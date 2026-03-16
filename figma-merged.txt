@@ -113,8 +113,8 @@ or initiating processes. They communicate interactivity and should have clear, a
     "@radix-ui/react-slot": "1.1.2",
     "@radix-ui/react-switch": "1.1.3",
     "@radix-ui/react-tabs": "1.1.3",
-    "@radix-ui/react-toggle-group": "1.1.2",
     "@radix-ui/react-toggle": "1.1.2",
+    "@radix-ui/react-toggle-group": "1.1.2",
     "@radix-ui/react-tooltip": "1.1.8",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
@@ -142,6 +142,7 @@ or initiating processes. They communicate interactivity and should have clear, a
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.1.12",
+    "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "4.7.0",
     "tailwindcss": "4.1.12",
     "vite": "6.3.5"
@@ -165,6 +166,7 @@ or initiating processes. They communicate interactivity and should have clear, a
   }
 }
 
+
 // ===== FILE: README.md =====
 
 
@@ -181,11 +183,23 @@ or initiating processes. They communicate interactivity and should have clear, a
 
 // ===== FILE: src\app\api.ts =====
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? "";
+const BASE_URL = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 
 export async function apiFetch(path: string, options?: RequestInit) {
   const url = `${BASE_URL}${path.replace(/^\/api/, "")}`;
   return fetch(url, options);
+}
+
+// ── Intercept ALL fetch("/api/...") calls globally ──────────────────────────
+if (BASE_URL) {
+  const _fetch = window.fetch.bind(window);
+  window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+    if (typeof input === "string" && input.startsWith("/api/")) {
+      const url = `${BASE_URL}${input.replace(/^\/api/, "")}`;
+      return _fetch(url, init);
+    }
+    return _fetch(input, init);
+  };
 }
 
 // ===== FILE: src\app\App.tsx =====
@@ -10738,14 +10752,15 @@ export function Login() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          login_identifier: loginIdentifier.trim(),
-          password,
-        }),
-      });
+      const API = import.meta.env.VITE_API_URL ?? "";
+const res = await fetch(`${API}/login`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    login_identifier: loginIdentifier.trim(),
+    password,
+  }),
+});
 
       const data = await res.json();
 
@@ -23818,13 +23833,14 @@ export async function createUserApi(
 
 // ===== FILE: src\main.tsx =====
 
+  import "./app/api";          // ← add this line FIRST
 
   import { createRoot } from "react-dom/client";
   import App from "./app/App.tsx";
   import "./styles/index.css";
 
   createRoot(document.getElementById("root")!).render(<App />);
-  
+              
 
 // ===== FILE: src\styles\fonts.css =====
 

@@ -35,14 +35,15 @@ export function Login() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          login_identifier: loginIdentifier.trim(),
-          password,
-        }),
-      });
+      const API = import.meta.env.VITE_API_URL ?? "";
+const res = await fetch(`${API}/login`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    login_identifier: loginIdentifier.trim(),
+    password,
+  }),
+});
 
       const data = await res.json();
 

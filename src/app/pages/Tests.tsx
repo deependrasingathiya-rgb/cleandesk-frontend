@@ -152,7 +152,7 @@ function mapRowToTest(row: TestRow): Test {
     date: row.test_date,
     testTime: row.test_time,
     durationMinutes: row.duration_minutes,
-    totalMarks: row.total_marks,
+    totalMarks: Number(row.total_marks),
     createdBy: row.created_by_name ?? "—",
     attachments: [],
     marks: null,
@@ -1526,7 +1526,7 @@ useEffect(() => {
                 studentId: m.student_id,
                 studentName: m.student_name,
                 mobile: m.mobile,
-                score: m.score,
+                score: m.score != null ? Number(m.score) : null,
               })) : null,
             }
           : t

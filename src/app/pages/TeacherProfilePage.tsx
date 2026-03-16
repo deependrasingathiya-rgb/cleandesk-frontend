@@ -2,7 +2,7 @@
 
 import { useParams, useNavigate } from "react-router";
 import { useState, useEffect } from "react";
-import { fetchTeachersApi, type TeacherListItem, type TeacherBatch } from "../../Lib/api/teachers";
+import { fetchTeachersApi, unassignTeacherBatchApi, type TeacherListItem, type TeacherBatch } from "../../Lib/api/teachers";
 import {
   ArrowLeft,
   Phone,
@@ -16,6 +16,7 @@ import {
   BarChart2,
   GraduationCap,
   ExternalLink,
+  X,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -286,9 +287,30 @@ export function TeacherProfilePage() {
                     >
                       <BookOpen size={14} style={{ color: "#2563eb" }} strokeWidth={2} />
                     </div>
-                    <p style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
-                      {batch.name}
-                    </p>
+                    <div className="flex-1 min-w-0">
+                      <p style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
+                        {batch.name}
+                      </p>
+                      {batch.subject && (
+                        <p style={{ fontSize: "11.5px", color: "#6b7280", marginTop: "1px" }}>
+                          {batch.subject}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={async () => {
+                        await unassignTeacherBatchApi(teacher.id, batch.id);
+                        setTeacher((prev) =>
+                          prev
+                            ? { ...prev, assignedBatches: prev.assignedBatches.filter((b) => b.id !== batch.id) }
+                            : prev
+                        );
+                      }}
+                      className="w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all flex-shrink-0"
+                      title="Remove from batch"
+                    >
+                      <X size={13} strokeWidth={2.5} />
+                    </button>
                   </div>
                 ))}
               </div>

@@ -6,12 +6,14 @@ import {
   fetchUnassignedTeacherUsersApi,
   fetchClassBatchesApi,
   assignTeacherApi,
+  unassignTeacherBatchApi,
   fetchTeachersApi,
   type TeacherUserOption,
   type ClassBatchOption,
   type TeacherListItem,
   type TeacherBatch,
 } from "../../Lib/api/teachers";
+import { fetchSubjectCatalogApi } from "../../Lib/api/subjects";
 import {
   Search,
   Plus,
@@ -68,31 +70,55 @@ function AssignTeacherModal({
   onClose: () => void;
   onAssigned: (teacherUser: TeacherUserOption, batches: ClassBatchOption[]) => void;
 }) {
-  const [teacherUsers, setTeacherUsers]       = useState<TeacherUserOption[]>([]);
-  const [batches, setBatches]                 = useState<ClassBatchOption[]>([]);
-  const [loadingData, setLoadingData]         = useState(true);
-  const [loadError, setLoadError]             = useState<string | null>(null);
-  const [selectedUserId, setSelectedUserId]   = useState("");
-  const [selectedBatchIds, setSelectedBatchIds] = useState<string[]>([]);
-  const [submitting, setSubmitting]           = useState(false);
-  const [error, setError]                     = useState<string | null>(null);
+  const [teacherUsers, setTeacherUsers] = useState<TeacherUserOption[]>([]);
+  const [batches, setBatches]           = useState<ClassBatchOption[]>([]);
+  const [subjects, setSubjects]         = useState<string[]>([]);
+  const [loadingData, setLoadingData]   = useState(true);
+  const [loadError, setLoadError]       = useState<string | null>(null);
+  const [selectedUserId, setSelectedUserId] = useState("");
+  // Map of batchId → subject (empty string = not yet chosen)
+  const [batchSubjects, setBatchSubjects] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting]     = useState(false);
+  const [error, setError]               = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([fetchUnassignedTeacherUsersApi(), fetchClassBatchesApi()])
-      .then(([users, batchList]) => {
+    Promise.all([
+      fetchUnassignedTeacherUsersApi(),
+      fetchClassBatchesApi(),
+      fetchSubjectCatalogApi(),
+    ])
+      .then(([users, batchList, subjectList]) => {
         setTeacherUsers(users);
         setBatches(batchList);
+        setSubjects(subjectList);
       })
       .catch((e) => setLoadError(e.message ?? "Failed to load data"))
       .finally(() => setLoadingData(false));
   }, []);
 
-  const canSubmit = Boolean(selectedUserId && selectedBatchIds.length > 0 && !submitting);
+  const selectedBatchIds = Object.keys(batchSubjects);
+
+  // All selected batches must have a subject chosen before submitting
+  const canSubmit = Boolean(
+    selectedUserId &&
+    selectedBatchIds.length > 0 &&
+    selectedBatchIds.every((id) => batchSubjects[id]?.trim()) &&
+    !submitting
+  );
 
   function toggleBatch(batchId: string) {
-    setSelectedBatchIds((prev) =>
-      prev.includes(batchId) ? prev.filter((id) => id !== batchId) : [...prev, batchId]
-    );
+    setBatchSubjects((prev) => {
+      if (batchId in prev) {
+        const next = { ...prev };
+        delete next[batchId];
+        return next;
+      }
+      return { ...prev, [batchId]: "" };
+    });
+  }
+
+  function setSubjectForBatch(batchId: string, subject: string) {
+    setBatchSubjects((prev) => ({ ...prev, [batchId]: subject }));
   }
 
   async function handleSubmit() {
@@ -102,9 +128,12 @@ function AssignTeacherModal({
     try {
       await assignTeacherApi({
         teacher_user_id: selectedUserId,
-        class_batch_ids: selectedBatchIds,
+        batch_assignments: selectedBatchIds.map((batchId) => ({
+          batch_id: batchId,
+          subject:  batchSubjects[batchId] || null,
+        })),
       });
-      const teacherUser = teacherUsers.find((u) => u.id === selectedUserId)!;
+      const teacherUser     = teacherUsers.find((u) => u.id === selectedUserId)!;
       const assignedBatches = batches.filter((b) => selectedBatchIds.includes(b.id));
       onAssigned(teacherUser, assignedBatches);
       onClose();
@@ -180,47 +209,74 @@ function AssignTeacherModal({
   </p>
   <div
     className="border border-gray-200 rounded-xl overflow-hidden"
-    style={{ maxHeight: "200px", overflowY: "auto" }}
+    style={{ maxHeight: "260px", overflowY: "auto" }}
   >
     {loadingData ? (
       <div className="px-4 py-3 text-gray-400" style={{ fontSize: "13px" }}>Loading batches…</div>
     ) : batches.map((b) => {
-      const checked = selectedBatchIds.includes(b.id);
+      const checked = b.id in batchSubjects;
       return (
-        <button
+        <div
           key={b.id}
-          type="button"
-          onClick={() => toggleBatch(b.id)}
-          className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-gray-50"
           style={{
             borderBottom: "1px solid #f3f4f6",
             backgroundColor: checked ? "#f0fdfa" : "white",
           }}
         >
-          <div
-            className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0 border transition-all"
-            style={{
-              backgroundColor: checked ? "#0d9488" : "white",
-              borderColor: checked ? "#0d9488" : "#d1d5db",
-            }}
+          {/* Batch row — toggle selection */}
+          <button
+            type="button"
+            onClick={() => toggleBatch(b.id)}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-gray-50"
           >
-            {checked && (
-              <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            )}
-          </div>
-          <span style={{ fontSize: "13.5px", color: checked ? "#0d9488" : "#374151", fontWeight: checked ? 600 : 400 }}>
-            {b.name}
-          </span>
-        </button>
+            <div
+              className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0 border transition-all"
+              style={{
+                backgroundColor: checked ? "#0d9488" : "white",
+                borderColor: checked ? "#0d9488" : "#d1d5db",
+              }}
+            >
+              {checked && (
+                <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                  <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              )}
+            </div>
+            <span style={{ fontSize: "13.5px", color: checked ? "#0d9488" : "#374151", fontWeight: checked ? 600 : 400 }}>
+              {b.name}
+            </span>
+          </button>
+
+          {/* Subject selector — only shown when batch is checked */}
+          {checked && (
+            <div className="px-4 pb-3">
+              <select
+                value={batchSubjects[b.id] ?? ""}
+                onChange={(e) => setSubjectForBatch(b.id, e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-700 focus:outline-none focus:border-teal-400 transition-all bg-white"
+                style={{ fontSize: "13px" }}
+              >
+                <option value="">— Select subject —</option>
+                {subjects.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+              {!batchSubjects[b.id] && (
+                <p className="text-amber-500 mt-1" style={{ fontSize: "11.5px" }}>
+                  Subject required before submitting.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
       );
     })}
   </div>
 </div>
 
 {/* Preview summary — shown when batches selected */}
-{canSubmit && selectedUserObj && (
+{selectedBatchIds.length > 0 && selectedUserObj && (
   <div
     className="flex items-start gap-3 p-3 rounded-xl"
     style={{ backgroundColor: "#f0fdfa", border: "1px solid #ccfbf1" }}
@@ -230,7 +286,9 @@ function AssignTeacherModal({
       <span style={{ fontWeight: 700 }}>{selectedUserObj.full_name}</span> will be assigned to{" "}
       <span style={{ fontWeight: 700 }}>{selectedBatchIds.length}</span>{" "}
       batch{selectedBatchIds.length !== 1 ? "es" : ""}:{" "}
-      {batches.filter((b) => selectedBatchIds.includes(b.id)).map((b) => b.name).join(", ")}
+      {batches.filter((b) => b.id in batchSubjects).map((b) =>
+        batchSubjects[b.id] ? `${b.name} (${batchSubjects[b.id]})` : b.name
+      ).join(", ")}
     </p>
   </div>
 )}
@@ -271,10 +329,12 @@ function TeacherProfilePanel({
   teacher,
   onClose,
   onViewFull,
+  onUnassignBatch,
 }: {
   teacher: Teacher;
   onClose: () => void;
   onViewFull: () => void;
+  onUnassignBatch: (batchId: string) => Promise<void>;
 }) {
   const initials = teacher.name.split(" ").filter((w) => /^[A-Z]/.test(w)).map((w) => w[0]).join("").slice(0, 2);
 
@@ -410,7 +470,17 @@ function TeacherProfilePanel({
                     </div>
                     <div className="flex-1 min-w-0">
                       <p style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>{batch.name}</p>
+                      {batch.subject && (
+                        <p style={{ fontSize: "11.5px", color: "#6b7280", marginTop: "1px" }}>{batch.subject}</p>
+                      )}
                     </div>
+                    <button
+                      onClick={() => onUnassignBatch(batch.id)}
+                      className="w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all flex-shrink-0"
+                      title="Remove from batch"
+                    >
+                      <X size={13} strokeWidth={2.5} />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -492,7 +562,7 @@ export function Teachers() {
       email: null,
       active: true,
       createdDate: new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
-      assignedBatches: assignedBatches.map((b) => ({ id: b.id, name: b.name })),
+      assignedBatches: assignedBatches.map((b) => ({ id: b.id, name: b.name, subject: null })),
     };
     setTeachers((prev) => [newTeacher, ...prev]);
   }
@@ -687,6 +757,14 @@ export function Teachers() {
           onViewFull={() => {
             setSelectedTeacher(null);
             navigate(`/teachers/${selectedTeacher.id}`);
+          }}
+          onUnassignBatch={async (batchId) => {
+            await unassignTeacherBatchApi(selectedTeacher.id, batchId);
+            setTeachers((prev) => prev.map((t) =>
+              t.id === selectedTeacher.id
+                ? { ...t, assignedBatches: t.assignedBatches.filter((b) => b.id !== batchId) }
+                : t
+            ));
           }}
         />
       )}

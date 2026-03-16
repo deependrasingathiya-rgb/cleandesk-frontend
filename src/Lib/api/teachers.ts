@@ -15,8 +15,9 @@ export type ClassBatchOption = {
 
 
 export type TeacherBatch = {
-  id: string;
-  name: string;
+  id:      string;
+  name:    string;
+  subject: string | null;
 };
 
 export type TeacherListItem = {
@@ -76,8 +77,8 @@ export async function fetchClassBatchesApi(): Promise<ClassBatchOption[]> {
 }
 
 export async function assignTeacherApi(payload: {
-  teacher_user_id: string;
-  class_batch_ids: string[];
+  teacher_user_id:   string;
+  batch_assignments: { batch_id: string; subject: string | null }[];
 }): Promise<void> {
   const token = getToken();
   if (!token) throw new Error("Not authenticated");
@@ -93,4 +94,20 @@ export async function assignTeacherApi(payload: {
 
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? "Failed to assign teacher");
+}
+
+export async function unassignTeacherBatchApi(
+  teacherId: string,
+  batchId:   string
+): Promise<void> {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+
+  const res = await fetch(`/api/teachers/${teacherId}/batches/${batchId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Failed to unassign batch");
 }

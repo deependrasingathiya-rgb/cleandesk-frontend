@@ -179,6 +179,15 @@ or initiating processes. They communicate interactivity and should have clear, a
   Run `npm run dev` to start the development server.
   
 
+// ===== FILE: src\app\api.ts =====
+
+const BASE_URL = import.meta.env.VITE_API_URL ?? "";
+
+export async function apiFetch(path: string, options?: RequestInit) {
+  const url = `${BASE_URL}${path.replace(/^\/api/, "")}`;
+  return fetch(url, options);
+}
+
 // ===== FILE: src\app\App.tsx =====
 
 import { RouterProvider } from "react-router";
@@ -22377,6 +22386,10 @@ export const router = createBrowserRouter([
 ]);
 
 
+// ===== FILE: src\app\vite.env.d.ts =====
+
+/// <reference types="vite/client" />
+
 // ===== FILE: src\imports\admin-dashboard-design.md =====
 
 Design a modern, minimal Admin Dashboard UI for an education institute management system.
@@ -24043,7 +24056,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'http://localhost:3000',  // keep this for local dev
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },

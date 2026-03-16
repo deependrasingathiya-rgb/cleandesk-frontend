@@ -453,6 +453,24 @@ function TestFormView({
   const set = <K extends keyof TestForm>(key: K) =>
     (val: TestForm[K]) => setForm((f) => ({ ...f, [key]: val }));
 
+  // ── Date / time boundary helpers ──────────────────────────────────────────
+  // Always computed fresh so the UI stays accurate without a re-render clock.
+  function getMinDate(): string {
+    // In edit mode allow the existing (possibly past) date to remain selectable,
+    // but still block choosing a NEW past date.
+    if (mode === "edit" && initial.date) return initial.date < todayStr() ? initial.date : todayStr();
+    return todayStr();
+  }
+
+  function getMinTime(): string | undefined {
+    // Only restrict time when the chosen date is today.
+    if (form.date !== todayStr()) return undefined;
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    return `${hh}:${mm}`;
+  }
+
   function validate() {
     const e: Partial<Record<keyof TestForm, string>> = {};
     if (!form.name.trim()) e.name = "Test name is required.";
@@ -614,6 +632,7 @@ function TestFormView({
             <input
               type="date"
               value={form.date}
+              min={getMinDate()}
               onChange={(e) => set("date")(e.target.value)}
               className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white"
               style={{ fontSize: "13.5px" }}
@@ -629,6 +648,7 @@ function TestFormView({
             <input
               type="time"
               value={form.testTime}
+              min={getMinTime()}
               onChange={(e) => set("testTime")(e.target.value)}
               className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white"
               style={{ fontSize: "13.5px" }}

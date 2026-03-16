@@ -455,20 +455,30 @@ function TestFormView({
 
   // ── Date / time boundary helpers ──────────────────────────────────────────
   // Always computed fresh so the UI stays accurate without a re-render clock.
+  // Uses YYYY-MM-DD format required by HTML date inputs.
+  function getTodayIso(): string {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm   = String(d.getMonth() + 1).padStart(2, "0");
+    const dd   = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
   function getMinDate(): string {
-    // In edit mode allow the existing (possibly past) date to remain selectable,
-    // but still block choosing a NEW past date.
-    if (mode === "edit" && initial.date) return initial.date < todayStr() ? initial.date : todayStr();
-    return todayStr();
+    const today = getTodayIso();
+    // In edit mode: if the saved date is already in the past, keep it as the
+    // floor so the form stays valid — but don't let them pick a different past date.
+    if (mode === "edit" && initial.date && initial.date < today) return initial.date;
+    return today;
   }
 
   function getMinTime(): string | undefined {
     // Only restrict time when the chosen date is today.
-    if (form.date !== todayStr()) return undefined;
+    if (form.date !== getTodayIso()) return undefined;
     const now = new Date();
-    const hh = String(now.getHours()).padStart(2, "0");
-    const mm = String(now.getMinutes()).padStart(2, "0");
-    return `${hh}:${mm}`;
+    const hh  = String(now.getHours()).padStart(2, "0");
+    const mnt = String(now.getMinutes()).padStart(2, "0");
+    return `${hh}:${mnt}`;
   }
 
   function validate() {

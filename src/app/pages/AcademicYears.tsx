@@ -371,6 +371,7 @@ function mapYear(raw: any): AcademicYear {
 
 export function AcademicYears() {
   const [years, setYears] = useState<AcademicYear[]>([]);
+  const [totalAlumni, setTotalAlumni] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [modalMode, setModalMode] = useState<"create" | "edit" | null>(null);
@@ -397,6 +398,7 @@ export function AcademicYears() {
         return base;
       });
       setYears(mapped);
+      setTotalAlumni(typeof json.total_alumni === "number" ? json.total_alumni : null);
     } catch (e: any) {
       setError(e.message ?? "Unknown error");
     } finally {
@@ -468,12 +470,12 @@ export function AcademicYears() {
     {
       label: "Total Years",
       value: years.length.toString(),
-      sub: "Since 2022",
+      sub: `${years.filter((y) => y.status === "Completed").length} completed`,
     },
     {
       label: "Total Alumni",
-      value: "4,510",
-      sub: "Across all sessions",
+      value: totalAlumni !== null ? totalAlumni.toLocaleString("en-IN") : "—",
+      sub: "Across completed sessions",
     },
   ];
 

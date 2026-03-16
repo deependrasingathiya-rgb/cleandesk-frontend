@@ -58,3 +58,11 @@ export async function fetchStudentResults(): Promise<StudentResultsData> {
   if (!res.ok) throw new Error(json.error ?? "Failed to fetch results");
   return json.data as StudentResultsData;
 }
+
+// Used by admin/management/teacher to view any student's full results.
+export async function fetchStudentResultsById(studentId: string): Promise<StudentResultsData> {
+  const res = await authFetch(`/api/students/${studentId}/results`);
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error ?? "Failed to fetch student results");
+  return json.data as StudentResultsData;
+}

@@ -14,6 +14,7 @@ import { Batches } from "./pages/Batches";
 import { Users } from "./pages/Users";
 import { Teachers } from "./pages/Teachers";
 import { TeacherProfilePage } from "./pages/TeacherProfilePage";
+import { StudentProfilePage } from "./pages/StudentProfilePage";
 import { Students } from "./pages/Students";
 import { Tests } from "./pages/Tests";
 import { Attendance } from "./pages/Attendance";
@@ -86,6 +87,7 @@ export const router = createBrowserRouter([
       { path: "teachers", Component: Teachers },
       { path: "teachers/:teacherId", Component: TeacherProfilePage },
       { path: "students", Component: Students },
+      { path: "students/:studentId", Component: StudentProfilePage },
       { path: "tests", Component: Tests },
       { path: "attendance", Component: Attendance },
       { path: "announcements", Component: Announcements },

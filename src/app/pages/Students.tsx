@@ -1,6 +1,7 @@
 // src/app/pages/Students.tsx
 
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router";
 import {
   enrollStudentApi,
   fetchStudentsApi,
@@ -28,6 +29,7 @@ import {
   Users2,
   Copy,
   Check,
+  ExternalLink,
 } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -709,6 +711,7 @@ function StudentProfile({ student, onBack, onDeactivate }: {
 type View = "list" | "enroll" | "profile";
 
 export function Students() {
+  const navigate = useNavigate();
   const [view, setView] = useState<View>("list");
   const [students, setStudents] = useState<Student[]>([]);
   const [stats, setStats] = useState<StudentStats | null>(null);
@@ -860,7 +863,7 @@ export function Students() {
               return (
                 <tr
                   key={student.id}
-                  onClick={() => { setSelectedStudent(student); setView("profile"); }}
+                  onClick={() => navigate(`/students/${student.id}`)}
                   className="border-t border-gray-50 hover:bg-teal-50 transition-colors cursor-pointer"
                 >
                   <td className="px-5 py-3.5">

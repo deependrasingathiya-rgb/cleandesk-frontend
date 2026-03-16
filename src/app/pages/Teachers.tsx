@@ -1,6 +1,7 @@
 // src/app/pages/Teachers.tsx
 
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router";
 import {
   fetchUnassignedTeacherUsersApi,
   fetchClassBatchesApi,
@@ -23,6 +24,7 @@ import {
   Phone,
   CalendarDays,
   FlaskConical,
+  ExternalLink,
 } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -268,9 +270,11 @@ function AssignTeacherModal({
 function TeacherProfilePanel({
   teacher,
   onClose,
+  onViewFull,
 }: {
   teacher: Teacher;
   onClose: () => void;
+  onViewFull: () => void;
 }) {
   const initials = teacher.name.split(" ").filter((w) => /^[A-Z]/.test(w)).map((w) => w[0]).join("").slice(0, 2);
 
@@ -293,12 +297,23 @@ function TeacherProfilePanel({
           <h2 style={{ fontSize: "17px", fontWeight: 700, color: "#111827", letterSpacing: "-0.01em" }}>
             Teacher Profile
           </h2>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-md flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors"
-          >
-            <X size={16} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onViewFull}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-100 text-gray-500 hover:border-teal-300 hover:text-teal-600 hover:bg-teal-50 transition-all"
+              style={{ fontSize: "12px", fontWeight: 600 }}
+              title="Open full profile page"
+            >
+              <ExternalLink size={12} strokeWidth={2.5} />
+              Full Profile
+            </button>
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-md flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors"
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -441,6 +456,7 @@ function TeacherProfilePanel({
 // ─── Main Component ────────────────────────────────────────────────────────────
 
 export function Teachers() {
+  const navigate = useNavigate();
   const [teachers, setTeachers]               = useState<Teacher[]>([]);
   const [loading, setLoading]                 = useState(true);
   const [fetchError, setFetchError]           = useState<string | null>(null);
@@ -668,6 +684,10 @@ export function Teachers() {
         <TeacherProfilePanel
           teacher={teachers.find((t) => t.id === selectedTeacher.id) ?? selectedTeacher}
           onClose={() => setSelectedTeacher(null)}
+          onViewFull={() => {
+            setSelectedTeacher(null);
+            navigate(`/teachers/${selectedTeacher.id}`);
+          }}
         />
       )}
     </div>

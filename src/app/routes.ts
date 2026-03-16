@@ -13,6 +13,7 @@ import { AcademicYears } from "./pages/AcademicYears";
 import { Batches } from "./pages/Batches";
 import { Users } from "./pages/Users";
 import { Teachers } from "./pages/Teachers";
+import { TeacherProfilePage } from "./pages/TeacherProfilePage";
 import { Students } from "./pages/Students";
 import { Tests } from "./pages/Tests";
 import { Attendance } from "./pages/Attendance";
@@ -83,6 +84,7 @@ export const router = createBrowserRouter([
       { path: "batches", Component: Batches },
       { path: "users", Component: Users },
       { path: "teachers", Component: Teachers },
+      { path: "teachers/:teacherId", Component: TeacherProfilePage },
       { path: "students", Component: Students },
       { path: "tests", Component: Tests },
       { path: "attendance", Component: Attendance },

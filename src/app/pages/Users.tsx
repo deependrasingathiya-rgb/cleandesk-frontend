@@ -584,6 +584,7 @@ export function Users() {
   const [roleFilter, setRoleFilter]     = useState<string>("All");
   const [showCreate, setShowCreate]     = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [currentPage, setCurrentPage]   = useState(1);
 
   useEffect(() => {
     let cancelled = false;
@@ -602,6 +603,8 @@ export function Users() {
     return () => { cancelled = true; };
   }, []);
 
+  const PAGE_SIZE = 25;
+
   const filtered = users.filter((u) => {
     const matchRole   = roleFilter === "All" || u.role === roleFilter;
     const matchSearch =
@@ -609,6 +612,17 @@ export function Users() {
       (u.name ?? "").toLowerCase().includes(search.toLowerCase());
     return matchRole && matchSearch;
   });
+
+  const totalPages  = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  // Clamp page in case filters reduce the result count below current page
+  const safePage    = Math.min(currentPage, totalPages);
+  const pageSlice   = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+
+  function handleFilterChange(fn: () => void) {
+    fn();
+    setCurrentPage(1);
+  }
 
   function handleCreated(newUser: User) {
     setUsers((prev) => [newUser, ...prev]);
@@ -681,7 +695,7 @@ export function Users() {
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => handleFilterChange(() => setSearch(e.target.value))}
             placeholder="Search by login identifier…"
             className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-300 shadow-sm transition-all"
             style={{ fontSize: "13.5px" }}
@@ -691,7 +705,7 @@ export function Users() {
           {["All", ...ALL_ROLES].map((r) => (
             <button
               key={r}
-              onClick={() => setRoleFilter(r)}
+              onClick={() => handleFilterChange(() => setRoleFilter(r))}
               className="px-3.5 py-2 rounded-xl border transition-all"
               style={{
                 fontSize: "12.5px",
@@ -724,7 +738,7 @@ export function Users() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((user) => {
+            {pageSlice.map((user) => {
               const rc = roleConfig[user.role];
               const RoleIcon = rc.icon;
               const initials = user.name
@@ -817,6 +831,60 @@ export function Users() {
           </tbody>
         </table>
 
+{/* ── Pagination footer ── */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100">
+            <span className="text-gray-400" style={{ fontSize: "12.5px" }}>
+              Showing {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} of {filtered.length}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+                className="px-3 py-1.5 rounded-lg border border-gray-100 text-gray-500 hover:border-teal-300 hover:text-teal-600 hover:bg-teal-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                style={{ fontSize: "12.5px", fontWeight: 600 }}
+              >
+                ← Prev
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter((p) => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1)
+                .reduce<(number | "…")[]>((acc, p, idx, arr) => {
+                  if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push("…");
+                  acc.push(p);
+                  return acc;
+                }, [])
+                .map((p, idx) =>
+                  p === "…" ? (
+                    <span key={`ellipsis-${idx}`} className="px-2 text-gray-300" style={{ fontSize: "12.5px" }}>…</span>
+                  ) : (
+                    <button
+                      key={p}
+                      onClick={() => setCurrentPage(p as number)}
+                      className="w-8 h-8 rounded-lg border transition-all"
+                      style={{
+                        fontSize: "12.5px",
+                        fontWeight: 600,
+                        borderColor: safePage === p ? "#0d9488" : "#f3f4f6",
+                        backgroundColor: safePage === p ? "#f0fdfa" : "white",
+                        color: safePage === p ? "#0d9488" : "#6b7280",
+                      }}
+                    >
+                      {p}
+                    </button>
+                  )
+                )}
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safePage === totalPages}
+                className="px-3 py-1.5 rounded-lg border border-gray-100 text-gray-500 hover:border-teal-300 hover:text-teal-600 hover:bg-teal-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                style={{ fontSize: "12.5px", fontWeight: 600 }}
+              >
+                Next →
+              </button>
+            </div>
+          </div>
+        )}
+        
         {loading && (
           <div className="py-16 text-center">
             <p className="text-gray-400" style={{ fontSize: "14px" }}>Loading users…</p>

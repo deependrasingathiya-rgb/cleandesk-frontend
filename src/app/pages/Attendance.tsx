@@ -11,7 +11,9 @@ import {
 } from "../../Lib/api/attendance";
 import {
   fetchHolidaysApi,
+  fetchHolidaysForDateApi,
   declareHolidayApi,
+  cancelHolidayApi,
   type HolidayRow,
 } from "../../Lib/api/holiday";
 import {
@@ -814,29 +816,35 @@ export function Attendance({ canManage = true }: { canManage?: boolean }) {
   const [loadingSummary, setLoadingSummary] = useState(true);
   const [summaryError, setSummaryError] = useState<string | null>(null);
 
-  // Holiday state
-  const [todayHoliday, setTodayHoliday] = useState<HolidayRow | null>(null);
+  // Holiday state — all active holidays for the selected date
+  const [dateHolidays, setDateHolidays] = useState<HolidayRow[]>([]);
+  // Derived: institute-wide holiday (class_batch_id === null)
+  const todayHoliday = dateHolidays.find(h => h.class_batch_id === null) ?? null;
+  // Set of batch IDs that already have a holiday declared for this date
+  const holidayedBatchIds = new Set(
+    dateHolidays.filter(h => h.class_batch_id !== null).map(h => h.class_batch_id as string)
+  );
 
   // Declare Holiday modal state
   const [showDeclareModal, setShowDeclareModal] = useState(false);
   const [declareHolidayName, setDeclareHolidayName] = useState("");
   const [declareBatchScope, setDeclareBatchScope] = useState<"all" | "batch">("all");
-  const [declareBatchId, setDeclareBatchId] = useState<string>("");
+  const [declareBatchIds, setDeclareBatchIds] = useState<string[]>([]);
   const [declaringSaving, setDeclaringSaving] = useState(false);
   const [declaringError, setDeclatingError] = useState<string | null>(null);
+
+  // Cancel holiday state
+  const [cancellingHolidayId, setCancellingHolidayId] = useState<string | null>(null);
 
   const loadSummary = useCallback((date: string) => {
     setLoadingSummary(true);
     setSummaryError(null);
-    setTodayHoliday(null);
+    setDateHolidays([]);
 
-    // Fetch holiday status for this date in parallel
-    fetchHolidaysApi()
-      .then((holidays) => {
-        const match = holidays.find(h => h.holiday_date === date && !h.is_cancelled) ?? null;
-        setTodayHoliday(match);
-      })
-      .catch(() => setTodayHoliday(null));
+    // Fetch all active holidays for this specific date
+    fetchHolidaysForDateApi(date)
+      .then(setDateHolidays)
+      .catch(() => setDateHolidays([]));
 
     fetchAttendanceBatchSummaryApi(date)
       .then(setBatchSummaries)
@@ -878,23 +886,51 @@ export function Attendance({ canManage = true }: { canManage?: boolean }) {
       setDeclatingError("Holiday name is required");
       return;
     }
+    if (declareBatchScope === "batch" && declareBatchIds.length === 0) {
+      setDeclatingError("Select at least one batch");
+      return;
+    }
     setDeclaringSaving(true);
     setDeclatingError(null);
     try {
-      await declareHolidayApi({
-        holiday_date: selectedDate,
-        name: declareHolidayName.trim(),
-        class_batch_id: declareBatchScope === "batch" && declareBatchId ? declareBatchId : null,
-      });
+      if (declareBatchScope === "all") {
+        await declareHolidayApi({
+          holiday_date: selectedDate,
+          name: declareHolidayName.trim(),
+          class_batch_id: null,
+        });
+      } else {
+        // Declare one holiday record per selected batch (sequential, fail-fast)
+        for (const batchId of declareBatchIds) {
+          await declareHolidayApi({
+            holiday_date: selectedDate,
+            name: declareHolidayName.trim(),
+            class_batch_id: batchId,
+          });
+        }
+      }
       setShowDeclareModal(false);
       setDeclareHolidayName("");
       setDeclareBatchScope("all");
-      setDeclareBatchId("");
+      setDeclareBatchIds([]);
       loadSummary(selectedDate);
     } catch (err: any) {
       setDeclatingError(err.message ?? "Failed to declare holiday");
     } finally {
       setDeclaringSaving(false);
+    }
+  }
+
+  async function handleCancelHoliday(holidayId: string) {
+    setCancellingHolidayId(holidayId);
+    try {
+      await cancelHolidayApi(holidayId);
+      loadSummary(selectedDate);
+    } catch (err: any) {
+      // Surface error in a non-blocking way — re-using declaringError for simplicity
+      setDeclatingError(err.message ?? "Failed to cancel holiday");
+    } finally {
+      setCancellingHolidayId(null);
     }
   }
 
@@ -965,6 +1001,7 @@ export function Attendance({ canManage = true }: { canManage?: boolean }) {
         {/* Date Picker + Declare Holiday */}
         <div className="flex items-center gap-2">
           {canManage && !todayHoliday && (
+            // Show button if no institute-wide holiday; batch holidays still allow declaring more
             <button
               onClick={() => setShowDeclareModal(true)}
               className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border shadow-sm transition-all"
@@ -1023,22 +1060,39 @@ export function Attendance({ canManage = true }: { canManage?: boolean }) {
         </div>
       )}
 
-      {todayHoliday && (
-        <div
-          className="flex items-start gap-3 px-5 py-4 rounded-2xl mb-6 border"
-          style={{ backgroundColor: "#fffbeb", borderColor: "#fde68a" }}
-        >
-          <Sun size={18} color="#d97706" className="flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-amber-800 mb-1" style={{ fontSize: "13.5px", fontWeight: 700 }}>
-              Holiday: {todayHoliday.name}
-            </p>
-            <p className="text-amber-700" style={{ fontSize: "12.5px" }}>
-              {todayHoliday.batch_name
-                ? `Applies to batch: ${todayHoliday.batch_name}`
-                : "Institute-wide holiday · Attendance marking is disabled for this date"}
-            </p>
-          </div>
+      {dateHolidays.length > 0 && (
+        <div className="flex flex-col gap-2 mb-6">
+          {dateHolidays.map(h => (
+            <div
+              key={h.id}
+              className="flex items-center justify-between px-5 py-4 rounded-2xl border"
+              style={{ backgroundColor: "#fffbeb", borderColor: "#fde68a" }}
+            >
+              <div className="flex items-start gap-3">
+                <Sun size={18} color="#d97706" className="flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-amber-800 mb-1" style={{ fontSize: "13.5px", fontWeight: 700 }}>
+                    Holiday: {h.name}
+                  </p>
+                  <p className="text-amber-700" style={{ fontSize: "12.5px" }}>
+                    {h.batch_name
+                      ? `Applies to batch: ${h.batch_name}`
+                      : "Institute-wide holiday · Attendance marking is disabled for this date"}
+                  </p>
+                </div>
+              </div>
+              {canManage && (
+                <button
+                  onClick={() => handleCancelHoliday(h.id)}
+                  disabled={cancellingHolidayId === h.id}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-50 transition-all disabled:opacity-50"
+                  style={{ fontSize: "12px", fontWeight: 600, flexShrink: 0 }}
+                >
+                  {cancellingHolidayId === h.id ? "Cancelling…" : "Cancel Holiday"}
+                </button>
+              )}
+            </div>
+          ))}
         </div>
       )}
 
@@ -1191,7 +1245,7 @@ export function Attendance({ canManage = true }: { canManage?: boolean }) {
                   </td>
                   <td className="px-5 py-4" onClick={e => e.stopPropagation()}>
                     {!isDone ? (
-                      todayHoliday ? (
+                      (todayHoliday || holidayedBatchIds.has(batch.batch_id)) ? (
                         <span className="text-amber-400" style={{ fontSize: "12px", fontWeight: 600 }}>Holiday</span>
                       ) : canManage ? (
                         <button
@@ -1287,17 +1341,35 @@ export function Attendance({ canManage = true }: { canManage?: boolean }) {
                 </button>
               </div>
               {declareBatchScope === "batch" && (
-                <select
-                  value={declareBatchId}
-                  onChange={e => setDeclareBatchId(e.target.value)}
-                  className="w-full mt-2 px-4 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-teal-400"
-                  style={{ fontSize: "13.5px" }}
-                >
-                  <option value="">Select batch…</option>
-                  {batchSummaries.map(b => (
-                    <option key={b.batch_id} value={b.batch_id}>{b.batch_name}</option>
-                  ))}
-                </select>
+                <div className="mt-2 rounded-xl border border-gray-200 overflow-hidden" style={{ maxHeight: "180px", overflowY: "auto" }}>
+                  {batchSummaries.filter(b => !holidayedBatchIds.has(b.batch_id) && !todayHoliday).length === 0 ? (
+                    <p className="px-4 py-3 text-gray-400" style={{ fontSize: "13px" }}>All batches already have a holiday declared.</p>
+                  ) : (
+                    batchSummaries
+                      .filter(b => !holidayedBatchIds.has(b.batch_id) && !todayHoliday)
+                      .map(b => (
+                        <label
+                          key={b.batch_id}
+                          className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-0"
+                          style={{ fontSize: "13.5px" }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={declareBatchIds.includes(b.batch_id)}
+                            onChange={e => {
+                              setDeclareBatchIds(prev =>
+                                e.target.checked
+                                  ? [...prev, b.batch_id]
+                                  : prev.filter(id => id !== b.batch_id)
+                              );
+                            }}
+                            className="accent-teal-500"
+                          />
+                          <span className="text-gray-700">{b.batch_name}</span>
+                        </label>
+                      ))
+                  )}
+                </div>
               )}
             </div>
 
@@ -1315,7 +1387,7 @@ export function Attendance({ canManage = true }: { canManage?: boolean }) {
                 {declaringSaving ? "Saving…" : "Declare Holiday"}
               </button>
               <button
-                onClick={() => { setShowDeclareModal(false); setDeclatingError(null); }}
+                onClick={() => { setShowDeclareModal(false); setDeclatingError(null); setDeclareBatchIds([]); setDeclareBatchScope("all"); setDeclareHolidayName(""); }}
                 className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 transition-all"
                 style={{ fontSize: "13.5px", fontWeight: 500 }}
               >

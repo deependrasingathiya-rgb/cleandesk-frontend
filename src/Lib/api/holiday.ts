@@ -41,6 +41,25 @@ export async function fetchHolidaysApi(options?: {
   return json.data as HolidayRow[];
 }
 
+export async function fetchHolidaysForDateApi(date: string): Promise<HolidayRow[]> {
+  const res = await fetch(`/api/holidays?date=${encodeURIComponent(date)}`, {
+    headers: authHeaders(),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error ?? "Failed to fetch holidays for date");
+  return json.data as HolidayRow[];
+}
+
+export async function cancelHolidayApi(holidayId: string): Promise<void> {
+  const res = await fetch(`/api/holidays/${encodeURIComponent(holidayId)}/cancel`, {
+    method: "PATCH",
+    headers: authHeaders(),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error ?? "Failed to cancel holiday");
+}
+
+
 export async function declareHolidayApi(payload: DeclareHolidayPayload): Promise<HolidayRow> {
   const res = await fetch("/api/holidays", {
     method: "POST",

@@ -6449,6 +6449,7 @@ function mapYear(raw: any): AcademicYear {
 
 export function AcademicYears() {
   const [years, setYears] = useState<AcademicYear[]>([]);
+  const [totalAlumni, setTotalAlumni] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [modalMode, setModalMode] = useState<"create" | "edit" | null>(null);
@@ -6475,6 +6476,7 @@ export function AcademicYears() {
         return base;
       });
       setYears(mapped);
+      setTotalAlumni(typeof json.total_alumni === "number" ? json.total_alumni : null);
     } catch (e: any) {
       setError(e.message ?? "Unknown error");
     } finally {
@@ -6546,12 +6548,12 @@ export function AcademicYears() {
     {
       label: "Total Years",
       value: years.length.toString(),
-      sub: "Since 2022",
+      sub: `${years.filter((y) => y.status === "Completed").length} completed`,
     },
     {
       label: "Total Alumni",
-      value: "4,510",
-      sub: "Across all sessions",
+      value: totalAlumni !== null ? totalAlumni.toLocaleString("en-IN") : "—",
+      sub: "Across completed sessions",
     },
   ];
 
@@ -15843,11 +15845,871 @@ export function StudentMarks() {
   );
 }
 
+// ===== FILE: src\app\pages\StudentProfilePage.tsx =====
+
+// src/app/pages/StudentProfilePage.tsx
+
+import { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router";
+import {
+  fetchStudentsApi,
+  type StudentRow,
+} from "../../Lib/api/students";
+import {
+  fetchStudentResultsById,
+  type StudentResultsData,
+  type ResultRow as ApiResultRow,
+} from "../../Lib/api/student-results";
+import {
+  ArrowLeft,
+  Award,
+  ClipboardList,
+  Calendar,
+  BookOpen,
+  TrendingUp,
+  Star,
+  ChevronRight,
+  CheckCircle2,
+  XCircle,
+  Search,
+  SlidersHorizontal,
+  BarChart2,
+  Phone,
+  School,
+  Users2,
+  CalendarDays,
+} from "lucide-react";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceLine,
+} from "recharts";
+
+// ─── Types ─────────────────────────────────────────────────────────────────────
+
+type StudentResult = {
+  testId:     string;
+  testName:   string;
+  subject:    string;
+  batch:      string;
+  date:       string;
+  score:      number | null;
+  totalMarks: number;
+  syllabus:   string;
+};
+
+function mapApiResult(r: ApiResultRow): StudentResult {
+  return {
+    testId:     r.test_id,
+    testName:   r.test_name,
+    subject:    r.subject,
+    batch:      r.batch_name,
+    date:       r.test_date,
+    score:      r.score,
+    totalMarks: r.total_marks,
+    syllabus:   r.syllabus_text ?? "",
+  };
+}
+
+// ─── Subject colour map (mirrors StudentMarks exactly) ─────────────────────────
+
+const subjectColors: Record<string, { color: string; bg: string }> = {
+  Physics:            { color: "#db2777", bg: "#fdf2f8" },
+  Mathematics:        { color: "#2563eb", bg: "#eff6ff" },
+  Chemistry:          { color: "#ea580c", bg: "#fff7ed" },
+  English:            { color: "#6b7280", bg: "#f9fafb" },
+  Business:           { color: "#7c3aed", bg: "#f5f3ff" },
+  Biology:            { color: "#16a34a", bg: "#f0fdf4" },
+  Accounts:           { color: "#0d9488", bg: "#f0fdfa" },
+  History:            { color: "#b45309", bg: "#fffbeb" },
+  Geography:          { color: "#0369a1", bg: "#f0f9ff" },
+  "Computer Science": { color: "#4f46e5", bg: "#eef2ff" },
+  Economics:          { color: "#be185d", bg: "#fdf2f8" },
+};
+
+// ─── Helpers (mirrors StudentMarks exactly) ────────────────────────────────────
+
+function pct(score: number, total: number) {
+  return Math.round((score / total) * 100);
+}
+
+function gradeLabel(p: number): { label: string; color: string; bg: string } {
+  if (p >= 90) return { label: "A+", color: "#16a34a", bg: "#f0fdf4" };
+  if (p >= 75) return { label: "A",  color: "#0d9488", bg: "#f0fdfa" };
+  if (p >= 60) return { label: "B",  color: "#2563eb", bg: "#eff6ff" };
+  if (p >= 45) return { label: "C",  color: "#d97706", bg: "#fffbeb" };
+  if (p >= 35) return { label: "D",  color: "#ea580c", bg: "#fff7ed" };
+  return       { label: "F",  color: "#dc2626", bg: "#fef2f2" };
+}
+
+function barColor(p: number): string {
+  if (p >= 75) return "#16a34a";
+  if (p >= 50) return "#0d9488";
+  if (p >= 35) return "#d97706";
+  return "#dc2626";
+}
+
+function fmtDate(iso: string, short = false): string {
+  return new Date(iso).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: short ? "short" : "long",
+    year: "numeric",
+  });
+}
+
+function fmtShortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+}
+
+function getBoardColor(board: string) {
+  if (board === "CBSE")  return { color: "#2563eb", bg: "#eff6ff" };
+  if (board === "ICSE")  return { color: "#7c3aed", bg: "#f5f3ff" };
+  return { color: "#d97706", bg: "#fffbeb" };
+}
+
+function getInitials(name: string) {
+  return name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
+}
+
+// ─── Trend tooltip (mirrors StudentMarks exactly) ─────────────────────────────
+
+function TrendTooltip({ active, payload }: any) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  const g = gradeLabel(d.percentage);
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-lg p-3" style={{ minWidth: "160px" }}>
+      <p className="text-gray-800 mb-1" style={{ fontSize: "13px", fontWeight: 700 }}>{d.testName}</p>
+      <p className="text-gray-400 mb-2" style={{ fontSize: "11px" }}>{fmtDate(d.date, true)}</p>
+      <div className="flex items-center justify-between gap-4">
+        <span style={{ fontSize: "13px", fontWeight: 700, color: barColor(d.percentage) }}>{d.percentage}%</span>
+        <span className="px-2 py-0.5 rounded-full" style={{ fontSize: "11px", fontWeight: 700, color: g.color, backgroundColor: g.bg }}>
+          {g.label}
+        </span>
+      </div>
+      <p className="text-gray-400 mt-1" style={{ fontSize: "11px" }}>{d.score} / {d.totalMarks} marks</p>
+    </div>
+  );
+}
+
+// ─── Trend dot (mirrors StudentMarks exactly) ─────────────────────────────────
+
+function TrendDot(props: any) {
+  const { cx, cy, payload } = props;
+  return <circle cx={cx} cy={cy} r={5} fill={barColor(payload.percentage)} stroke="white" strokeWidth={2} />;
+}
+
+// ─── Subject Detail (mirrors StudentMarks — "Back" label adjusted) ─────────────
+
+function SubjectDetail({
+  subject,
+  results,
+  studentName,
+  onBack,
+}: {
+  subject:     string;
+  results:     StudentResult[];
+  studentName: string;
+  onBack:      () => void;
+}) {
+  const sc       = subjectColors[subject] ?? { color: "#0d9488", bg: "#f0fdfa" };
+  const attempted = results.filter((r) => r.score !== null);
+  const sortedAsc  = [...attempted].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const sortedDesc = [...results].sort((a, b)   => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  const avgPct = attempted.length > 0
+    ? Math.round(attempted.reduce((s, r) => s + pct(r.score!, r.totalMarks), 0) / attempted.length)
+    : 0;
+
+  const highestEntry = [...attempted].sort((a, b) => pct(b.score!, b.totalMarks) - pct(a.score!, a.totalMarks))[0];
+  const highestPct   = highestEntry ? pct(highestEntry.score!, highestEntry.totalMarks) : null;
+  const lastAttempted = sortedDesc.find((r) => r.score !== null);
+  const lastPct       = lastAttempted ? pct(lastAttempted.score!, lastAttempted.totalMarks) : null;
+  const passedCount   = attempted.filter((r) => pct(r.score!, r.totalMarks) >= 35).length;
+
+  const chartData = sortedAsc.map((r) => ({
+    label: fmtShortDate(r.date),
+    percentage: pct(r.score!, r.totalMarks),
+    testName: r.testName,
+    score: r.score,
+    totalMarks: r.totalMarks,
+    date: r.date,
+  }));
+
+  return (
+    <div className="p-8 max-w-[960px] mx-auto">
+      <button
+        onClick={onBack}
+        className="flex items-center gap-2 text-gray-400 hover:text-gray-700 mb-6 transition-colors"
+        style={{ fontSize: "13.5px", fontWeight: 500 }}
+      >
+        <ArrowLeft size={15} />
+        Back to {studentName}'s Profile
+      </button>
+
+      {/* Subject hero */}
+      <div className="rounded-2xl border shadow-sm p-7 mb-6 flex items-center justify-between"
+        style={{ backgroundColor: sc.bg, borderColor: `${sc.color}22` }}>
+        <div className="flex items-center gap-5">
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
+            style={{ backgroundColor: "white", boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
+            <BookOpen size={26} style={{ color: sc.color }} strokeWidth={1.8} />
+          </div>
+          <div>
+            <p className="uppercase mb-1" style={{ fontSize: "10.5px", fontWeight: 700, letterSpacing: "0.1em", color: sc.color, opacity: 0.7 }}>
+              Subject Performance
+            </p>
+            <h1 style={{ fontSize: "26px", fontWeight: 800, color: sc.color, letterSpacing: "-0.02em" }}>{subject}</h1>
+            <p style={{ fontSize: "13px", color: sc.color, opacity: 0.65, marginTop: "2px" }}>
+              {results.length} test{results.length !== 1 ? "s" : ""} · {attempted.length} attempted
+            </p>
+          </div>
+        </div>
+        {avgPct > 0 && (
+          <div className="text-right">
+            <p style={{ fontSize: "44px", fontWeight: 800, color: sc.color, letterSpacing: "-0.04em", lineHeight: 1 }}>{avgPct}%</p>
+            <p style={{ fontSize: "12px", color: sc.color, opacity: 0.65, marginTop: "4px" }}>Overall Average</p>
+          </div>
+        )}
+      </div>
+
+      {/* Stat cards */}
+      <div className="grid grid-cols-4 gap-4 mb-6">
+        {[
+          { icon: Star,         label: "Highest Score", value: highestPct !== null ? `${highestPct}%` : "—",     color: "#f59e0b" },
+          { icon: TrendingUp,   label: "Last Score",    value: lastPct    !== null ? `${lastPct}%`    : "—",     color: barColor(lastPct ?? 0) },
+          { icon: CheckCircle2, label: "Passed",        value: `${passedCount} / ${attempted.length}`,           color: "#16a34a" },
+          { icon: Award,        label: "Average",       value: avgPct > 0 ? `${avgPct}%` : "—",                  color: barColor(avgPct) },
+        ].map(({ icon: Icon, label, value, color }) => (
+          <div key={label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className="flex items-center gap-1.5 mb-3">
+              <Icon size={13} style={{ color }} />
+              <p className="text-gray-400 uppercase" style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.07em" }}>{label}</p>
+            </div>
+            <p style={{ fontSize: "28px", fontWeight: 800, color, letterSpacing: "-0.03em", lineHeight: 1 }}>{value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Chart */}
+      {chartData.length >= 2 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
+          <h2 className="text-gray-800 mb-5" style={{ fontSize: "15px", fontWeight: 700 }}>Score Trend</h2>
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+              <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+              <Tooltip content={<TrendTooltip />} />
+              <ReferenceLine y={35} stroke="#fca5a5" strokeDasharray="4 4"
+                label={{ value: "Pass 35%", position: "right", fontSize: 10, fill: "#fca5a5" }} />
+              <Line type="monotone" dataKey="percentage" stroke={sc.color} strokeWidth={2.5}
+                dot={<TrendDot />} activeDot={{ r: 6, fill: sc.color, stroke: "white", strokeWidth: 2 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Results table */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <table className="w-full">
+          <thead>
+            <tr style={{ backgroundColor: "#f9fafb" }}>
+              {["Test", "Date", "Score", "%", "Grade", "Result"].map((h) => (
+                <th key={h} className="text-left px-5 py-3 text-gray-400"
+                  style={{ fontSize: "11px", fontWeight: 600, letterSpacing: "0.04em" }}>
+                  {h.toUpperCase()}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sortedDesc.map((r) => {
+              const absent = r.score === null;
+              const p2     = absent ? null : pct(r.score!, r.totalMarks);
+              const grade  = p2 !== null ? gradeLabel(p2) : null;
+              const passed = p2 !== null && p2 >= 35;
+              return (
+                <tr key={r.testId} className="border-t border-gray-50">
+                  <td className="px-5 py-3 text-gray-700" style={{ fontSize: "13px", fontWeight: 600 }}>{r.testName}</td>
+                  <td className="px-5 py-3 text-gray-500" style={{ fontSize: "12.5px" }}>{fmtDate(r.date, true)}</td>
+                  <td className="px-5 py-3">
+                    {absent ? <span className="text-gray-400">—</span>
+                      : <span className="text-gray-800" style={{ fontSize: "13.5px", fontWeight: 700 }}>
+                          {r.score}<span className="text-gray-400" style={{ fontWeight: 400 }}> / {r.totalMarks}</span>
+                        </span>}
+                  </td>
+                  <td className="px-5 py-3">
+                    {absent ? <span className="text-gray-400">—</span>
+                      : <span style={{ fontSize: "13px", fontWeight: 700, color: barColor(p2!) }}>{p2}%</span>}
+                  </td>
+                  <td className="px-5 py-3">
+                    {grade && <span className="px-2.5 py-0.5 rounded-full"
+                      style={{ fontSize: "12px", fontWeight: 700, color: grade.color, backgroundColor: grade.bg }}>
+                      {grade.label}
+                    </span>}
+                  </td>
+                  <td className="px-5 py-3">
+                    {absent
+                      ? <span className="px-2 py-0.5 rounded-full" style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", backgroundColor: "#f3f4f6" }}>Absent</span>
+                      : <span className="px-2 py-0.5 rounded-full" style={{ fontSize: "11px", fontWeight: 600, color: passed ? "#16a34a" : "#dc2626", backgroundColor: passed ? "#f0fdf4" : "#fef2f2" }}>
+                          {passed ? "Pass" : "Fail"}
+                        </span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── Result Detail (mirrors StudentMarks — "Back" label adjusted) ──────────────
+
+function ResultDetail({ result, studentName, onBack }: {
+  result:      StudentResult;
+  studentName: string;
+  onBack:      () => void;
+}) {
+  const sc        = subjectColors[result.subject] ?? { color: "#0d9488", bg: "#f0fdfa" };
+  const isAbsent  = result.score === null;
+  const percentage = isAbsent ? null : pct(result.score!, result.totalMarks);
+  const grade      = percentage !== null ? gradeLabel(percentage) : null;
+  const passed     = percentage !== null && percentage >= 35;
+
+  return (
+    <div className="p-8 max-w-[760px] mx-auto">
+      <button
+        onClick={onBack}
+        className="flex items-center gap-2 text-gray-400 hover:text-gray-700 mb-6 transition-colors"
+        style={{ fontSize: "13.5px", fontWeight: 500 }}
+      >
+        <ArrowLeft size={15} />
+        Back to {studentName}'s Profile
+      </button>
+
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 mb-5">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ backgroundColor: sc.bg }}>
+              <ClipboardList size={24} style={{ color: sc.color }} strokeWidth={2} />
+            </div>
+            <div>
+              <h1 className="text-gray-900 mb-1" style={{ fontSize: "22px", fontWeight: 700, letterSpacing: "-0.02em" }}>{result.testName}</h1>
+              <p className="text-gray-400" style={{ fontSize: "13.5px" }}>{result.batch} · {fmtDate(result.date)}</p>
+            </div>
+          </div>
+          {!isAbsent && grade && (
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-1" style={{ backgroundColor: grade.bg }}>
+                <span style={{ fontSize: "28px", fontWeight: 800, color: grade.color }}>{grade.label}</span>
+              </div>
+              <p className="text-gray-400" style={{ fontSize: "11px", fontWeight: 600 }}>GRADE</p>
+            </div>
+          )}
+          {isAbsent && (
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-1" style={{ backgroundColor: "#fee2e2" }}>
+                <XCircle size={28} color="#dc2626" strokeWidth={1.5} />
+              </div>
+              <p className="text-gray-400" style={{ fontSize: "11px", fontWeight: 600 }}>ABSENT</p>
+            </div>
+          )}
+        </div>
+
+        {!isAbsent && percentage !== null && (
+          <div className="mt-8 pt-6 border-t border-gray-50">
+            <div className="flex items-end gap-6 mb-5">
+              <div>
+                <p className="text-gray-400 mb-1" style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>Score</p>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-gray-900" style={{ fontSize: "48px", fontWeight: 800, letterSpacing: "-0.04em", lineHeight: 1 }}>{result.score}</span>
+                  <span className="text-gray-400" style={{ fontSize: "20px", fontWeight: 400 }}>/ {result.totalMarks}</span>
+                </div>
+              </div>
+              <div className="flex-1 pb-2">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span style={{ fontSize: "12px", fontWeight: 600, color: barColor(percentage) }}>{percentage}%</span>
+                  <span className="px-2 py-0.5 rounded-full"
+                    style={{ fontSize: "11px", fontWeight: 600, color: passed ? "#16a34a" : "#dc2626", backgroundColor: passed ? "#f0fdf4" : "#fef2f2" }}>
+                    {passed ? "Passed" : "Failed"}
+                  </span>
+                </div>
+                <div className="w-full h-3 rounded-full" style={{ backgroundColor: "#f3f4f6" }}>
+                  <div className="h-full rounded-full transition-all"
+                    style={{ width: `${percentage}%`, backgroundColor: barColor(percentage) }} />
+                </div>
+                <div className="flex justify-between mt-1">
+                  <span className="text-gray-300" style={{ fontSize: "10px" }}>0</span>
+                  <span className="text-gray-300" style={{ fontSize: "10px" }}>Pass mark: 35%</span>
+                  <span className="text-gray-300" style={{ fontSize: "10px" }}>{result.totalMarks}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {isAbsent && (
+          <div className="mt-6 pt-6 border-t border-gray-50">
+            <p className="text-gray-400" style={{ fontSize: "13.5px" }}>This student was absent for this test. No marks have been recorded.</p>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-5">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <BookOpen size={15} className="text-teal-500" />
+            <h2 className="text-gray-800" style={{ fontSize: "15px", fontWeight: 700 }}>Syllabus Covered</h2>
+          </div>
+          {result.syllabus
+            ? <p className="text-gray-600" style={{ fontSize: "13.5px", lineHeight: 1.7 }}>{result.syllabus}</p>
+            : <p className="text-gray-300" style={{ fontSize: "13.5px" }}>No syllabus specified.</p>}
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <ClipboardList size={15} className="text-teal-500" />
+            <h2 className="text-gray-800" style={{ fontSize: "15px", fontWeight: 700 }}>Test Details</h2>
+          </div>
+          <div className="space-y-4">
+            {[
+              { label: "Subject",     value: result.subject,          isSubject: true  },
+              { label: "Batch",       value: result.batch,            isSubject: false },
+              { label: "Date",        value: fmtDate(result.date),    isSubject: false },
+              { label: "Total Marks", value: String(result.totalMarks), isSubject: false },
+            ].map(({ label, value, isSubject }) => {
+              const sc2 = subjectColors[value] ?? null;
+              return (
+                <div key={label} className="flex items-center justify-between">
+                  <span className="text-gray-400" style={{ fontSize: "12.5px", fontWeight: 500 }}>{label}</span>
+                  {isSubject && sc2
+                    ? <span className="px-2.5 py-0.5 rounded-full"
+                        style={{ fontSize: "12px", fontWeight: 600, color: sc2.color, backgroundColor: sc2.bg }}>{value}</span>
+                    : <span className="text-gray-700" style={{ fontSize: "13px", fontWeight: 600 }}>{value}</span>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
+export function StudentProfilePage() {
+  const { studentId } = useParams<{ studentId: string }>();
+  const navigate      = useNavigate();
+
+  const [studentName, setStudentName]     = useState<string>("Student");
+  const [studentMeta, setStudentMeta]     = useState<StudentRow | null>(null);
+  const [apiData, setApiData]             = useState<StudentResultsData | null>(null);
+  const [loading, setLoading]             = useState(true);
+  const [fetchError, setFetchError]       = useState<string | null>(null);
+
+  const [selectedTestId, setSelectedTestId]     = useState<string | null>(null);
+  const [selectedSubject, setSelectedSubject]   = useState<string | null>(null);
+  const [search, setSearch]                     = useState("");
+  const [subjectFilter, setSubjectFilter]       = useState("All");
+
+  useEffect(() => {
+    if (!studentId) { setFetchError("No student ID provided"); setLoading(false); return; }
+
+    Promise.all([
+      fetchStudentsApi({ limit: 1000 }),
+      fetchStudentResultsById(studentId),
+    ])
+      .then(([listRes, results]) => {
+        const match = listRes.students.find((s) => s.id === studentId);
+        if (match) {
+          setStudentName(match.name ?? "Student");
+          setStudentMeta(match);
+        }
+        setApiData(results);
+      })
+      .catch((e: any) => setFetchError(e.message ?? "Failed to load profile"))
+      .finally(() => setLoading(false));
+  }, [studentId]);
+
+  if (loading) {
+    return (
+      <div className="p-8 max-w-[1060px] mx-auto flex items-center justify-center h-64">
+        <p className="text-gray-400" style={{ fontSize: "14px" }}>Loading student profile…</p>
+      </div>
+    );
+  }
+
+  if (fetchError || !apiData) {
+    return (
+      <div className="p-8 max-w-[1060px] mx-auto flex items-center justify-center h-64">
+        <p className="text-red-400" style={{ fontSize: "14px" }}>{fetchError ?? "Failed to load profile."}</p>
+      </div>
+    );
+  }
+
+  const myResults: StudentResult[] = apiData.all_results.map(mapApiResult);
+
+  // ── Sub-views ──
+  if (selectedTestId !== null) {
+    const result = myResults.find((r) => r.testId === selectedTestId);
+    if (result) return <ResultDetail result={result} studentName={studentName} onBack={() => setSelectedTestId(null)} />;
+  }
+  if (selectedSubject !== null) {
+    const subjectResults = myResults.filter((r) => r.subject === selectedSubject);
+    return <SubjectDetail subject={selectedSubject} results={subjectResults} studentName={studentName} onBack={() => setSelectedSubject(null)} />;
+  }
+
+  // ── Derived stats ──
+  const attemptedResults = myResults.filter((r) => r.score !== null);
+  const totalTests       = apiData.total_tested;
+  const overallPct       = apiData.overall_pct ?? 0;
+  const totalScored      = attemptedResults.reduce((s, r) => s + (r.score ?? 0), 0);
+  const totalPossible    = attemptedResults.reduce((s, r) => s + r.totalMarks, 0);
+  const passedCount      = attemptedResults.filter((r) => pct(r.score!, r.totalMarks) >= 35).length;
+
+  const sortedByPct = apiData.subject_summaries.map((s) => ({
+    name: s.subject, pct: s.avg_pct, count: s.attempted_count, totalTests: s.total_count,
+  }));
+  const bestSubject = apiData.best_subject ? { name: apiData.best_subject.subject, pct: apiData.best_subject.avg_pct } : null;
+  const weakSubject = apiData.weak_subject ? { name: apiData.weak_subject.subject, pct: apiData.weak_subject.avg_pct } : null;
+
+  const trendData = apiData.trend_data.map((r) => ({
+    label: fmtShortDate(r.test_date), percentage: r.percentage,
+    testName: r.test_name, score: r.score, totalMarks: r.total_marks, date: r.test_date,
+  }));
+
+  const allSubjects = ["All", ...Array.from(new Set(myResults.map((r) => r.subject)))];
+  const filtered    = myResults.filter((r) => {
+    const matchesSubject = subjectFilter === "All" || r.subject === subjectFilter;
+    const matchesSearch  = r.testName.toLowerCase().includes(search.toLowerCase()) || r.subject.toLowerCase().includes(search.toLowerCase());
+    return matchesSubject && matchesSearch;
+  });
+
+  const initials = getInitials(studentName);
+  const bc       = studentMeta ? getBoardColor((studentMeta as any).board ?? "") : { color: "#0d9488", bg: "#f0fdfa" };
+
+  return (
+    <div className="p-8 max-w-[1060px] mx-auto">
+
+      {/* ── Back ── */}
+      <button
+        onClick={() => navigate("/students")}
+        className="flex items-center gap-2 text-gray-400 hover:text-teal-600 transition-colors mb-6"
+        style={{ fontSize: "13.5px", fontWeight: 600 }}
+      >
+        <ArrowLeft size={15} strokeWidth={2.5} />
+        Back to Students
+      </button>
+
+      {/* ── Hero card ── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-7 mb-6">
+        <div className="flex items-start gap-5">
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#f0fdfa" }}>
+            <span style={{ fontSize: "22px", fontWeight: 800, color: "#0d9488" }}>{initials}</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-3 flex-wrap mb-1">
+              <h1 className="text-gray-900" style={{ fontSize: "22px", fontWeight: 800, letterSpacing: "-0.02em" }}>{studentName}</h1>
+              <span className="px-2.5 py-0.5 rounded-full"
+                style={{ fontSize: "11.5px", fontWeight: 600, color: "#0d9488", backgroundColor: "#f0fdfa" }}>
+                Student
+              </span>
+              {studentMeta && (
+                <span className="px-2.5 py-0.5 rounded-full"
+                  style={{ fontSize: "11.5px", fontWeight: 600,
+                    color: studentMeta.is_active ? "#16a34a" : "#9ca3af",
+                    backgroundColor: studentMeta.is_active ? "#f0fdf4" : "#f9fafb" }}>
+                  {studentMeta.is_active ? "Active" : "Inactive"}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-5 mt-2 flex-wrap">
+              {studentMeta?.mobile && (
+                <div className="flex items-center gap-1.5 text-gray-500" style={{ fontSize: "13px" }}>
+                  <Phone size={13} strokeWidth={2} className="text-gray-400" />
+                  {studentMeta.mobile}
+                </div>
+              )}
+              {studentMeta?.batch && (
+                <div className="flex items-center gap-1.5 text-gray-500" style={{ fontSize: "13px" }}>
+                  <Users2 size={13} strokeWidth={2} className="text-gray-400" />
+                  {studentMeta.batch}
+                </div>
+              )}
+              {studentMeta && (
+                <div className="flex items-center gap-1.5 text-gray-400" style={{ fontSize: "13px" }}>
+                  <CalendarDays size={13} strokeWidth={2} />
+                  Joined {new Date(studentMeta.created_at).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Page header ── */}
+      <div className="mb-6">
+        <h2 className="text-gray-900" style={{ fontSize: "18px", fontWeight: 700, letterSpacing: "-0.01em" }}>
+          Results & Performance
+        </h2>
+        <p className="text-gray-400 mt-0.5" style={{ fontSize: "13.5px" }}>
+          Performance analytics across all subjects and tests
+        </p>
+      </div>
+
+      {/* ── Summary Cards ── */}
+      <div className="grid grid-cols-5 gap-4 mb-6">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div className="flex items-center gap-1.5 mb-3">
+            <TrendingUp size={13} className="text-teal-500" />
+            <p className="text-gray-400 uppercase" style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.07em" }}>Overall</p>
+          </div>
+          <p className="text-gray-900 mb-2" style={{ fontSize: "30px", fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1 }}>{overallPct}%</p>
+          <div className="w-full h-1.5 rounded-full mb-2" style={{ backgroundColor: "#f3f4f6" }}>
+            <div className="h-full rounded-full" style={{ width: `${overallPct}%`, backgroundColor: barColor(overallPct) }} />
+          </div>
+          <p className="text-gray-400" style={{ fontSize: "11.5px" }}>{totalScored} / {totalPossible} marks</p>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div className="flex items-center gap-1.5 mb-3">
+            <ClipboardList size={13} className="text-teal-500" />
+            <p className="text-gray-400 uppercase" style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.07em" }}>Tests</p>
+          </div>
+          <p className="text-gray-900 mb-1" style={{ fontSize: "30px", fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1 }}>{totalTests}</p>
+          <p className="text-gray-400" style={{ fontSize: "11.5px" }}>{passedCount} passed</p>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div className="flex items-center gap-1.5 mb-3">
+            <CheckCircle2 size={13} className="text-teal-500" />
+            <p className="text-gray-400 uppercase" style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.07em" }}>Pass Rate</p>
+          </div>
+          <p className="text-gray-900 mb-1" style={{ fontSize: "30px", fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1 }}>
+            {attemptedResults.length > 0 ? Math.round((passedCount / attemptedResults.length) * 100) : 0}%
+          </p>
+          <p className="text-gray-400" style={{ fontSize: "11.5px" }}>{passedCount} of {totalTests} attempted</p>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 cursor-pointer hover:shadow-md hover:border-teal-100 transition-all"
+          onClick={() => bestSubject && setSelectedSubject(bestSubject.name)}>
+          <div className="flex items-center gap-1.5 mb-3">
+            <Star size={13} className="text-amber-400" />
+            <p className="text-gray-400 uppercase" style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.07em" }}>Best Subject</p>
+          </div>
+          {bestSubject ? (
+            <>
+              <p className="text-gray-900 mb-1" style={{ fontSize: "16px", fontWeight: 700, lineHeight: 1.3 }}>{bestSubject.name}</p>
+              <p className="text-gray-400" style={{ fontSize: "11.5px" }}>Avg: {bestSubject.pct}%</p>
+              <span style={{ fontSize: "11px", color: "#0d9488", fontWeight: 600 }}>View →</span>
+            </>
+          ) : <p className="text-gray-300" style={{ fontSize: "13px" }}>No data yet</p>}
+        </div>
+
+        <div className="rounded-2xl border shadow-sm p-5 cursor-pointer hover:shadow-md transition-all"
+          style={{ backgroundColor: weakSubject && weakSubject.pct < 50 ? "#fff7ed" : "white",
+            borderColor: weakSubject && weakSubject.pct < 50 ? "#fed7aa" : "#f3f4f6" }}
+          onClick={() => weakSubject && setSelectedSubject(weakSubject.name)}>
+          <div className="flex items-center gap-1.5 mb-3">
+            <BarChart2 size={13} style={{ color: weakSubject && weakSubject.pct < 50 ? "#ea580c" : "#9ca3af" }} />
+            <p className="text-gray-400 uppercase" style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.07em" }}>Weak Subject</p>
+          </div>
+          {weakSubject ? (
+            <>
+              <p className="text-gray-900 mb-1" style={{ fontSize: "16px", fontWeight: 700, lineHeight: 1.3 }}>{weakSubject.name}</p>
+              <p style={{ fontSize: "11.5px", color: weakSubject.pct < 50 ? "#c2410c" : "#6b7280", marginTop: "2px" }}>Avg: {weakSubject.pct}%</p>
+              <span style={{ fontSize: "11px", color: weakSubject.pct < 50 ? "#ea580c" : "#0d9488", fontWeight: 600 }}>View →</span>
+            </>
+          ) : <p className="text-gray-300" style={{ fontSize: "13px" }}>No data yet</p>}
+        </div>
+      </div>
+
+      {/* ── Trend + Subjects ── */}
+      <div className="grid grid-cols-3 gap-5 mb-6">
+        <div className="col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-2">
+              <TrendingUp size={15} className="text-teal-500" />
+              <h2 className="text-gray-800" style={{ fontSize: "15px", fontWeight: 700 }}>Score Trend</h2>
+            </div>
+            <span className="text-gray-400" style={{ fontSize: "12px" }}>% per test, date-ordered</span>
+          </div>
+          {trendData.length >= 2 ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={trendData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                <Tooltip content={<TrendTooltip />} />
+                <ReferenceLine y={35} stroke="#fca5a5" strokeDasharray="4 4"
+                  label={{ value: "Pass 35%", position: "right", fontSize: 10, fill: "#fca5a5" }} />
+                <Line type="monotone" dataKey="percentage" stroke="#0d9488" strokeWidth={2.5}
+                  dot={<TrendDot />} activeDot={{ r: 6, fill: "#0d9488", stroke: "white", strokeWidth: 2 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-48 text-gray-300" style={{ fontSize: "14px" }}>
+              Not enough data for a trend yet.
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col">
+          <div className="flex items-center gap-2 mb-4">
+            <BarChart2 size={15} className="text-teal-500" />
+            <h2 className="text-gray-800" style={{ fontSize: "15px", fontWeight: 700 }}>Subjects</h2>
+          </div>
+          <div className="flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: "230px" }}>
+            {sortedByPct.map((s) => {
+              const sc = subjectColors[s.name] ?? { color: "#0d9488", bg: "#f0fdfa" };
+              return (
+                <button key={s.name} onClick={() => setSelectedSubject(s.name)}
+                  className="flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-gray-50 transition-colors text-left w-full group">
+                  <div className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0" style={{ backgroundColor: sc.bg }}>
+                    <BookOpen size={13} style={{ color: sc.color }} strokeWidth={2} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-gray-700 truncate" style={{ fontSize: "12.5px", fontWeight: 600 }}>{s.name}</span>
+                      <span style={{ fontSize: "12px", fontWeight: 700, color: barColor(s.pct), flexShrink: 0, marginLeft: "8px" }}>{s.pct}%</span>
+                    </div>
+                    <div className="w-full h-1 rounded-full" style={{ backgroundColor: "#f3f4f6" }}>
+                      <div className="h-full rounded-full" style={{ width: `${s.pct}%`, backgroundColor: barColor(s.pct) }} />
+                    </div>
+                  </div>
+                  <ChevronRight size={13} className="text-gray-300 group-hover:text-teal-400 flex-shrink-0 transition-colors" />
+                </button>
+              );
+            })}
+            {sortedByPct.length === 0 && (
+              <p className="text-gray-300 text-center py-8" style={{ fontSize: "13px" }}>No subjects yet.</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Search + Filter ── */}
+      <div className="flex gap-3 mb-4">
+        <div className="flex-1 relative">
+          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by test name or subject…"
+            className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-300 shadow-sm"
+            style={{ fontSize: "13.5px" }} />
+        </div>
+        <div className="relative">
+          <select value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}
+            className="appearance-none bg-white border border-gray-100 rounded-xl pl-4 pr-8 py-2.5 text-gray-600 focus:outline-none focus:border-teal-300 shadow-sm cursor-pointer"
+            style={{ fontSize: "13px", fontWeight: 500 }}>
+            {allSubjects.map((s) => <option key={s} value={s}>{s === "All" ? "All Subjects" : s}</option>)}
+          </select>
+          <SlidersHorizontal size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        </div>
+      </div>
+
+      {/* ── Results table ── */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <table className="w-full">
+          <thead>
+            <tr style={{ backgroundColor: "#f9fafb" }}>
+              {["Test", "Subject", "Date", "Score", "Percentage", "Grade", "Result"].map((col) => (
+                <th key={col} className="text-left px-5 py-3 text-gray-400"
+                  style={{ fontSize: "11px", fontWeight: 600, letterSpacing: "0.04em" }}>{col.toUpperCase()}</th>
+              ))}
+              <th className="px-5 py-3" />
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((result) => {
+              const sc      = subjectColors[result.subject] ?? { color: "#0d9488", bg: "#f0fdfa" };
+              const isAbsent    = result.score === null;
+              const percentage  = isAbsent ? null : pct(result.score!, result.totalMarks);
+              const grade       = percentage !== null ? gradeLabel(percentage) : null;
+              const passed      = percentage !== null && percentage >= 35;
+              return (
+                <tr key={result.testId} onClick={() => setSelectedTestId(result.testId)}
+                  className="border-t border-gray-50 hover:bg-teal-50 transition-colors cursor-pointer group">
+                  <td className="px-5 py-3.5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-md flex items-center justify-center" style={{ backgroundColor: sc.bg }}>
+                        <ClipboardList size={14} style={{ color: sc.color }} strokeWidth={2} />
+                      </div>
+                      <span className="text-gray-800 group-hover:text-teal-700" style={{ fontSize: "13.5px", fontWeight: 600 }}>{result.testName}</span>
+                    </div>
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <button onClick={(e) => { e.stopPropagation(); setSelectedSubject(result.subject); }}
+                      className="px-2.5 py-0.5 rounded-full hover:opacity-75 transition-opacity"
+                      style={{ fontSize: "11.5px", fontWeight: 600, color: sc.color, backgroundColor: sc.bg }}>
+                      {result.subject}
+                    </button>
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <div className="flex items-center gap-1.5">
+                      <Calendar size={12} className="text-gray-400" />
+                      <span className="text-gray-600" style={{ fontSize: "13px" }}>{fmtDate(result.date, true)}</span>
+                    </div>
+                  </td>
+                  <td className="px-5 py-3.5">
+                    {isAbsent ? <span className="text-gray-400" style={{ fontSize: "13px" }}>—</span>
+                      : <span className="text-gray-800" style={{ fontSize: "13.5px", fontWeight: 700 }}>
+                          {result.score}<span className="text-gray-400" style={{ fontSize: "12px", fontWeight: 400 }}> / {result.totalMarks}</span>
+                        </span>}
+                  </td>
+                  <td className="px-5 py-3.5">
+                    {isAbsent ? <span className="text-gray-400" style={{ fontSize: "13px" }}>—</span>
+                      : <div className="flex items-center gap-2" style={{ minWidth: "100px" }}>
+                          <div className="flex-1 h-1.5 rounded-full" style={{ backgroundColor: "#f3f4f6" }}>
+                            <div className="h-full rounded-full" style={{ width: `${percentage}%`, backgroundColor: barColor(percentage!) }} />
+                          </div>
+                          <span style={{ fontSize: "12.5px", fontWeight: 600, color: barColor(percentage!), minWidth: "36px" }}>{percentage}%</span>
+                        </div>}
+                  </td>
+                  <td className="px-5 py-3.5">
+                    {isAbsent ? <span className="text-gray-400" style={{ fontSize: "13px" }}>—</span>
+                      : grade ? <span className="px-2.5 py-0.5 rounded-full"
+                          style={{ fontSize: "12px", fontWeight: 700, color: grade.color, backgroundColor: grade.bg }}>{grade.label}</span>
+                        : null}
+                  </td>
+                  <td className="px-5 py-3.5">
+                    {isAbsent
+                      ? <span className="px-2 py-0.5 rounded-full" style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", backgroundColor: "#f3f4f6" }}>Absent</span>
+                      : <span className="px-2 py-0.5 rounded-full"
+                          style={{ fontSize: "11px", fontWeight: 600, color: passed ? "#16a34a" : "#dc2626", backgroundColor: passed ? "#f0fdf4" : "#fef2f2" }}>
+                          {passed ? "Pass" : "Fail"}
+                        </span>}
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <ChevronRight size={15} className="text-gray-300 group-hover:text-teal-500 transition-colors" />
+                  </td>
+                </tr>
+              );
+            })}
+            {filtered.length === 0 && (
+              <tr><td colSpan={8} className="px-5 py-12 text-center">
+                <p className="text-gray-300" style={{ fontSize: "14px" }}>No results found.</p>
+              </td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ===== FILE: src\app\pages\Students.tsx =====
 
 // src/app/pages/Students.tsx
 
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router";
 import {
   enrollStudentApi,
   fetchStudentsApi,
@@ -15875,6 +16737,7 @@ import {
   Users2,
   Copy,
   Check,
+  ExternalLink,
 } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -16556,6 +17419,7 @@ function StudentProfile({ student, onBack, onDeactivate }: {
 type View = "list" | "enroll" | "profile";
 
 export function Students() {
+  const navigate = useNavigate();
   const [view, setView] = useState<View>("list");
   const [students, setStudents] = useState<Student[]>([]);
   const [stats, setStats] = useState<StudentStats | null>(null);
@@ -16707,7 +17571,7 @@ export function Students() {
               return (
                 <tr
                   key={student.id}
-                  onClick={() => { setSelectedStudent(student); setView("profile"); }}
+                  onClick={() => navigate(`/students/${student.id}`)}
                   className="border-t border-gray-50 hover:bg-teal-50 transition-colors cursor-pointer"
                 >
                   <td className="px-5 py-3.5">
@@ -18911,21 +19775,382 @@ export function TeacherDashboard() {
   );
 }
 
+// ===== FILE: src\app\pages\TeacherProfilePage.tsx =====
+
+// src/app/pages/TeacherProfilePage.tsx
+
+import { useParams, useNavigate } from "react-router";
+import { useState, useEffect } from "react";
+import { fetchTeachersApi, unassignTeacherBatchApi, type TeacherListItem, type TeacherBatch } from "../../Lib/api/teachers";
+import {
+  ArrowLeft,
+  Phone,
+  Mail,
+  CalendarDays,
+  BookOpen,
+  FlaskConical,
+  TrendingUp,
+  Users2,
+  ClipboardList,
+  BarChart2,
+  GraduationCap,
+  ExternalLink,
+  X,
+} from "lucide-react";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type Teacher = {
+  id: string;
+  name: string;
+  loginIdentifier: string;
+  mobile: string | null;
+  email: string | null;
+  assignedBatches: TeacherBatch[];
+  active: boolean;
+  createdDate: string;
+};
+
+function mapApiTeacher(t: TeacherListItem): Teacher {
+  return {
+    id: t.id,
+    name: t.full_name,
+    loginIdentifier: t.login_identifier,
+    mobile: t.mobile ?? null,
+    email: t.email ?? null,
+    assignedBatches: t.assigned_batches,
+    active: t.is_active,
+    createdDate: new Date(t.created_at).toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    }),
+  };
+}
+
+// ─── Placeholder Section Card ─────────────────────────────────────────────────
+
+function PlaceholderCard({
+  icon: Icon,
+  title,
+  description,
+}: {
+  icon: React.ElementType;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      <div className="flex items-center gap-2 mb-5">
+        <Icon size={15} className="text-teal-500" strokeWidth={2} />
+        <h2 className="text-gray-800" style={{ fontSize: "15px", fontWeight: 700 }}>
+          {title}
+        </h2>
+      </div>
+      <div
+        className="flex flex-col items-center justify-center py-10 rounded-xl"
+        style={{ backgroundColor: "#f9fafb" }}
+      >
+        <Icon size={28} className="text-gray-200 mb-3" strokeWidth={1.5} />
+        <p className="text-gray-400" style={{ fontSize: "13.5px", fontWeight: 500 }}>
+          {description}
+        </p>
+        <p className="text-gray-300 mt-1" style={{ fontSize: "12px" }}>
+          Data will appear here once wired
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Stat Pill ────────────────────────────────────────────────────────────────
+
+function StatPill({
+  label,
+  value,
+  color,
+  bg,
+}: {
+  label: string;
+  value: string | number;
+  color: string;
+  bg: string;
+}) {
+  return (
+    <div
+      className="flex flex-col items-center justify-center rounded-2xl border border-gray-100 shadow-sm p-5"
+      style={{ backgroundColor: "white" }}
+    >
+      <p style={{ fontSize: "28px", fontWeight: 800, color, letterSpacing: "-0.03em", lineHeight: 1 }}>
+        {value}
+      </p>
+      <p className="text-gray-400 mt-1.5" style={{ fontSize: "11.5px", fontWeight: 500 }}>
+        {label}
+      </p>
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
+export function TeacherProfilePage() {
+  const { teacherId } = useParams<{ teacherId: string }>();
+  const navigate = useNavigate();
+
+  const [teacher, setTeacher] = useState<Teacher | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!teacherId) { setError("No teacher ID provided"); setLoading(false); return; }
+
+    setLoading(true);
+    fetchTeachersApi()
+      .then((rows) => {
+        const match = rows.find((r) => r.id === teacherId);
+        if (!match) { setError("Teacher not found"); return; }
+        setTeacher(mapApiTeacher(match));
+      })
+      .catch((e: any) => setError(e.message ?? "Failed to load teacher"))
+      .finally(() => setLoading(false));
+  }, [teacherId]);
+
+  if (loading) {
+    return (
+      <div className="p-8 max-w-[1100px] mx-auto flex items-center justify-center h-64">
+        <p className="text-gray-400" style={{ fontSize: "14px" }}>Loading teacher profile…</p>
+      </div>
+    );
+  }
+
+  if (error || !teacher) {
+    return (
+      <div className="p-8 max-w-[1100px] mx-auto flex items-center justify-center h-64">
+        <p className="text-red-400" style={{ fontSize: "14px" }}>{error ?? "Teacher not found."}</p>
+      </div>
+    );
+  }
+
+  const initials = teacher.name
+    .split(" ")
+    .filter((w) => /^[A-Z]/i.test(w))
+    .map((w) => w[0].toUpperCase())
+    .join("")
+    .slice(0, 2);
+
+  return (
+    <div className="p-8 max-w-[1100px] mx-auto">
+
+      {/* ── Back ── */}
+      <button
+        onClick={() => navigate("/teachers")}
+        className="flex items-center gap-2 text-gray-400 hover:text-teal-600 transition-colors mb-6"
+        style={{ fontSize: "13.5px", fontWeight: 600 }}
+      >
+        <ArrowLeft size={15} strokeWidth={2.5} />
+        Back to Teachers
+      </button>
+
+      {/* ── Hero card ── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-7 mb-6">
+        <div className="flex items-start gap-5">
+
+          {/* Avatar */}
+          <div
+            className="w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0"
+            style={{ backgroundColor: "#eff6ff" }}
+          >
+            <span style={{ fontSize: "22px", fontWeight: 800, color: "#2563eb" }}>{initials}</span>
+          </div>
+
+          {/* Identity */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-gray-900" style={{ fontSize: "22px", fontWeight: 800, letterSpacing: "-0.02em" }}>
+                {teacher.name}
+              </h1>
+              <span
+                className="px-2.5 py-0.5 rounded-full"
+                style={{ fontSize: "11.5px", fontWeight: 600, color: "#2563eb", backgroundColor: "#eff6ff" }}
+              >
+                Teacher
+              </span>
+              <span
+                className="px-2.5 py-0.5 rounded-full"
+                style={{
+                  fontSize: "11.5px",
+                  fontWeight: 600,
+                  color: teacher.active ? "#16a34a" : "#9ca3af",
+                  backgroundColor: teacher.active ? "#f0fdf4" : "#f9fafb",
+                }}
+              >
+                {teacher.active ? "Active" : "Inactive"}
+              </span>
+            </div>
+            <p className="text-gray-400 mt-1" style={{ fontSize: "13px" }}>
+              {teacher.loginIdentifier}
+            </p>
+
+            {/* Contact row */}
+            <div className="flex items-center gap-5 mt-3 flex-wrap">
+              {teacher.mobile && (
+                <div className="flex items-center gap-1.5 text-gray-500" style={{ fontSize: "13px" }}>
+                  <Phone size={13} strokeWidth={2} className="text-gray-400" />
+                  {teacher.mobile}
+                </div>
+              )}
+              {teacher.email && (
+                <div className="flex items-center gap-1.5 text-gray-500" style={{ fontSize: "13px" }}>
+                  <Mail size={13} strokeWidth={2} className="text-gray-400" />
+                  {teacher.email}
+                </div>
+              )}
+              <div className="flex items-center gap-1.5 text-gray-400" style={{ fontSize: "13px" }}>
+                <CalendarDays size={13} strokeWidth={2} />
+                Joined {teacher.createdDate}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Quick stats row ── */}
+      <div className="grid grid-cols-4 gap-4 mb-6">
+        <StatPill
+          label="Batches Assigned"
+          value={teacher.assignedBatches.length}
+          color="#2563eb"
+          bg="#eff6ff"
+        />
+        <StatPill label="Tests Conducted"  value="—" color="#0d9488" bg="#f0fdfa" />
+        <StatPill label="Students Taught"  value="—" color="#7c3aed" bg="#f5f3ff" />
+        <StatPill label="Avg. Class Score" value="—" color="#d97706" bg="#fffbeb" />
+      </div>
+
+      {/* ── Two-column layout ── */}
+      <div className="grid grid-cols-3 gap-6">
+
+        {/* Left col — batches (1 col) */}
+        <div className="col-span-1">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <BookOpen size={15} className="text-teal-500" strokeWidth={2} />
+                <h2 className="text-gray-800" style={{ fontSize: "15px", fontWeight: 700 }}>
+                  Assigned Batches
+                </h2>
+              </div>
+              <span className="text-gray-400" style={{ fontSize: "12px" }}>
+                {teacher.assignedBatches.length} total
+              </span>
+            </div>
+
+            {teacher.assignedBatches.length === 0 ? (
+              <div
+                className="flex flex-col items-center justify-center py-10 rounded-xl"
+                style={{ backgroundColor: "#f9fafb" }}
+              >
+                <BookOpen size={24} className="text-gray-200 mb-2" strokeWidth={1.5} />
+                <p className="text-gray-400" style={{ fontSize: "13px" }}>No batches assigned</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {teacher.assignedBatches.map((batch) => (
+                  <div
+                    key={batch.id}
+                    className="flex items-center gap-3 p-3 rounded-xl border border-gray-100"
+                  >
+                    <div
+                      className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0"
+                      style={{ backgroundColor: "#eff6ff" }}
+                    >
+                      <BookOpen size={14} style={{ color: "#2563eb" }} strokeWidth={2} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
+                        {batch.name}
+                      </p>
+                      {batch.subject && (
+                        <p style={{ fontSize: "11.5px", color: "#6b7280", marginTop: "1px" }}>
+                          {batch.subject}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={async () => {
+                        await unassignTeacherBatchApi(teacher.id, batch.id);
+                        setTeacher((prev) =>
+                          prev
+                            ? { ...prev, assignedBatches: prev.assignedBatches.filter((b) => b.id !== batch.id) }
+                            : prev
+                        );
+                      }}
+                      className="w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all flex-shrink-0"
+                      title="Remove from batch"
+                    >
+                      <X size={13} strokeWidth={2.5} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right col — placeholders (2 cols) */}
+        <div className="col-span-2 flex flex-col gap-6">
+
+          <PlaceholderCard
+            icon={FlaskConical}
+            title="Tests Conducted"
+            description="Tests created and assigned by this teacher"
+          />
+
+          <PlaceholderCard
+            icon={TrendingUp}
+            title="Student Performance"
+            description="Average scores across batches over time"
+          />
+
+        </div>
+      </div>
+
+      {/* ── Bottom row — more placeholders ── */}
+      <div className="grid grid-cols-2 gap-6 mt-6">
+        <PlaceholderCard
+          icon={Users2}
+          title="Student Roster"
+          description="Students across all assigned batches"
+        />
+        <PlaceholderCard
+          icon={BarChart2}
+          title="Subject Performance"
+          description="Breakdown by subject taught"
+        />
+      </div>
+
+    </div>
+  );
+}
+
 // ===== FILE: src\app\pages\Teachers.tsx =====
 
 // src/app/pages/Teachers.tsx
 
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router";
 import {
   fetchUnassignedTeacherUsersApi,
   fetchClassBatchesApi,
   assignTeacherApi,
+  unassignTeacherBatchApi,
   fetchTeachersApi,
   type TeacherUserOption,
   type ClassBatchOption,
   type TeacherListItem,
   type TeacherBatch,
 } from "../../Lib/api/teachers";
+import { fetchSubjectCatalogApi } from "../../Lib/api/subjects";
 import {
   Search,
   Plus,
@@ -18938,6 +20163,7 @@ import {
   Phone,
   CalendarDays,
   FlaskConical,
+  ExternalLink,
 } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -18981,31 +20207,55 @@ function AssignTeacherModal({
   onClose: () => void;
   onAssigned: (teacherUser: TeacherUserOption, batches: ClassBatchOption[]) => void;
 }) {
-  const [teacherUsers, setTeacherUsers]       = useState<TeacherUserOption[]>([]);
-  const [batches, setBatches]                 = useState<ClassBatchOption[]>([]);
-  const [loadingData, setLoadingData]         = useState(true);
-  const [loadError, setLoadError]             = useState<string | null>(null);
-  const [selectedUserId, setSelectedUserId]   = useState("");
-  const [selectedBatchIds, setSelectedBatchIds] = useState<string[]>([]);
-  const [submitting, setSubmitting]           = useState(false);
-  const [error, setError]                     = useState<string | null>(null);
+  const [teacherUsers, setTeacherUsers] = useState<TeacherUserOption[]>([]);
+  const [batches, setBatches]           = useState<ClassBatchOption[]>([]);
+  const [subjects, setSubjects]         = useState<string[]>([]);
+  const [loadingData, setLoadingData]   = useState(true);
+  const [loadError, setLoadError]       = useState<string | null>(null);
+  const [selectedUserId, setSelectedUserId] = useState("");
+  // Map of batchId → subject (empty string = not yet chosen)
+  const [batchSubjects, setBatchSubjects] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting]     = useState(false);
+  const [error, setError]               = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([fetchUnassignedTeacherUsersApi(), fetchClassBatchesApi()])
-      .then(([users, batchList]) => {
+    Promise.all([
+      fetchUnassignedTeacherUsersApi(),
+      fetchClassBatchesApi(),
+      fetchSubjectCatalogApi(),
+    ])
+      .then(([users, batchList, subjectList]) => {
         setTeacherUsers(users);
         setBatches(batchList);
+        setSubjects(subjectList);
       })
       .catch((e) => setLoadError(e.message ?? "Failed to load data"))
       .finally(() => setLoadingData(false));
   }, []);
 
-  const canSubmit = Boolean(selectedUserId && selectedBatchIds.length > 0 && !submitting);
+  const selectedBatchIds = Object.keys(batchSubjects);
+
+  // All selected batches must have a subject chosen before submitting
+  const canSubmit = Boolean(
+    selectedUserId &&
+    selectedBatchIds.length > 0 &&
+    selectedBatchIds.every((id) => batchSubjects[id]?.trim()) &&
+    !submitting
+  );
 
   function toggleBatch(batchId: string) {
-    setSelectedBatchIds((prev) =>
-      prev.includes(batchId) ? prev.filter((id) => id !== batchId) : [...prev, batchId]
-    );
+    setBatchSubjects((prev) => {
+      if (batchId in prev) {
+        const next = { ...prev };
+        delete next[batchId];
+        return next;
+      }
+      return { ...prev, [batchId]: "" };
+    });
+  }
+
+  function setSubjectForBatch(batchId: string, subject: string) {
+    setBatchSubjects((prev) => ({ ...prev, [batchId]: subject }));
   }
 
   async function handleSubmit() {
@@ -19015,9 +20265,12 @@ function AssignTeacherModal({
     try {
       await assignTeacherApi({
         teacher_user_id: selectedUserId,
-        class_batch_ids: selectedBatchIds,
+        batch_assignments: selectedBatchIds.map((batchId) => ({
+          batch_id: batchId,
+          subject:  batchSubjects[batchId] || null,
+        })),
       });
-      const teacherUser = teacherUsers.find((u) => u.id === selectedUserId)!;
+      const teacherUser     = teacherUsers.find((u) => u.id === selectedUserId)!;
       const assignedBatches = batches.filter((b) => selectedBatchIds.includes(b.id));
       onAssigned(teacherUser, assignedBatches);
       onClose();
@@ -19093,47 +20346,74 @@ function AssignTeacherModal({
   </p>
   <div
     className="border border-gray-200 rounded-xl overflow-hidden"
-    style={{ maxHeight: "200px", overflowY: "auto" }}
+    style={{ maxHeight: "260px", overflowY: "auto" }}
   >
     {loadingData ? (
       <div className="px-4 py-3 text-gray-400" style={{ fontSize: "13px" }}>Loading batches…</div>
     ) : batches.map((b) => {
-      const checked = selectedBatchIds.includes(b.id);
+      const checked = b.id in batchSubjects;
       return (
-        <button
+        <div
           key={b.id}
-          type="button"
-          onClick={() => toggleBatch(b.id)}
-          className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-gray-50"
           style={{
             borderBottom: "1px solid #f3f4f6",
             backgroundColor: checked ? "#f0fdfa" : "white",
           }}
         >
-          <div
-            className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0 border transition-all"
-            style={{
-              backgroundColor: checked ? "#0d9488" : "white",
-              borderColor: checked ? "#0d9488" : "#d1d5db",
-            }}
+          {/* Batch row — toggle selection */}
+          <button
+            type="button"
+            onClick={() => toggleBatch(b.id)}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-gray-50"
           >
-            {checked && (
-              <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            )}
-          </div>
-          <span style={{ fontSize: "13.5px", color: checked ? "#0d9488" : "#374151", fontWeight: checked ? 600 : 400 }}>
-            {b.name}
-          </span>
-        </button>
+            <div
+              className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0 border transition-all"
+              style={{
+                backgroundColor: checked ? "#0d9488" : "white",
+                borderColor: checked ? "#0d9488" : "#d1d5db",
+              }}
+            >
+              {checked && (
+                <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                  <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              )}
+            </div>
+            <span style={{ fontSize: "13.5px", color: checked ? "#0d9488" : "#374151", fontWeight: checked ? 600 : 400 }}>
+              {b.name}
+            </span>
+          </button>
+
+          {/* Subject selector — only shown when batch is checked */}
+          {checked && (
+            <div className="px-4 pb-3">
+              <select
+                value={batchSubjects[b.id] ?? ""}
+                onChange={(e) => setSubjectForBatch(b.id, e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-700 focus:outline-none focus:border-teal-400 transition-all bg-white"
+                style={{ fontSize: "13px" }}
+              >
+                <option value="">— Select subject —</option>
+                {subjects.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+              {!batchSubjects[b.id] && (
+                <p className="text-amber-500 mt-1" style={{ fontSize: "11.5px" }}>
+                  Subject required before submitting.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
       );
     })}
   </div>
 </div>
 
 {/* Preview summary — shown when batches selected */}
-{canSubmit && selectedUserObj && (
+{selectedBatchIds.length > 0 && selectedUserObj && (
   <div
     className="flex items-start gap-3 p-3 rounded-xl"
     style={{ backgroundColor: "#f0fdfa", border: "1px solid #ccfbf1" }}
@@ -19143,7 +20423,9 @@ function AssignTeacherModal({
       <span style={{ fontWeight: 700 }}>{selectedUserObj.full_name}</span> will be assigned to{" "}
       <span style={{ fontWeight: 700 }}>{selectedBatchIds.length}</span>{" "}
       batch{selectedBatchIds.length !== 1 ? "es" : ""}:{" "}
-      {batches.filter((b) => selectedBatchIds.includes(b.id)).map((b) => b.name).join(", ")}
+      {batches.filter((b) => b.id in batchSubjects).map((b) =>
+        batchSubjects[b.id] ? `${b.name} (${batchSubjects[b.id]})` : b.name
+      ).join(", ")}
     </p>
   </div>
 )}
@@ -19183,9 +20465,13 @@ function AssignTeacherModal({
 function TeacherProfilePanel({
   teacher,
   onClose,
+  onViewFull,
+  onUnassignBatch,
 }: {
   teacher: Teacher;
   onClose: () => void;
+  onViewFull: () => void;
+  onUnassignBatch: (batchId: string) => Promise<void>;
 }) {
   const initials = teacher.name.split(" ").filter((w) => /^[A-Z]/.test(w)).map((w) => w[0]).join("").slice(0, 2);
 
@@ -19208,12 +20494,23 @@ function TeacherProfilePanel({
           <h2 style={{ fontSize: "17px", fontWeight: 700, color: "#111827", letterSpacing: "-0.01em" }}>
             Teacher Profile
           </h2>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-md flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors"
-          >
-            <X size={16} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onViewFull}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-100 text-gray-500 hover:border-teal-300 hover:text-teal-600 hover:bg-teal-50 transition-all"
+              style={{ fontSize: "12px", fontWeight: 600 }}
+              title="Open full profile page"
+            >
+              <ExternalLink size={12} strokeWidth={2.5} />
+              Full Profile
+            </button>
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-md flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors"
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -19310,7 +20607,17 @@ function TeacherProfilePanel({
                     </div>
                     <div className="flex-1 min-w-0">
                       <p style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>{batch.name}</p>
+                      {batch.subject && (
+                        <p style={{ fontSize: "11.5px", color: "#6b7280", marginTop: "1px" }}>{batch.subject}</p>
+                      )}
                     </div>
+                    <button
+                      onClick={() => onUnassignBatch(batch.id)}
+                      className="w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all flex-shrink-0"
+                      title="Remove from batch"
+                    >
+                      <X size={13} strokeWidth={2.5} />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -19356,6 +20663,7 @@ function TeacherProfilePanel({
 // ─── Main Component ────────────────────────────────────────────────────────────
 
 export function Teachers() {
+  const navigate = useNavigate();
   const [teachers, setTeachers]               = useState<Teacher[]>([]);
   const [loading, setLoading]                 = useState(true);
   const [fetchError, setFetchError]           = useState<string | null>(null);
@@ -19391,7 +20699,7 @@ export function Teachers() {
       email: null,
       active: true,
       createdDate: new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
-      assignedBatches: assignedBatches.map((b) => ({ id: b.id, name: b.name })),
+      assignedBatches: assignedBatches.map((b) => ({ id: b.id, name: b.name, subject: null })),
     };
     setTeachers((prev) => [newTeacher, ...prev]);
   }
@@ -19583,6 +20891,18 @@ export function Teachers() {
         <TeacherProfilePanel
           teacher={teachers.find((t) => t.id === selectedTeacher.id) ?? selectedTeacher}
           onClose={() => setSelectedTeacher(null)}
+          onViewFull={() => {
+            setSelectedTeacher(null);
+            navigate(`/teachers/${selectedTeacher.id}`);
+          }}
+          onUnassignBatch={async (batchId) => {
+            await unassignTeacherBatchApi(selectedTeacher.id, batchId);
+            setTeachers((prev) => prev.map((t) =>
+              t.id === selectedTeacher.id
+                ? { ...t, assignedBatches: t.assignedBatches.filter((b) => b.id !== batchId) }
+                : t
+            ));
+          }}
         />
       )}
     </div>
@@ -19746,7 +21066,7 @@ function mapRowToTest(row: TestRow): Test {
     date: row.test_date,
     testTime: row.test_time,
     durationMinutes: row.duration_minutes,
-    totalMarks: row.total_marks,
+    totalMarks: Number(row.total_marks),
     createdBy: row.created_by_name ?? "—",
     attachments: [],
     marks: null,
@@ -20049,20 +21369,30 @@ function TestFormView({
 
   // ── Date / time boundary helpers ──────────────────────────────────────────
   // Always computed fresh so the UI stays accurate without a re-render clock.
+  // Uses YYYY-MM-DD format required by HTML date inputs.
+  function getTodayIso(): string {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm   = String(d.getMonth() + 1).padStart(2, "0");
+    const dd   = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
   function getMinDate(): string {
-    // In edit mode allow the existing (possibly past) date to remain selectable,
-    // but still block choosing a NEW past date.
-    if (mode === "edit" && initial.date) return initial.date < todayStr() ? initial.date : todayStr();
-    return todayStr();
+    const today = getTodayIso();
+    // In edit mode: if the saved date is already in the past, keep it as the
+    // floor so the form stays valid — but don't let them pick a different past date.
+    if (mode === "edit" && initial.date && initial.date < today) return initial.date;
+    return today;
   }
 
   function getMinTime(): string | undefined {
     // Only restrict time when the chosen date is today.
-    if (form.date !== todayStr()) return undefined;
+    if (form.date !== getTodayIso()) return undefined;
     const now = new Date();
-    const hh = String(now.getHours()).padStart(2, "0");
-    const mm = String(now.getMinutes()).padStart(2, "0");
-    return `${hh}:${mm}`;
+    const hh  = String(now.getHours()).padStart(2, "0");
+    const mnt = String(now.getMinutes()).padStart(2, "0");
+    return `${hh}:${mnt}`;
   }
 
   function validate() {
@@ -21110,7 +22440,7 @@ useEffect(() => {
                 studentId: m.student_id,
                 studentName: m.student_name,
                 mobile: m.mobile,
-                score: m.score,
+                score: m.score != null ? Number(m.score) : null,
               })) : null,
             }
           : t
@@ -21996,6 +23326,7 @@ export function Users() {
   const [roleFilter, setRoleFilter]     = useState<string>("All");
   const [showCreate, setShowCreate]     = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [currentPage, setCurrentPage]   = useState(1);
 
   useEffect(() => {
     let cancelled = false;
@@ -22014,6 +23345,8 @@ export function Users() {
     return () => { cancelled = true; };
   }, []);
 
+  const PAGE_SIZE = 25;
+
   const filtered = users.filter((u) => {
     const matchRole   = roleFilter === "All" || u.role === roleFilter;
     const matchSearch =
@@ -22021,6 +23354,17 @@ export function Users() {
       (u.name ?? "").toLowerCase().includes(search.toLowerCase());
     return matchRole && matchSearch;
   });
+
+  const totalPages  = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  // Clamp page in case filters reduce the result count below current page
+  const safePage    = Math.min(currentPage, totalPages);
+  const pageSlice   = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+
+  function handleFilterChange(fn: () => void) {
+    fn();
+    setCurrentPage(1);
+  }
 
   function handleCreated(newUser: User) {
     setUsers((prev) => [newUser, ...prev]);
@@ -22093,7 +23437,7 @@ export function Users() {
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => handleFilterChange(() => setSearch(e.target.value))}
             placeholder="Search by login identifier…"
             className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-300 shadow-sm transition-all"
             style={{ fontSize: "13.5px" }}
@@ -22103,7 +23447,7 @@ export function Users() {
           {["All", ...ALL_ROLES].map((r) => (
             <button
               key={r}
-              onClick={() => setRoleFilter(r)}
+              onClick={() => handleFilterChange(() => setRoleFilter(r))}
               className="px-3.5 py-2 rounded-xl border transition-all"
               style={{
                 fontSize: "12.5px",
@@ -22136,7 +23480,7 @@ export function Users() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((user) => {
+            {pageSlice.map((user) => {
               const rc = roleConfig[user.role];
               const RoleIcon = rc.icon;
               const initials = user.name
@@ -22229,6 +23573,60 @@ export function Users() {
           </tbody>
         </table>
 
+{/* ── Pagination footer ── */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100">
+            <span className="text-gray-400" style={{ fontSize: "12.5px" }}>
+              Showing {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} of {filtered.length}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+                className="px-3 py-1.5 rounded-lg border border-gray-100 text-gray-500 hover:border-teal-300 hover:text-teal-600 hover:bg-teal-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                style={{ fontSize: "12.5px", fontWeight: 600 }}
+              >
+                ← Prev
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter((p) => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1)
+                .reduce<(number | "…")[]>((acc, p, idx, arr) => {
+                  if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push("…");
+                  acc.push(p);
+                  return acc;
+                }, [])
+                .map((p, idx) =>
+                  p === "…" ? (
+                    <span key={`ellipsis-${idx}`} className="px-2 text-gray-300" style={{ fontSize: "12.5px" }}>…</span>
+                  ) : (
+                    <button
+                      key={p}
+                      onClick={() => setCurrentPage(p as number)}
+                      className="w-8 h-8 rounded-lg border transition-all"
+                      style={{
+                        fontSize: "12.5px",
+                        fontWeight: 600,
+                        borderColor: safePage === p ? "#0d9488" : "#f3f4f6",
+                        backgroundColor: safePage === p ? "#f0fdfa" : "white",
+                        color: safePage === p ? "#0d9488" : "#6b7280",
+                      }}
+                    >
+                      {p}
+                    </button>
+                  )
+                )}
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safePage === totalPages}
+                className="px-3 py-1.5 rounded-lg border border-gray-100 text-gray-500 hover:border-teal-300 hover:text-teal-600 hover:bg-teal-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                style={{ fontSize: "12.5px", fontWeight: 600 }}
+              >
+                Next →
+              </button>
+            </div>
+          </div>
+        )}
+        
         {loading && (
           <div className="py-16 text-center">
             <p className="text-gray-400" style={{ fontSize: "14px" }}>Loading users…</p>
@@ -22290,6 +23688,8 @@ import { AcademicYears } from "./pages/AcademicYears";
 import { Batches } from "./pages/Batches";
 import { Users } from "./pages/Users";
 import { Teachers } from "./pages/Teachers";
+import { TeacherProfilePage } from "./pages/TeacherProfilePage";
+import { StudentProfilePage } from "./pages/StudentProfilePage";
 import { Students } from "./pages/Students";
 import { Tests } from "./pages/Tests";
 import { Attendance } from "./pages/Attendance";
@@ -22360,7 +23760,9 @@ export const router = createBrowserRouter([
       { path: "batches", Component: Batches },
       { path: "users", Component: Users },
       { path: "teachers", Component: Teachers },
+      { path: "teachers/:teacherId", Component: TeacherProfilePage },
       { path: "students", Component: Students },
+      { path: "students/:studentId", Component: StudentProfilePage },
       { path: "tests", Component: Tests },
       { path: "attendance", Component: Attendance },
       { path: "announcements", Component: Announcements },
@@ -23311,6 +24713,14 @@ export async function fetchStudentResults(): Promise<StudentResultsData> {
   return json.data as StudentResultsData;
 }
 
+// Used by admin/management/teacher to view any student's full results.
+export async function fetchStudentResultsById(studentId: string): Promise<StudentResultsData> {
+  const res = await authFetch(`/api/students/${studentId}/results`);
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error ?? "Failed to fetch student results");
+  return json.data as StudentResultsData;
+}
+
 // ===== FILE: src\Lib\api\students.ts =====
 
 // src/Lib/api/students.ts
@@ -23528,8 +24938,9 @@ export type ClassBatchOption = {
 
 
 export type TeacherBatch = {
-  id: string;
-  name: string;
+  id:      string;
+  name:    string;
+  subject: string | null;
 };
 
 export type TeacherListItem = {
@@ -23589,8 +25000,8 @@ export async function fetchClassBatchesApi(): Promise<ClassBatchOption[]> {
 }
 
 export async function assignTeacherApi(payload: {
-  teacher_user_id: string;
-  class_batch_ids: string[];
+  teacher_user_id:   string;
+  batch_assignments: { batch_id: string; subject: string | null }[];
 }): Promise<void> {
   const token = getToken();
   if (!token) throw new Error("Not authenticated");
@@ -23606,6 +25017,22 @@ export async function assignTeacherApi(payload: {
 
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? "Failed to assign teacher");
+}
+
+export async function unassignTeacherBatchApi(
+  teacherId: string,
+  batchId:   string
+): Promise<void> {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+
+  const res = await fetch(`/api/teachers/${teacherId}/batches/${batchId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Failed to unassign batch");
 }
 
 // ===== FILE: src\Lib\api\tests.ts =====

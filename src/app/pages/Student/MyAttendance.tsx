@@ -18,12 +18,13 @@ import {
   fetchStudentAttendancePage,
   type StudentAttendancePageData,
   type AttendanceDayRecord,
+  type HolidayDayRecord,
   type MonthSummary,
 } from "../../../Lib/api/student-attendance";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-type DayStatus = "present" | "absent" | "late" | "early_leave" | "none";
+type DayStatus = "present" | "absent" | "late" | "early_leave" | "holiday" | "none";
 
 // Derived DayRecord used by calendar/log — built from API AttendanceDayRecord
 type DayRecord = {
@@ -90,6 +91,7 @@ const STATUS_CONFIG: Record<DayStatus, { label: string; color: string; bg: strin
   absent:      { label: "Absent",           color: "#dc2626", bg: "#fee2e2", ring: "#dc2626" },
   late:        { label: "Late",             color: "#d97706", bg: "#fef9c3", ring: "#d97706" },
   early_leave: { label: "Early Leave",      color: "#7c3aed", bg: "#f5f3ff", ring: "#7c3aed" },
+  holiday:     { label: "Holiday",          color: "#d97706", bg: "#fffbeb", ring: "#fde68a" },
   none:        { label: "—",               color: "#d1d5db", bg: "#f9fafb", ring: "#e5e7eb" },
 };
 
@@ -99,15 +101,20 @@ function DayCell({
   iso,
   isCurrentMonth,
   recordMap,
+  holidayMap,
 }: {
   iso: string;
   isCurrentMonth: boolean;
   recordMap: Map<string, DayRecord>;
+  holidayMap: Map<string, HolidayDayRecord>;
 }) {
   const [hovered, setHovered] = useState(false);
-  const record = recordMap.get(iso);
-  const status = record?.status ?? "none";
+  const holiday = holidayMap.get(iso);
+  const record  = holiday ? undefined : recordMap.get(iso);
+  // Holiday takes priority over attendance status
+  const status: DayStatus = holiday ? "holiday" : (record?.status ?? "none");
   const cfg    = STATUS_CONFIG[status];
+
   const { d }  = parseIso(iso);
   const isToday = iso === "2026-03-08";
 
@@ -151,7 +158,7 @@ function DayCell({
             }}
           >
             <p style={{ fontSize: "11px", fontWeight: 700, color: cfg.color }}>
-              {cfg.label}
+              {status === "holiday" && holiday ? holiday.name : cfg.label}
             </p>
             {record?.wasEdited && record.updatedByName && (
               <p className="text-gray-400 mt-0.5" style={{ fontSize: "10px" }}>
@@ -192,11 +199,13 @@ function MonthCalendar({
   year,
   month,
   recordMap,
+  holidayMap,
   monthSummary,
 }: {
   year: number;
-  month: number; // 0-indexed (UI convention kept)
+  month: number;
   recordMap: Map<string, DayRecord>;
+  holidayMap: Map<string, HolidayDayRecord>;
   monthSummary: MonthSummary | undefined;
 }) {
   const firstDay    = new Date(year, month, 1).getDay();
@@ -271,7 +280,7 @@ function MonthCalendar({
       <div className="grid grid-cols-7 gap-1.5">
         {cells.map((cell, idx) =>
           cell.inMonth ? (
-            <DayCell key={idx} iso={cell.iso} isCurrentMonth recordMap={recordMap} />
+            <DayCell key={idx} iso={cell.iso} isCurrentMonth recordMap={recordMap} holidayMap={holidayMap} />
           ) : (
             <div key={idx} className="aspect-square" />
           )
@@ -316,6 +325,14 @@ export function MyAttendance() {
     }
   }
 
+  // Holiday map: date string → HolidayDayRecord
+  const holidayMap = new Map<string, HolidayDayRecord>();
+  if (data?.holiday_records) {
+    for (const h of data.holiday_records) {
+      holidayMap.set(h.date, h);
+    }
+  }
+
   // Build monthly trend lookup keyed by "YYYY-M" (1-indexed month)
   const monthSummaryMap = new Map<string, MonthSummary>();
   if (data) {
@@ -339,8 +356,21 @@ export function MyAttendance() {
   const currentStreak    = data?.current_streak      ?? 0;
   const longestStreak    = data?.longest_streak      ?? 0;
 
-  // Log: already sorted desc by backend
-  const logEntries = data?.day_records.map(toDayRecord) ?? [];
+  // Log: merge attendance records + holiday records, sorted desc by date
+  const logEntries: (DayRecord | { type: "holiday"; date: string; name: string })[] = (() => {
+    const att: (DayRecord | { type: "holiday"; date: string; name: string })[] =
+      (data?.day_records ?? []).map(r => toDayRecord(r));
+    const hols: (DayRecord | { type: "holiday"; date: string; name: string })[] =
+      (data?.holiday_records ?? []).map(h => ({
+        type: "holiday" as const,
+        date: h.date,
+        name: h.name,
+      }));
+    // Merge and sort descending — attendance takes priority on same day
+    const attDates = new Set((data?.day_records ?? []).map(r => r.date));
+    const filteredHols = hols.filter(h => !attDates.has(h.date));
+    return [...att, ...filteredHols].sort((a, b) => b.date.localeCompare(a.date));
+  })();
 
   // Monthly trend for bar chart — sorted asc (backend returns desc)
   const monthTrend = (data?.monthly_trend ?? [])
@@ -569,7 +599,7 @@ export function MyAttendance() {
           {/* Legend (calendar tab only) */}
           {activeTab === "calendar" && (
             <div className="flex items-center gap-3">
-{(["present", "late", "early_leave", "absent"] as DayStatus[]).map((s) => {                const cfg = STATUS_CONFIG[s];
+{(["present", "late", "early_leave", "absent", "holiday"] as DayStatus[]).map((s) => {                const cfg = STATUS_CONFIG[s];
                 return (
                   <div key={s} className="flex items-center gap-1.5">
                     <div className="w-3 h-3 rounded" style={{ backgroundColor: cfg.bg, border: `1.5px solid ${cfg.color}` }} />
@@ -608,6 +638,7 @@ export function MyAttendance() {
               year={viewYear}
               month={viewMonth}
               recordMap={recordMap}
+              holidayMap={holidayMap}
               monthSummary={currentMonthSummary}
             />
           </div>
@@ -638,28 +669,55 @@ export function MyAttendance() {
                 </thead>
                 <tbody>
                   {logEntries.map((entry) => {
-                    const cfg = STATUS_CONFIG[entry.status];
-                    const { y, m, d } = parseIso(entry.date);
+                    // Holiday row
+                    if ("type" in entry && entry.type === "holiday") {
+                      const { y, m, d } = parseIso(entry.date);
+                      const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+                      const display = `${months[m]} ${d}, ${y}`;
+                      const holidayCfg = STATUS_CONFIG["holiday"];
+                      return (
+                        <tr key={`hol-${entry.date}`} className="border-t border-gray-50 hover:bg-gray-50 transition-colors">
+                          <td className="px-6 py-3.5">
+                            <span className="text-gray-700" style={{ fontSize: "13px", fontWeight: 500 }}>{display}</span>
+                          </td>
+                          <td className="px-6 py-3.5">
+                            <span className="px-2.5 py-0.5 rounded-full" style={{ fontSize: "11.5px", fontWeight: 600, color: holidayCfg.color, backgroundColor: holidayCfg.bg }}>
+                              Holiday
+                            </span>
+                          </td>
+                          <td className="px-6 py-3.5">
+                            <span className="text-gray-500" style={{ fontSize: "13px" }}>{entry.name}</span>
+                          </td>
+                          <td className="px-6 py-3.5">
+                            <span className="text-gray-400" style={{ fontSize: "13px" }}>—</span>
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    // Normal attendance row
+                    const attEntry = entry as DayRecord;
+                    const cfg = STATUS_CONFIG[attEntry.status];
+                    const { y, m, d } = parseIso(attEntry.date);
                     const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
                     const display = `${months[m]} ${d}, ${y}`;
                     const todayIso = new Date().toISOString().split("T")[0];
-                    const isToday = entry.date === todayIso;
+                    const isToday = attEntry.date === todayIso;
 
-                    // Use updated_at+updatedBy if record was edited, else created_at+createdBy
-                    const displayName = entry.wasEdited
-                      ? (entry.updatedByName ?? entry.createdByName ?? "—")
-                      : (entry.createdByName ?? "—");
-                    const displayTime = entry.wasEdited
-                      ? (entry.updatedAt
-                          ? new Date(entry.updatedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
+                    const displayName = attEntry.wasEdited
+                      ? (attEntry.updatedByName ?? attEntry.createdByName ?? "—")
+                      : (attEntry.createdByName ?? "—");
+                    const displayTime = attEntry.wasEdited
+                      ? (attEntry.updatedAt
+                          ? new Date(attEntry.updatedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
                           : "—")
-                      : (entry.createdAt
-                          ? new Date(entry.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
+                      : (attEntry.createdAt
+                          ? new Date(attEntry.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
                           : "—");
 
                     return (
                       <tr
-                        key={entry.date}
+                        key={attEntry.date}
                         className="border-t border-gray-50 hover:bg-gray-50 transition-colors"
                       >
                         <td className="px-6 py-3.5">
@@ -698,7 +756,7 @@ export function MyAttendance() {
                             <span className="text-gray-500" style={{ fontSize: "13px" }}>
                               {displayName}
                             </span>
-                            {entry.wasEdited && (
+                            {attEntry.wasEdited && (
                               <span
                                 className="px-1 py-0.5 rounded"
                                 style={{ fontSize: "9px", fontWeight: 700, backgroundColor: "#eff6ff", color: "#2563eb" }}

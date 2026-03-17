@@ -10,6 +10,11 @@ import {
   type StudentDetailItem,
 } from "../../Lib/api/attendance";
 import {
+  fetchHolidaysApi,
+  declareHolidayApi,
+  type HolidayRow,
+} from "../../Lib/api/holiday";
+import {
   CheckSquare,
   TrendingUp,
   TrendingDown,
@@ -26,6 +31,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   ClipboardList,
+  Sun,
   Users2,
   ChevronLeft,
   ChevronRight,
@@ -808,9 +814,30 @@ export function Attendance({ canManage = true }: { canManage?: boolean }) {
   const [loadingSummary, setLoadingSummary] = useState(true);
   const [summaryError, setSummaryError] = useState<string | null>(null);
 
+  // Holiday state
+  const [todayHoliday, setTodayHoliday] = useState<HolidayRow | null>(null);
+
+  // Declare Holiday modal state
+  const [showDeclareModal, setShowDeclareModal] = useState(false);
+  const [declareHolidayName, setDeclareHolidayName] = useState("");
+  const [declareBatchScope, setDeclareBatchScope] = useState<"all" | "batch">("all");
+  const [declareBatchId, setDeclareBatchId] = useState<string>("");
+  const [declaringSaving, setDeclaringSaving] = useState(false);
+  const [declaringError, setDeclatingError] = useState<string | null>(null);
+
   const loadSummary = useCallback((date: string) => {
     setLoadingSummary(true);
     setSummaryError(null);
+    setTodayHoliday(null);
+
+    // Fetch holiday status for this date in parallel
+    fetchHolidaysApi()
+      .then((holidays) => {
+        const match = holidays.find(h => h.holiday_date === date && !h.is_cancelled) ?? null;
+        setTodayHoliday(match);
+      })
+      .catch(() => setTodayHoliday(null));
+
     fetchAttendanceBatchSummaryApi(date)
       .then(setBatchSummaries)
       .catch((err) => setSummaryError(err.message))
@@ -843,9 +870,32 @@ export function Attendance({ canManage = true }: { canManage?: boolean }) {
   }
 
   function handleDeleteRecord(_batchId: string) {
-    // Re-fetch summary after deletion
     loadSummary(selectedDate);
     setView({ type: "list" });
+  }
+  async function handleDeclareHoliday() {
+    if (!declareHolidayName.trim()) {
+      setDeclatingError("Holiday name is required");
+      return;
+    }
+    setDeclaringSaving(true);
+    setDeclatingError(null);
+    try {
+      await declareHolidayApi({
+        holiday_date: selectedDate,
+        name: declareHolidayName.trim(),
+        class_batch_id: declareBatchScope === "batch" && declareBatchId ? declareBatchId : null,
+      });
+      setShowDeclareModal(false);
+      setDeclareHolidayName("");
+      setDeclareBatchScope("all");
+      setDeclareBatchId("");
+      loadSummary(selectedDate);
+    } catch (err: any) {
+      setDeclatingError(err.message ?? "Failed to declare holiday");
+    } finally {
+      setDeclaringSaving(false);
+    }
   }
 
   // ── Sub-views ──
@@ -912,8 +962,18 @@ export function Attendance({ canManage = true }: { canManage?: boolean }) {
           </p>
         </div>
 
-        {/* Date Picker */}
+        {/* Date Picker + Declare Holiday */}
         <div className="flex items-center gap-2">
+          {canManage && !todayHoliday && (
+            <button
+              onClick={() => setShowDeclareModal(true)}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border shadow-sm transition-all"
+              style={{ fontSize: "13px", fontWeight: 600, backgroundColor: "#fffbeb", borderColor: "#fde68a", color: "#d97706" }}
+            >
+              <Sun size={14} />
+              Declare Holiday
+            </button>
+          )}
           {[TODAY, YESTERDAY].map(d => (
             <button
               key={d}
@@ -963,7 +1023,26 @@ export function Attendance({ canManage = true }: { canManage?: boolean }) {
         </div>
       )}
 
-      {!loadingSummary && pendingBatches.length > 0 && (
+      {todayHoliday && (
+        <div
+          className="flex items-start gap-3 px-5 py-4 rounded-2xl mb-6 border"
+          style={{ backgroundColor: "#fffbeb", borderColor: "#fde68a" }}
+        >
+          <Sun size={18} color="#d97706" className="flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-amber-800 mb-1" style={{ fontSize: "13.5px", fontWeight: 700 }}>
+              Holiday: {todayHoliday.name}
+            </p>
+            <p className="text-amber-700" style={{ fontSize: "12.5px" }}>
+              {todayHoliday.batch_name
+                ? `Applies to batch: ${todayHoliday.batch_name}`
+                : "Institute-wide holiday · Attendance marking is disabled for this date"}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {!todayHoliday && !loadingSummary && pendingBatches.length > 0 && (
         <div
           className="flex items-start gap-3 px-5 py-4 rounded-2xl mb-6 border"
           style={{ backgroundColor: "#fffbeb", borderColor: "#fde68a" }}
@@ -1112,7 +1191,9 @@ export function Attendance({ canManage = true }: { canManage?: boolean }) {
                   </td>
                   <td className="px-5 py-4" onClick={e => e.stopPropagation()}>
                     {!isDone ? (
-                      canManage ? (
+                      todayHoliday ? (
+                        <span className="text-amber-400" style={{ fontSize: "12px", fontWeight: 600 }}>Holiday</span>
+                      ) : canManage ? (
                         <button
                           onClick={() => setView({ type: "mark", batch: batch.batch_id })}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-white hover:opacity-90 transition-all"
@@ -1140,6 +1221,110 @@ export function Attendance({ canManage = true }: { canManage?: boolean }) {
           </tbody>
         </table>
       </div>
+
+      {/* Declare Holiday Modal */}
+      {showDeclareModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ backgroundColor: "rgba(0,0,0,0.4)" }}
+          onClick={() => setShowDeclareModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl p-7"
+            style={{ width: "460px", maxWidth: "95vw" }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "#fffbeb" }}>
+                <Sun size={20} color="#d97706" />
+              </div>
+              <div>
+                <h2 className="text-gray-900" style={{ fontSize: "17px", fontWeight: 700 }}>Declare Holiday</h2>
+                <p className="text-gray-400" style={{ fontSize: "12.5px" }}>{formatDisplayDate(selectedDate)}</p>
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-gray-600 mb-1.5" style={{ fontSize: "12.5px", fontWeight: 600 }}>
+                Holiday Name <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text"
+                value={declareHolidayName}
+                onChange={e => setDeclareHolidayName(e.target.value)}
+                placeholder="e.g. Diwali, Republic Day"
+                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-teal-400 transition-colors"
+                style={{ fontSize: "13.5px" }}
+              />
+            </div>
+
+            <div className="mb-5">
+              <label className="block text-gray-600 mb-1.5" style={{ fontSize: "12.5px", fontWeight: 600 }}>Scope</label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setDeclareBatchScope("all")}
+                  className="flex-1 py-2 rounded-xl border transition-all"
+                  style={{
+                    fontSize: "13px", fontWeight: 600,
+                    backgroundColor: declareBatchScope === "all" ? "#fffbeb" : "white",
+                    borderColor: declareBatchScope === "all" ? "#fde68a" : "#e5e7eb",
+                    color: declareBatchScope === "all" ? "#d97706" : "#6b7280",
+                  }}
+                >
+                  All Batches
+                </button>
+                <button
+                  onClick={() => setDeclareBatchScope("batch")}
+                  className="flex-1 py-2 rounded-xl border transition-all"
+                  style={{
+                    fontSize: "13px", fontWeight: 600,
+                    backgroundColor: declareBatchScope === "batch" ? "#fffbeb" : "white",
+                    borderColor: declareBatchScope === "batch" ? "#fde68a" : "#e5e7eb",
+                    color: declareBatchScope === "batch" ? "#d97706" : "#6b7280",
+                  }}
+                >
+                  Specific Batch
+                </button>
+              </div>
+              {declareBatchScope === "batch" && (
+                <select
+                  value={declareBatchId}
+                  onChange={e => setDeclareBatchId(e.target.value)}
+                  className="w-full mt-2 px-4 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-teal-400"
+                  style={{ fontSize: "13.5px" }}
+                >
+                  <option value="">Select batch…</option>
+                  {batchSummaries.map(b => (
+                    <option key={b.batch_id} value={b.batch_id}>{b.batch_name}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {declaringError && (
+              <p className="text-red-500 mb-3" style={{ fontSize: "12.5px" }}>{declaringError}</p>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                onClick={handleDeclareHoliday}
+                disabled={declaringSaving}
+                className="flex-1 py-2.5 rounded-xl text-white transition-all disabled:opacity-60"
+                style={{ backgroundColor: "#d97706", fontSize: "13.5px", fontWeight: 700 }}
+              >
+                {declaringSaving ? "Saving…" : "Declare Holiday"}
+              </button>
+              <button
+                onClick={() => { setShowDeclareModal(false); setDeclatingError(null); }}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 transition-all"
+                style={{ fontSize: "13.5px", fontWeight: 500 }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

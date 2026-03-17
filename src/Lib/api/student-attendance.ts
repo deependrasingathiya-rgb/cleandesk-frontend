@@ -15,6 +15,12 @@ export type AttendanceDayRecord = {
   updated_by_name: string | null;
 };
 
+export type HolidayDayRecord = {
+  date: string;
+  name: string;
+  class_batch_id: string | null;
+};
+
 export type MonthSummary = {
   year: number;
   month: number;
@@ -44,6 +50,7 @@ export type StudentAttendancePageData = {
   longest_streak: number;
   monthly_trend: MonthSummary[];
   day_records: AttendanceDayRecord[];
+  holiday_records: HolidayDayRecord[];
 };
 
 // ── Fetch ─────────────────────────────────────────────────────────────────────

@@ -3,16 +3,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 
-import { saveToken, parseToken, ROLES } from "../auth";
+import { saveToken, parseToken, ROLE_ROUTES } from "../auth";
 import loginIllustration from "../../assets/login-illustration.png";
 import loginDoodle from "../../assets/login-page-background-doogle.png";
-
-const ROLE_ROUTES: Record<number, string> = {
-  [ROLES.ADMIN]:      "/",
-  [ROLES.MANAGEMENT]: "/management",
-  [ROLES.TEACHER]:    "/teacher",
-  [ROLES.STUDENT]:    "/student",
-};
 
 // ─── Login Page ───────────────────────────────────────────────────────────────
 

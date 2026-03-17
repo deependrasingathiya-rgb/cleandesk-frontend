@@ -1,6 +1,9 @@
 // src/app/auth.ts
 
 const TOKEN_KEY = "auth_token";
+const LOGIN_PATH = "/login";
+
+let isHandlingUnauthorized = false;
 
 // ─── Role IDs — must match backend ROLES constants ────────────────────────────
 export const ROLES = {
@@ -11,6 +14,13 @@ export const ROLES = {
 } as const;
 
 export type RoleId = typeof ROLES[keyof typeof ROLES];
+
+export const ROLE_ROUTES: Record<RoleId, string> = {
+  [ROLES.ADMIN]: "/",
+  [ROLES.MANAGEMENT]: "/management",
+  [ROLES.TEACHER]: "/teacher",
+  [ROLES.STUDENT]: "/student",
+};
 
 // ─── Token storage ────────────────────────────────────────────────────────────
 
@@ -24,6 +34,10 @@ export function getToken(): string | null {
 
 export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
+}
+
+export function clearSession(): void {
+  clearToken();
 }
 
 // ─── JWT payload parsing (client-side, no verification) ──────────────────────
@@ -71,4 +85,46 @@ export function getSession(): Session | null {
   }
 
   return { token, payload };
+}
+
+function redirectToLogin(): void {
+  if (window.location.pathname !== LOGIN_PATH) {
+    window.location.assign(LOGIN_PATH);
+  }
+}
+
+export async function logout(options?: { redirectToLogin?: boolean }): Promise<void> {
+  const shouldRedirect = options?.redirectToLogin ?? true;
+  const token = getToken();
+
+  try {
+    if (token) {
+      await fetch("/api/logout", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+    }
+  } catch {
+    // Local cleanup still needs to happen even if the network request fails.
+  } finally {
+    clearSession();
+
+    if (shouldRedirect) {
+      redirectToLogin();
+    }
+  }
+}
+
+export function handleUnauthorizedSession(): void {
+  if (isHandlingUnauthorized) return;
+
+  isHandlingUnauthorized = true;
+  clearSession();
+  redirectToLogin();
+
+  window.setTimeout(() => {
+    isHandlingUnauthorized = false;
+  }, 0);
 }

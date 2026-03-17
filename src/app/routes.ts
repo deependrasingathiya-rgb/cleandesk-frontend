@@ -26,14 +26,7 @@ import { ManagementDashboard } from "./pages/Management/ManagementDashboard";
 import { StudentDashboard } from "./pages/Student/StudentDashboard";
 import { StudentMarks } from "./pages/Student/StudentMarks";
 import { Login } from "./pages/Login";
-import { clearToken, getToken, parseToken, isTokenExpired } from "./auth";
-
-const ROLE_ROUTES: Record<number, string> = {
-  1: "/",
-  2: "/management",
-  3: "/teacher",
-  4: "/student",
-};
+import { clearToken, getToken, parseToken, isTokenExpired, ROLE_ROUTES } from "./auth";
 
 function requireRole(roleId: number) {
   return () => {

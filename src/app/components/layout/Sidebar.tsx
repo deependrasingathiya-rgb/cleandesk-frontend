@@ -1,6 +1,7 @@
 // src/app/components/layout/Sidebar.tsx
 
 import { NavLink, useLocation } from "react-router";
+import { useState } from "react";
 import {
   LayoutDashboard,
   CalendarDays,
@@ -16,7 +17,9 @@ import {
   ChevronRight,
   Star,
   TrendingUp,
+  LogOut,
 } from "lucide-react";
+import { logout } from "../../auth";
 
 // ─── Nav Item Type ─────────────────────────────────────────────────────────────
 
@@ -207,6 +210,7 @@ function NavItem({
 
 export function Sidebar() {
   const location = useLocation();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const role = detectRole(location.pathname);
   const config = ROLE_CONFIG[role];
 
@@ -218,6 +222,13 @@ export function Sidebar() {
     if (exactPaths.includes(path)) return location.pathname === path;
     return location.pathname.startsWith(path);
   };
+
+  async function handleLogout() {
+    if (isLoggingOut) return;
+
+    setIsLoggingOut(true);
+    await logout();
+  }
 
   return (
     <aside
@@ -287,7 +298,7 @@ export function Sidebar() {
       </nav>
 
       {/* Profile Card */}
-      <div className="px-3 pb-4 pt-3 border-t border-gray-100">
+      <div className="px-3 pb-4 pt-3 border-t border-gray-100 space-y-2">
         <div className="flex items-center gap-3 px-3 py-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer group">
           <div
             className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
@@ -320,6 +331,17 @@ export function Sidebar() {
           </div>
           <ChevronRight size={14} className="text-gray-400 group-hover:text-gray-600" />
         </div>
+
+        <button
+          type="button"
+          onClick={handleLogout}
+          disabled={isLoggingOut}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          style={{ fontSize: "13px", fontWeight: 600 }}
+        >
+          <LogOut size={15} />
+          {isLoggingOut ? "Signing out..." : "Logout"}
+        </button>
       </div>
     </aside>
   );

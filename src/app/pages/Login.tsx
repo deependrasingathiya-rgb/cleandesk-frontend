@@ -75,10 +75,29 @@ export function Login() {
 
   return (
     <div
-      className="min-h-screen flex"
+      className="min-h-screen flex flex-col lg:flex-row"
       style={{ backgroundColor: "#f8fafc" }}
     >
-      {/* ── Left Panel — Illustration ── */}
+      {/* ── Top Banner — Mobile/Tablet only ── */}
+      <div
+        className="flex lg:hidden items-center gap-3 px-6 py-4"
+        style={{ backgroundColor: "#f0fdfa", borderBottom: "1px solid #ccfbf1" }}
+      >
+        <div
+          className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+          style={{ backgroundColor: "#0d9488" }}
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <path d="M9 2L2 6v6l7 4 7-4V6L9 2z" stroke="white" strokeWidth="1.8" strokeLinejoin="round" />
+            <path d="M9 2v14M2 6l7 4 7-4" stroke="white" strokeWidth="1.8" strokeLinejoin="round" />
+          </svg>
+        </div>
+        <span style={{ fontSize: "18px", fontWeight: 700, color: "#0d9488", letterSpacing: "-0.02em" }}>
+          CleanDesk
+        </span>
+      </div>
+
+      {/* ── Left Panel — Illustration (desktop only) ── */}
       <div
         className="hidden lg:flex flex-col justify-between p-12 flex-shrink-0"
         style={{ width: "520px", backgroundColor: "#f0fdfa" }}
@@ -170,27 +189,6 @@ export function Login() {
         <div className="absolute inset-0" style={{ backgroundColor: "rgba(255,255,255,0.92)" }} />
         <div className="relative z-10 w-full" style={{ maxWidth: "400px" }}>
         <div className="w-full" style={{ maxWidth: "400px" }}>
-
-          {/* Mobile logo */}
-          <div className="flex items-center gap-2.5 mb-10 lg:hidden">
-            <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center"
-              style={{ backgroundColor: "#0d9488" }}
-            >
-              <svg width="16" height="16" viewBox="0 0 18 18" fill="none">
-                <path
-                  d="M9 2L2 6v6l7 4 7-4V6L9 2z"
-                  stroke="white"
-                  strokeWidth="1.8"
-                  strokeLinejoin="round"
-                />
-                <path d="M9 2v14M2 6l7 4 7-4" stroke="white" strokeWidth="1.8" strokeLinejoin="round" />
-              </svg>
-            </div>
-            <span style={{ fontSize: "16px", fontWeight: 700, color: "#0d9488", letterSpacing: "-0.01em" }}>
-              CleanDesk
-            </span>
-          </div>
 
           {/* Heading */}
           <div className="mb-8">
@@ -316,17 +314,18 @@ export function Login() {
             )}
 
             {/* Submit */}
-            <button
-              onClick={handleLogin}
-              disabled={loading}
-              className="w-full py-3 rounded-xl text-white font-semibold transition-all hover:opacity-90 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              style={{
-                backgroundColor: "#0d9488",
-                fontSize: "14.5px",
-                fontWeight: 600,
-                marginTop: "4px",
-              }}
-            >
+          <button
+            onClick={handleLogin}
+            disabled={loading}
+            className="w-full py-3 rounded-xl text-white font-semibold transition-all hover:opacity-90 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            style={{
+              backgroundColor: "#0d9488",
+              fontSize: "14.5px",
+              fontWeight: 600,
+              marginTop: "4px",
+              minHeight: "48px",
+            }}
+          >
               {loading ? (
                 <>
                   <svg
@@ -359,6 +358,24 @@ export function Login() {
           </p>
         </div>
         </div>
+      </div>
+
+      {/* ── Bottom strip — Mobile only (mirrors left panel's dots) ── */}
+      <div
+        className="flex lg:hidden items-center justify-center gap-2 py-4"
+        style={{ backgroundColor: "#f0fdfa", borderTop: "1px solid #ccfbf1" }}
+      >
+        {[1, 2, 3].map((i) => (
+          <div
+            key={i}
+            className="rounded-full"
+            style={{
+              width: i === 1 ? "24px" : "8px",
+              height: "8px",
+              backgroundColor: i === 1 ? "#0d9488" : "#99f6e4",
+            }}
+          />
+        ))}
       </div>
     </div>
   );

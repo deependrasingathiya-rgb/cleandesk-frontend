@@ -19,6 +19,8 @@ import {
   LogOut,
 } from "lucide-react";
 import { logout, getRoleLabel, getSession, ROLES, type RoleId } from "../../auth";
+import { useSidebarCollapsed } from "./SidebarContext";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchMyProfile, type MyProfile } from "../../../Lib/api/profile";
 import { useNavigate } from "react-router";
@@ -161,17 +163,22 @@ function NavItem({
   icon: Icon,
   path,
   isActive,
+  collapsed,
 }: {
   label: string;
   icon: React.ElementType;
   path: string;
   isActive: boolean;
+  collapsed: boolean;
 }) {
   return (
     <li>
       <NavLink
         to={path}
-        className={`flex items-center gap-3 px-3 py-2.5 rounded-md transition-all duration-150 group ${
+        title={collapsed ? label : undefined}
+        className={`flex items-center gap-3 rounded-md transition-all duration-150 group ${
+          collapsed ? "justify-center px-0 py-2.5 mx-1" : "px-3 py-2.5"
+        } ${
           isActive
             ? "bg-teal-50 text-teal-700"
             : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"
@@ -183,14 +190,18 @@ function NavItem({
           strokeWidth={isActive ? 2.2 : 1.8}
           className={isActive ? "text-teal-600" : "text-gray-400 group-hover:text-gray-600"}
         />
-        <span style={{ fontSize: "13.5px", fontWeight: isActive ? 600 : 450 }}>
-          {label}
-        </span>
-        {isActive && (
-          <div
-            className="ml-auto w-1.5 h-1.5 rounded-full"
-            style={{ backgroundColor: "#0d9488" }}
-          />
+        {!collapsed && (
+          <>
+            <span style={{ fontSize: "13.5px", fontWeight: isActive ? 600 : 450 }}>
+              {label}
+            </span>
+            {isActive && (
+              <div
+                className="ml-auto w-1.5 h-1.5 rounded-full"
+                style={{ backgroundColor: "#0d9488" }}
+              />
+            )}
+          </>
         )}
       </NavLink>
     </li>
@@ -203,6 +214,7 @@ export function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const { collapsed, setCollapsed } = useSidebarCollapsed();
   const [profile, setProfile] = useState<MyProfile | null>(null);
   const session = getSession();
   const sessionRoleId = session?.payload.role_id;
@@ -233,6 +245,7 @@ export function Sidebar() {
 
   const mainItems = config.navItems.slice(0, config.mainEnd);
   const secondaryItems = config.navItems.slice(config.mainEnd, config.secondaryEnd);
+  const sidebarWidth = collapsed ? "0px" : "240px";
 
   const isActive = (path: string): boolean => {
     const exactPaths = ["/", "/teacher", "/management", "/student"];
@@ -248,13 +261,14 @@ export function Sidebar() {
   }
 
   return (
+    <>
     <aside
-      style={{ width: "240px", minWidth: "240px" }}
-      className="h-screen bg-white border-r border-gray-100 flex flex-col fixed left-0 top-0 z-30"
+      style={{ width: sidebarWidth, minWidth: sidebarWidth, transition: "width 0.2s ease" }}
+      className="h-screen bg-white border-r border-gray-100 flex flex-col fixed left-0 top-0 z-30 overflow-hidden"
     >
       {/* Logo */}
-      <div className="px-6 py-5 border-b border-gray-100">
-        <div className="flex items-center gap-3">
+      <div className="px-4 py-5 border-b border-gray-100">
+        <div className="flex items-center gap-3 overflow-hidden transition-all duration-200">
           <div
             className="flex items-center justify-center flex-shrink-0 overflow-hidden"
             style={{ width: "42px", height: "42px" }}
@@ -277,16 +291,18 @@ export function Sidebar() {
             </p>
           </div>
         </div>
-      </div>
+        </div>
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 overflow-y-auto">
+        {!collapsed && (
         <p
           className="text-gray-400 uppercase px-3 mb-3"
           style={{ fontSize: "10px", letterSpacing: "0.08em", fontWeight: 600 }}
         >
           {config.menuLabel}
         </p>
+        )}
         <ul className="space-y-0.5">
           {mainItems.map(({ label, icon, path }) => (
             <NavItem
@@ -295,16 +311,19 @@ export function Sidebar() {
               icon={icon}
               path={path}
               isActive={isActive(path)}
+              collapsed={collapsed}
             />
           ))}
         </ul>
 
+        {!collapsed && (
         <p
           className="text-gray-400 uppercase px-3 mt-6 mb-3"
           style={{ fontSize: "10px", letterSpacing: "0.08em", fontWeight: 600 }}
         >
           {config.accountLabel}
         </p>
+        )}
         <ul className="space-y-0.5">
           {secondaryItems.map(({ label, icon, path }) => (
             <NavItem
@@ -313,6 +332,7 @@ export function Sidebar() {
               icon={icon}
               path={path}
               isActive={isActive(path)}
+              collapsed={collapsed}
             />
           ))}
         </ul>
@@ -322,7 +342,7 @@ export function Sidebar() {
       <div className="px-3 pb-4 pt-3 border-t border-gray-100 space-y-2">
         <div
           onClick={() => navigate(profilePath)}
-          className="flex items-center gap-3 px-3 py-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer group"
+          className={`flex items-center gap-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer group ${collapsed ? "justify-center px-2 py-3 mx-1" : "px-3 py-3"}`}
         >
           <div
             className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
@@ -332,28 +352,32 @@ export function Sidebar() {
               {initials}
             </span>
           </div>
-          <div className="flex-1 min-w-0">
-            <p
-              className="text-gray-800 truncate"
-              style={{ fontSize: "13px", fontWeight: 600 }}
-            >
-              {displayName}
-            </p>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <span
-                className="px-2 py-0.5 rounded-full"
-                style={{
-                  fontSize: "10px",
-                  fontWeight: 600,
-                  backgroundColor: config.roleBg,
-                  color: config.roleColor,
-                }}
-              >
-                {roleBadge}
-              </span>
-            </div>
-          </div>
-          <ChevronRight size={14} className="text-gray-400 group-hover:text-gray-600" />
+          {!collapsed && (
+            <>
+              <div className="flex-1 min-w-0">
+                <p
+                  className="text-gray-800 truncate"
+                  style={{ fontSize: "13px", fontWeight: 600 }}
+                >
+                  {displayName}
+                </p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span
+                    className="px-2 py-0.5 rounded-full"
+                    style={{
+                      fontSize: "10px",
+                      fontWeight: 600,
+                      backgroundColor: config.roleBg,
+                      color: config.roleColor,
+                    }}
+                  >
+                    {roleBadge}
+                  </span>
+                </div>
+              </div>
+              <ChevronRight size={14} className="text-gray-400 group-hover:text-gray-600" />
+            </>
+          )}
         </div>
 
         <button
@@ -364,9 +388,26 @@ export function Sidebar() {
           style={{ fontSize: "13px", fontWeight: 600 }}
         >
           <LogOut size={15} />
-          {isLoggingOut ? "Signing out..." : "Logout"}
+          {!collapsed && (isLoggingOut ? "Signing out..." : "Logout")}
         </button>
       </div>
     </aside>
+
+      {/* Floating toggle button — outside aside so overflow:hidden never clips it */}
+      <button
+        onClick={() => setCollapsed(!collapsed)}
+        style={{
+          position: "fixed",
+          left: collapsed ? "12px" : "220px",
+          top: "20px",
+          transition: "left 0.2s ease",
+          zIndex: 40,
+        }}
+        className="w-8 h-8 rounded-md flex items-center justify-center bg-white border border-gray-200 text-gray-400 hover:bg-gray-100 hover:text-gray-600 shadow-sm transition-colors"
+        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+      >
+        {collapsed ? <PanelLeftOpen size={16} strokeWidth={2} /> : <PanelLeftClose size={16} strokeWidth={2} />}
+      </button>
+    </>
   );
 }

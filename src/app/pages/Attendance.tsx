@@ -1,6 +1,7 @@
 // src/app/pages/Attendance.tsx
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { fetchWeeklyAttendanceTrend, type WeeklyTrendDay } from "../../Lib/api/attendance";
 import {
   fetchAttendanceBatchSummaryApi,
   fetchAttendanceBatchDetailApi,
@@ -29,7 +30,6 @@ import {
   UserX,
   AlertCircle,
   Pencil,
-  Trash2,
   AlertTriangle,
   CheckCircle2,
   ClipboardList,
@@ -493,7 +493,6 @@ function BatchSummaryPage({
   summary,
   onBack,
   onModify,
-  onDelete,
   onMarkAttendance,
   canManage,
 }: {
@@ -503,11 +502,9 @@ function BatchSummaryPage({
   summary: BatchSummaryItem | null; // null = pending
   onBack: () => void;
   onModify: () => void;
-  onDelete: () => void;
   onMarkAttendance: () => void;
   canManage: boolean;
 }) {
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [detailRows, setDetailRows] = useState<StudentDetailItem[]>([]);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
@@ -584,14 +581,7 @@ function BatchSummaryPage({
                   <Pencil size={13} strokeWidth={2} />
                   Modify Attendance
                 </button>
-                <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-red-100 text-red-400 hover:bg-red-50 hover:border-red-200 transition-all"
-                  style={{ fontSize: "13px", fontWeight: 600 }}
-                >
-                  <Trash2 size={13} strokeWidth={2} />
-                  Delete Record
-                </button>
+               
               </div>
             ) : null
           ) : (
@@ -758,41 +748,7 @@ function BatchSummaryPage({
         </div>
       )}
 
-      {/* Delete confirmation modal */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.3)" }}>
-          <div className="bg-white rounded-2xl shadow-xl p-8 w-[420px] mx-4">
-            <div className="flex items-start gap-4 mb-6">
-              <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#fef2f2" }}>
-                <AlertTriangle size={20} color="#ef4444" />
-              </div>
-              <div>
-                <h3 className="text-gray-900 mb-1" style={{ fontSize: "16px", fontWeight: 700 }}>Delete Attendance Record?</h3>
-                <p className="text-gray-400" style={{ fontSize: "13.5px", lineHeight: 1.6 }}>
-                  This will permanently remove the attendance record for{" "}
-                  <strong className="text-gray-700">{batchName}</strong> on {formatDisplayDate(date)}. This cannot be undone.
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => { onDelete(); setShowDeleteConfirm(false); }}
-                className="flex-1 py-2.5 rounded-xl text-white transition-all hover:opacity-90"
-                style={{ backgroundColor: "#ef4444", fontSize: "13.5px", fontWeight: 600 }}
-              >
-                Yes, Delete
-              </button>
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 transition-all"
-                style={{ fontSize: "13.5px", fontWeight: 500 }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      
     </div>
   );
 }
@@ -815,7 +771,7 @@ export function Attendance({ canManage = true }: { canManage?: boolean }) {
   const [batchSummaries, setBatchSummaries] = useState<BatchSummaryItem[]>([]);
   const [loadingSummary, setLoadingSummary] = useState(true);
   const [summaryError, setSummaryError] = useState<string | null>(null);
-
+const [weeklyTrend, setWeeklyTrend] = useState<WeeklyTrendDay[]>([]);
   // Holiday state — all active holidays for the selected date
   const [dateHolidays, setDateHolidays] = useState<HolidayRow[]>([]);
   // Derived: institute-wide holiday (class_batch_id === null)
@@ -850,6 +806,11 @@ export function Attendance({ canManage = true }: { canManage?: boolean }) {
       .then(setBatchSummaries)
       .catch((err) => setSummaryError(err.message))
       .finally(() => setLoadingSummary(false));
+
+    // Weekly trend is not date-specific — always shows last 5 weekdays
+    fetchWeeklyAttendanceTrend()
+      .then(setWeeklyTrend)
+      .catch(() => setWeeklyTrend([]));
   }, []);
 
   useEffect(() => {
@@ -877,10 +838,7 @@ export function Attendance({ canManage = true }: { canManage?: boolean }) {
     setView({ type: "summary", batch: batchId });
   }
 
-  function handleDeleteRecord(_batchId: string) {
-    loadSummary(selectedDate);
-    setView({ type: "list" });
-  }
+  
   async function handleDeclareHoliday() {
     if (!declareHolidayName.trim()) {
       setDeclatingError("Holiday name is required");
@@ -959,7 +917,6 @@ export function Attendance({ canManage = true }: { canManage?: boolean }) {
         summary={summary ?? null}
         onBack={() => setView({ type: "list" })}
         onModify={() => setView({ type: "modify", batch: view.batch })}
-        onDelete={() => handleDeleteRecord(view.batch)}
         onMarkAttendance={() => setView({ type: "mark", batch: view.batch })}
         canManage={canManage}
       />
@@ -977,13 +934,7 @@ export function Attendance({ canManage = true }: { canManage?: boolean }) {
   const totalLate     = batchSummaries.reduce((a, s) => a + s.late_count, 0);
   const overallPct    = totalStudents > 0 ? Math.round((totalPresent / totalStudents) * 100) : 0;
 
-  const weeklyTrend = [
-    { day: "Mon", pct: 88 },
-    { day: "Tue", pct: 91 },
-    { day: "Wed", pct: 89 },
-    { day: "Thu", pct: 94 },
-    { day: "Fri", pct: 91 },
-  ];
+  
 
   return (
     <div className="p-8 max-w-[1100px] mx-auto">

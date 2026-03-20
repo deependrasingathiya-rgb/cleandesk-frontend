@@ -49,6 +49,9 @@ export async function fetchUpcomingTests(limit = 5): Promise<UpcomingTest[]> {
   return data.tests;
 }
 
+
+
+
 export async function fetchAttendanceSummary(date?: string): Promise<{ date: string; rows: AttendanceSummaryRow[] }> {
   const param = date ? `?date=${date}` : "";
   const res = await authFetch(`/api/dashboard/attendance-summary${param}`);

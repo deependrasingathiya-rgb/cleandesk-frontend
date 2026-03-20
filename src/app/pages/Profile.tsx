@@ -7,7 +7,7 @@ import {
   Globe, X, Eye, EyeOff, Check, GraduationCap, UserCheck,
   Users as UsersIcon, CheckCircle2, AlertTriangle,
 } from "lucide-react";
-import { fetchMyProfile, type MyProfile } from "../../Lib/api/profile";
+import { fetchMyProfile, updateMyProfile, changePasswordApi, type MyProfile } from "../../Lib/api/profile";
 
 // ─── Role detection (mirrors Sidebar.tsx) ──────────────────────────────────────
 
@@ -19,111 +19,17 @@ function detectRole(pathname: string): RoleContext {
   if (pathname === "/student"    || pathname.startsWith("/student/"))    return "student";
   return "admin";
 }
+const ROLE_VISUAL: Record<RoleContext, { color: string; bg: string; icon: React.ElementType; label: string }> = {
+  admin:      { color: "#7c3aed", bg: "#f5f3ff", icon: Shield,        label: "Admin"      },
+  teacher:    { color: "#0d9488", bg: "#f0fdfa", icon: GraduationCap, label: "Teacher"    },
+  management: { color: "#2563eb", bg: "#eff6ff", icon: UserCheck,     label: "Management" },
+  student:    { color: "#d97706", bg: "#fffbeb", icon: UsersIcon,     label: "Student"    },
+};
 
 // ─── Per-role static data ──────────────────────────────────────────────────────
 
-type RoleProfile = {
-  name: string;
-  initials: string;
-  role: string;
-  roleColor: string;
-  roleBg: string;
-  roleIcon: React.ElementType;
-  email: string;
-  phone: string;
-  location: string;
-  institute: string;
-  joined: string;
-  lastLogin: string;
-  activityLog: { action: string; time: string }[];
-};
 
-const ROLE_PROFILES: Record<RoleContext, RoleProfile> = {
-  admin: {
-    name: "Aryan Kumar",
-    initials: "AK",
-    role: "Super Admin",
-    roleColor: "#7c3aed",
-    roleBg: "#f5f3ff",
-    roleIcon: Shield,
-    email: "aryan.kumar@institute.edu",
-    phone: "+91 98765 43200",
-    location: "Mumbai, Maharashtra",
-    institute: "EduAdmin Institute",
-    joined: "January 2022",
-    lastLogin: "Today, 9:14 AM",
-    activityLog: [
-      { action: "Created announcement: Annual Sports Day",             time: "Mar 5, 2026, 3:45 PM"  },
-      { action: "Enrolled student: Sneha Patel in Science Batch A",    time: "Mar 5, 2026, 11:20 AM" },
-      { action: "Updated batch capacity: Math – Batch D",              time: "Mar 4, 2026, 2:10 PM"  },
-      { action: "Added teacher: Dr. Anita Sharma",                     time: "Mar 3, 2026, 10:05 AM" },
-      { action: "Published academic year 2026–2027",                   time: "Mar 2, 2026, 4:30 PM"  },
-    ],
-  },
-  teacher: {
-    name: "Ravi Shankar",
-    initials: "RS",
-    role: "Teacher",
-    roleColor: "#0d9488",
-    roleBg: "#f0fdfa",
-    roleIcon: GraduationCap,
-    email: "ravi.shankar@institute.edu",
-    phone: "+91 98001 11001",
-    location: "Pune, Maharashtra",
-    institute: "EduAdmin Institute",
-    joined: "April 2024",
-    lastLogin: "Today, 8:50 AM",
-    activityLog: [
-      { action: "Marked attendance for Science – Batch A",             time: "Mar 8, 2026, 9:05 AM"  },
-      { action: "Uploaded: Physics Formula Sheet.pdf",                 time: "Mar 3, 2026, 11:00 AM" },
-      { action: "Created test: Mid-Term Physics",                      time: "Mar 1, 2026, 2:30 PM"  },
-      { action: "Marked attendance for Math – Batch D",                time: "Feb 28, 2026, 9:12 AM" },
-      { action: "Added result for Algebra Unit Test",                  time: "Feb 20, 2026, 4:00 PM" },
-    ],
-  },
-  management: {
-    name: "Meera Joshi",
-    initials: "MJ",
-    role: "Management",
-    roleColor: "#2563eb",
-    roleBg: "#eff6ff",
-    roleIcon: UserCheck,
-    email: "meera.joshi@institute.edu",
-    phone: "+91 98002 22002",
-    location: "Nagpur, Maharashtra",
-    institute: "EduAdmin Institute",
-    joined: "February 2023",
-    lastLogin: "Today, 10:30 AM",
-    activityLog: [
-      { action: "Reviewed attendance report for March 2026",           time: "Mar 8, 2026, 10:15 AM" },
-      { action: "Exported student marks – Commerce Batch B",           time: "Mar 6, 2026, 3:00 PM"  },
-      { action: "Viewed upcoming test schedule",                       time: "Mar 5, 2026, 2:00 PM"  },
-      { action: "Checked batch occupancy report",                      time: "Mar 4, 2026, 11:45 AM" },
-      { action: "Reviewed study material uploads",                     time: "Mar 3, 2026, 9:30 AM"  },
-    ],
-  },
-  student: {
-    name: "Sneha Patel",
-    initials: "SP",
-    role: "Student",
-    roleColor: "#d97706",
-    roleBg: "#fffbeb",
-    roleIcon: UsersIcon,
-    email: "sneha.patel@student.edu",
-    phone: "+91 98003 33003",
-    location: "Thane, Maharashtra",
-    institute: "EduAdmin Institute",
-    joined: "April 2024",
-    lastLogin: "Today, 7:45 AM",
-    activityLog: [
-      { action: "Viewed attendance report for March 2026",             time: "Mar 8, 2026, 7:50 AM"  },
-      { action: "Downloaded: Physics Formula Sheet.pdf",               time: "Mar 3, 2026, 6:30 PM"  },
-      { action: "Checked result: Organic Chemistry Quiz",              time: "Feb 20, 2026, 5:00 PM" },
-      { action: "Viewed announcement: Mid-Term Exam Schedule",         time: "Mar 4, 2026, 8:00 AM"  },
-      { action: "Viewed upcoming test: Algebra Unit Test",             time: "Mar 2, 2026, 7:30 PM"  },
-    ],
-  },
-};
+
 
 // ─── Inline Field Editor ───────────────────────────────────────────────────────
 
@@ -131,71 +37,103 @@ function InlineEditor({
   label,
   value,
   onSave,
+  disabled = false,
 }: {
   label: string;
   value: string;
-  onSave: (v: string) => void;
+  onSave: (v: string) => Promise<void>;
+  disabled?: boolean;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [draft,   setDraft]   = useState(value);
+  const [editing, setSaving_editing] = useState(false);
+  const [draft,   setDraft]          = useState(value);
+  const [saving,  setSaving]         = useState(false);
+  const [error,   setError]          = useState<string | null>(null);
 
-  function commit() {
-    if (draft.trim()) onSave(draft.trim());
-    setEditing(false);
+  // Keep draft in sync if parent value changes (e.g. after initial load)
+  useEffect(() => { setDraft(value); }, [value]);
+
+  async function commit() {
+    const trimmed = draft.trim();
+    if (!trimmed) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave(trimmed);
+      setSaving_editing(false);
+    } catch (err: any) {
+      setError(err.message ?? "Failed to save");
+    } finally {
+      setSaving(false);
+    }
   }
 
   function cancel() {
     setDraft(value);
-    setEditing(false);
+    setSaving_editing(false);
+    setError(null);
   }
 
   return (
-    <div className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0">
-      <div className="flex-1 min-w-0 pr-4">
-        <p className="text-gray-500" style={{ fontSize: "12px", fontWeight: 500 }}>{label}</p>
-        {editing ? (
-          <input
-            autoFocus
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") cancel(); }}
-            className="mt-1 w-full border border-teal-300 rounded-md px-3 py-1.5 text-gray-800 focus:outline-none focus:ring-2 focus:ring-teal-100 transition-all"
-            style={{ fontSize: "13.5px" }}
-          />
-        ) : (
-          <p className="text-gray-800 mt-0.5 truncate" style={{ fontSize: "14px", fontWeight: 500 }}>{value}</p>
-        )}
-      </div>
-      <div className="flex items-center gap-1.5 flex-shrink-0">
-        {editing ? (
-          <>
+    <div className="py-3 border-b border-gray-50 last:border-0">
+      <div className="flex items-center justify-between">
+        <div className="flex-1 min-w-0 pr-4">
+          <p className="text-gray-500" style={{ fontSize: "12px", fontWeight: 500 }}>{label}</p>
+          {editing ? (
+            <input
+              autoFocus
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") cancel(); }}
+              disabled={saving}
+              className="mt-1 w-full border border-teal-300 rounded-md px-3 py-1.5 text-gray-800 focus:outline-none focus:ring-2 focus:ring-teal-100 transition-all disabled:opacity-60"
+              style={{ fontSize: "13.5px" }}
+            />
+          ) : (
+            <p className="text-gray-800 mt-0.5 truncate" style={{ fontSize: "14px", fontWeight: 500 }}>
+              {value || <span className="text-gray-300">Not set</span>}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {editing ? (
+            <>
+              <button
+                onClick={commit}
+                disabled={saving}
+                className="w-7 h-7 rounded-md flex items-center justify-center transition-colors hover:bg-teal-50 disabled:opacity-50"
+                style={{ color: "#0d9488" }}
+                title="Save"
+              >
+                {saving
+                  ? <div className="w-3 h-3 border border-teal-500 border-t-transparent rounded-full animate-spin" />
+                  : <Check size={14} strokeWidth={2.5} />
+                }
+              </button>
+              <button
+                onClick={cancel}
+                disabled={saving}
+                className="w-7 h-7 rounded-md flex items-center justify-center transition-colors hover:bg-gray-100 disabled:opacity-50"
+                style={{ color: "#9ca3af" }}
+                title="Cancel"
+              >
+                <X size={14} strokeWidth={2.5} />
+              </button>
+            </>
+          ) : (
             <button
-              onClick={commit}
-              className="w-7 h-7 rounded-md flex items-center justify-center transition-colors hover:bg-teal-50"
-              style={{ color: "#0d9488" }}
-              title="Save"
+              onClick={() => { if (!disabled) { setDraft(value); setSaving_editing(true); } }}
+              disabled={disabled}
+              className="w-7 h-7 rounded-md flex items-center justify-center transition-colors hover:bg-teal-50 text-gray-300 hover:text-teal-600 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-gray-300"
+              title={disabled ? "Cannot be edited" : "Edit"}
             >
-              <Check size={14} strokeWidth={2.5} />
+              <Edit2 size={13} strokeWidth={2} />
             </button>
-            <button
-              onClick={cancel}
-              className="w-7 h-7 rounded-md flex items-center justify-center transition-colors hover:bg-gray-100"
-              style={{ color: "#9ca3af" }}
-              title="Cancel"
-            >
-              <X size={14} strokeWidth={2.5} />
-            </button>
-          </>
-        ) : (
-          <button
-            onClick={() => { setDraft(value); setEditing(true); }}
-            className="w-7 h-7 rounded-md flex items-center justify-center transition-colors hover:bg-teal-50 text-gray-300 hover:text-teal-600"
-            title="Edit"
-          >
-            <Edit2 size={13} strokeWidth={2} />
-          </button>
-        )}
+          )}
+        </div>
       </div>
+      {error && (
+        <p className="text-red-500 mt-1" style={{ fontSize: "11.5px" }}>{error}</p>
+      )}
     </div>
   );
 }
@@ -203,30 +141,34 @@ function InlineEditor({
 // ─── Change Password Modal ─────────────────────────────────────────────────────
 
 function ChangePasswordModal({ onClose }: { onClose: () => void }) {
-  const [current,  setCurrent]  = useState("");
-  const [next,     setNext]     = useState("");
-  const [confirm,  setConfirm]  = useState("");
-  const [showCur,  setShowCur]  = useState(false);
-  const [showNew,  setShowNew]  = useState(false);
-  const [showCon,  setShowCon]  = useState(false);
-  const [done,     setDone]     = useState(false);
-  const [error,    setError]    = useState("");
+  const [current,    setCurrent]    = useState("");
+  const [next,       setNext]       = useState("");
+  const [confirm,    setConfirm]    = useState("");
+  const [showCur,    setShowCur]    = useState(false);
+  const [showNew,    setShowNew]    = useState(false);
+  const [showCon,    setShowCon]    = useState(false);
+  const [done,       setDone]       = useState(false);
+  const [error,      setError]      = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const lengthOk  = next.length >= 8;
   const matchOk   = next === confirm && confirm.length > 0;
   const hasUpper  = /[A-Z]/.test(next);
   const hasNum    = /[0-9]/.test(next);
-  const canSubmit = current.trim() && lengthOk && matchOk && hasUpper && hasNum;
+  const canSubmit = current.trim() && lengthOk && matchOk && hasUpper && hasNum && !submitting;
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!canSubmit) return;
-    // Simulate wrong current password for demo
-    if (current !== "Password123") {
-      setError("Current password is incorrect. (Hint: Password123)");
-      return;
-    }
+    setSubmitting(true);
     setError("");
-    setDone(true);
+    try {
+      await changePasswordApi(current, next);
+      setDone(true);
+    } catch (err: any) {
+      setError(err.message ?? "Failed to change password");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function Rule({ ok, label }: { ok: boolean; label: string }) {
@@ -339,7 +281,7 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
                 className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
               >
-                Update Password
+                {submitting ? "Updating…" : "Update Password"}
               </button>
             </div>
           </>
@@ -716,13 +658,11 @@ export function Profile() {
     return "admin" as RoleContext;
   })();
 
-  const base = ROLE_PROFILES[role];
+  const visual = ROLE_VISUAL[role];
 
-  // ── Live profile data from backend ──
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileError,   setProfileError]   = useState<string | null>(null);
 
-  // Editable fields — seeded from API response
   const [name,      setName]      = useState("");
   const [email,     setEmail]     = useState("");
   const [phone,     setPhone]     = useState("");
@@ -760,7 +700,7 @@ export function Profile() {
   // Recompute initials dynamically from the live name
   const initials = name.split(" ").filter(Boolean).map((w) => w[0].toUpperCase()).join("").slice(0, 2);
 
-  const RoleIcon = base.roleIcon;
+  const RoleIcon = visual.icon;
 
   if (profileLoading) {
     return (
@@ -800,19 +740,19 @@ export function Profile() {
             {/* Avatar */}
             <div
               className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4"
-              style={{ backgroundColor: base.roleBg }}
+              style={{ backgroundColor: visual.bg }}
             >
-              <span style={{ fontSize: "28px", fontWeight: 700, color: base.roleColor }}>{initials}</span>
+              <span style={{ fontSize: "28px", fontWeight: 700, color: visual.color }}>{initials}</span>
             </div>
 
             {/* Name & Role */}
             <h2 className="text-gray-900 mb-1" style={{ fontSize: "18px", fontWeight: 700 }}>{name}</h2>
             <span
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full mb-4"
-              style={{ fontSize: "12px", fontWeight: 600, color: base.roleColor, backgroundColor: base.roleBg }}
+             className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full mb-4"
+            style={{ fontSize: "12px", fontWeight: 600, color: visual.color, backgroundColor: visual.bg }}
             >
               <RoleIcon size={12} strokeWidth={2} />
-              {base.role}
+              {visual.label}
             </span>
 
             {/* Info list */}
@@ -874,11 +814,29 @@ export function Profile() {
                   </div>
                 </div>
               ) : (
-                <InlineEditor label="Full Name" value={name} onSave={setName} />
+                <>
+                  <InlineEditor
+                    label="Full Name"
+                    value={name}
+                    onSave={async (v) => { await updateMyProfile({ full_name: v }); setName(v); }}
+                  />
+                  <InlineEditor
+                    label="Email Address"
+                    value={email}
+                    onSave={async (v) => { await updateMyProfile({ email: v }); setEmail(v); }}
+                  />
+                  <InlineEditor
+                    label="Phone Number"
+                    value={phone}
+                    onSave={async (v) => { await updateMyProfile({ mobile: v }); setPhone(v); }}
+                  />
+                  <InlineEditor
+                    label="Location"
+                    value={location_}
+                    onSave={async (v) => { await updateMyProfile({ address: v }); setLocation(v); }}
+                  />
+                </>
               )}
-              <InlineEditor label="Email Address" value={email}     onSave={setEmail}     />
-              <InlineEditor label="Phone Number"  value={phone}     onSave={setPhone}     />
-              <InlineEditor label="Location"      value={location_} onSave={setLocation}  />
             </div>
           </div>
 
@@ -956,19 +914,11 @@ export function Profile() {
             </div>
           </div>
 
-          {/* Recent Activity */}
+          {/* Recent Activity — placeholder until activity log API is wired */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <h3 className="text-gray-800 mb-4" style={{ fontSize: "15px", fontWeight: 650 }}>Recent Activity</h3>
-            <div className="space-y-3">
-              {base.activityLog.map((log, i) => (
-                <div key={i} className="flex items-start gap-3">
-                  <div className="w-1.5 h-1.5 rounded-full mt-2 flex-shrink-0" style={{ backgroundColor: base.roleColor }} />
-                  <div>
-                    <p className="text-gray-700" style={{ fontSize: "13px" }}>{log.action}</p>
-                    <p className="text-gray-400 mt-0.5" style={{ fontSize: "11.5px" }}>{log.time}</p>
-                  </div>
-                </div>
-              ))}
+            <div className="py-8 text-center rounded-xl" style={{ backgroundColor: "#f9fafb" }}>
+              <p className="text-gray-400" style={{ fontSize: "13px" }}>Activity log coming soon.</p>
             </div>
           </div>
 

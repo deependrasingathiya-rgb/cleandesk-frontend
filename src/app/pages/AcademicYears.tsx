@@ -10,7 +10,7 @@ import {
   X,
   Edit2,
   Power,
-  PowerOff,
+
   ChevronRight,
   Users2,
   Users,
@@ -30,6 +30,7 @@ type AcademicYear = {
   students: number;
   status: AcademicYearStatus;
   createdDate: string;
+  createdByName: string;
   createdBy: string;
 };
 
@@ -160,54 +161,6 @@ function AcademicYearModal({
   );
 }
 
-// ─── Deactivate Confirm Modal ─────────────────────────────────────────────────
-
-function DeactivateModal({
-  year,
-  onClose,
-  onConfirm,
-}: {
-  year: AcademicYear;
-  onClose: () => void;
-  onConfirm: () => void;
-}) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: "rgba(0,0,0,0.35)" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-7">
-        <div className="flex items-center justify-center w-12 h-12 rounded-2xl mb-5 mx-auto" style={{ backgroundColor: "#fef3c7" }}>
-          <AlertTriangle size={22} style={{ color: "#d97706" }} strokeWidth={2} />
-        </div>
-        <h2 className="text-center text-gray-900 mb-2" style={{ fontSize: "17px", fontWeight: 700 }}>
-          Deactivate Academic Year?
-        </h2>
-        <p className="text-center text-gray-400 mb-6" style={{ fontSize: "13.5px", lineHeight: 1.6 }}>
-          <span className="font-semibold text-gray-700">{year.label}</span> will be marked as completed.
-          This action cannot be undone while batches are active.
-        </p>
-        <div className="flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
-            style={{ fontSize: "13.5px", fontWeight: 600 }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => { onConfirm(); onClose(); }}
-            className="flex-1 py-2.5 rounded-xl text-white transition-all hover:opacity-90"
-            style={{ backgroundColor: "#dc2626", fontSize: "13.5px", fontWeight: 600 }}
-          >
-            Yes, Deactivate
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ─── Detail Side Panel ────────────────────────────────────────────────────────
 
@@ -215,13 +168,11 @@ function DetailPanel({
   year,
   onClose,
   onEdit,
-  onDeactivate,
   onActivate,
 }: {
   year: AcademicYear;
   onClose: () => void;
   onEdit: () => void;
-  onDeactivate: () => void;
   onActivate: () => void;
 }) {
   return (
@@ -268,15 +219,17 @@ function DetailPanel({
 
           {/* Info Grid */}
           <div className="bg-gray-50 rounded-2xl p-4 mb-5 space-y-3">
-            {[
-              { label: "Created On", value: year.createdDate },
-              { label: "Created By", value: year.createdBy },
-            ].map(({ label, value }) => (
-              <div key={label} className="flex items-center justify-between">
-                <span className="text-gray-400" style={{ fontSize: "12.5px", fontWeight: 500 }}>{label}</span>
-                <span className="text-gray-700" style={{ fontSize: "13px", fontWeight: 600 }}>{value}</span>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-400" style={{ fontSize: "12.5px", fontWeight: 500 }}>Created On</span>
+              <span className="text-gray-700" style={{ fontSize: "13px", fontWeight: 600 }}>{year.createdDate}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-400" style={{ fontSize: "12.5px", fontWeight: 500 }}>Created By</span>
+              <div className="text-right">
+                <p className="text-gray-700" style={{ fontSize: "13px", fontWeight: 600 }}>{year.createdByName}</p>
+                <p className="text-gray-400" style={{ fontSize: "11px" }}>{year.createdBy}</p>
               </div>
-            ))}
+            </div>
           </div>
 
           {/* Stats */}
@@ -325,16 +278,7 @@ function DetailPanel({
             <Edit2 size={14} strokeWidth={2.5} />
             Edit Academic Year
           </button>
-          {year.status === "Active" && (
-            <button
-              onClick={onDeactivate}
-              className="w-full py-2.5 rounded-xl border border-red-100 text-red-500 flex items-center justify-center gap-2 hover:bg-red-50 transition-all"
-              style={{ fontSize: "13.5px", fontWeight: 600 }}
-            >
-              <PowerOff size={14} strokeWidth={2.5} />
-              Deactivate Academic Year
-            </button>
-          )}
+          
         </div>
       </div>
     </>
@@ -365,7 +309,8 @@ function mapYear(raw: any): AcademicYear {
           day: "2-digit", month: "short", year: "numeric",
         })
       : "—",
-    createdBy: raw.created_by ?? "—",
+    createdByName: raw.created_by_name ?? "—",
+    createdBy: raw.created_by_identifier ?? "—",
   };
 }
 
@@ -377,7 +322,6 @@ export function AcademicYears() {
   const [modalMode, setModalMode] = useState<"create" | "edit" | null>(null);
   const [selectedYear, setSelectedYear] = useState<AcademicYear | null>(null);
   const [detailYear, setDetailYear] = useState<AcademicYear | null>(null);
-  const [deactivateTarget, setDeactivateTarget] = useState<AcademicYear | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const activeYear = years.find((y) => y.status === "Active");
@@ -428,21 +372,22 @@ export function AcademicYears() {
 
   async function handleEdit(label: string) {
     if (!selectedYear) return;
-    // Label-only edit is not yet a backend route — optimistic UI update only until that endpoint is added
-    setYears((prev) =>
-      prev.map((y) => (y.id === selectedYear.id ? { ...y, label } : y))
-    );
-    setDetailYear((prev) => (prev ? { ...prev, label } : null));
+    try {
+      const res = await authFetch(`/api/academic-years/${selectedYear.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ label }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error ?? "Failed to update academic year");
+      }
+      await fetchYears();
+    } catch (e: any) {
+      alert(e.message);
+    }
   }
 
-  async function handleDeactivate(id: string) {
-    // Deactivate = activate another year; no standalone deactivate endpoint exists.
-    // UI marks it Completed optimistically until next fetch confirms DB state.
-    setYears((prev) =>
-      prev.map((y) => (y.id === id ? { ...y, status: "Completed" } : y))
-    );
-    setDetailYear((prev) => (prev ? { ...prev, status: "Completed" } : null));
-  }
+  
 
   async function handleActivate(id: string) {
     try {
@@ -618,12 +563,17 @@ export function AcademicYears() {
                       style={{ backgroundColor: "#0d9488" }}
                     >
                       <span className="text-white" style={{ fontSize: "9px", fontWeight: 700 }}>
-                        {yr.createdBy.split(" ").map((n) => n[0]).join("")}
+                        {yr.createdByName.split(" ").filter(Boolean).map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
                       </span>
                     </div>
-                    <span className="text-gray-600" style={{ fontSize: "13.5px" }}>
-                      {yr.createdBy}
-                    </span>
+                    <div>
+                      <p className="text-gray-700" style={{ fontSize: "13px", fontWeight: 600 }}>
+                        {yr.createdByName}
+                      </p>
+                      <p className="text-gray-400" style={{ fontSize: "11px" }}>
+                        {yr.createdBy}
+                      </p>
+                    </div>
                   </div>
                 </td>
 
@@ -658,17 +608,6 @@ export function AcademicYears() {
                       <Edit2 size={14} strokeWidth={2} />
                     </button>
 
-                    {/* Deactivate button — only for Active */}
-                    {yr.status === "Active" && (
-                      <button
-                        onClick={() => setDeactivateTarget(yr)}
-                        className="w-8 h-8 rounded-md flex items-center justify-center border border-gray-100 text-gray-400 hover:border-red-200 hover:text-red-500 hover:bg-red-50 transition-all"
-                        title="Deactivate"
-                      >
-                        <PowerOff size={14} strokeWidth={2} />
-                      </button>
-                    )}
-
                     {/* Details chevron */}
                     <button
                       onClick={() => setDetailYear(yr)}
@@ -697,17 +636,6 @@ export function AcademicYears() {
         />
       )}
 
-      {/* Deactivate confirm */}
-      {deactivateTarget && (
-        <DeactivateModal
-          year={deactivateTarget}
-          onClose={() => setDeactivateTarget(null)}
-          onConfirm={() => {
-            handleDeactivate(deactivateTarget.id);
-            setDeactivateTarget(null);
-          }}
-        />
-      )}
 
       {/* Detail side panel */}
       {detailYear && (
@@ -718,10 +646,7 @@ export function AcademicYears() {
             setSelectedYear(detailYear);
             setModalMode("edit");
           }}
-          onDeactivate={() => {
-            setDeactivateTarget(detailYear);
-            setDetailYear(null);
-          }}
+          
           onActivate={() => {
             handleActivate(detailYear.id);
           }}

@@ -1,7 +1,7 @@
 // src/app/components/layout/Sidebar.tsx
 
 import { NavLink, useLocation } from "react-router";
-import { useState } from "react";
+import logoSrc from "../../../assets/Logo.png";
 import {
   LayoutDashboard,
   CalendarDays,
@@ -13,13 +13,15 @@ import {
   CheckSquare,
   Megaphone,
   BookOpen,
-  UserCircle,
   ChevronRight,
   Star,
   TrendingUp,
   LogOut,
 } from "lucide-react";
-import { logout } from "../../auth";
+import { logout, getRoleLabel, getSession, ROLES, type RoleId } from "../../auth";
+import { useEffect, useState } from "react";
+import { fetchMyProfile, type MyProfile } from "../../../Lib/api/profile";
+import { useNavigate } from "react-router";
 
 // ─── Nav Item Type ─────────────────────────────────────────────────────────────
 
@@ -42,7 +44,6 @@ const adminNavItems: NavItemDef[] = [
   { label: "Attendance",      icon: CheckSquare,     path: "/attendance" },
   { label: "Announcements",   icon: Megaphone,       path: "/announcements" },
   { label: "Study Materials", icon: BookOpen,        path: "/study-materials" },
-  { label: "Profile",         icon: UserCircle,      path: "/profile" },
 ];
 
 const teacherNavItems: NavItemDef[] = [
@@ -52,7 +53,6 @@ const teacherNavItems: NavItemDef[] = [
   { label: "Tests",           icon: ClipboardList,   path: "/teacher/tests" },
   { label: "Announcements",   icon: Megaphone,       path: "/teacher/announcements" },
   { label: "Study Materials", icon: BookOpen,        path: "/teacher/study-materials" },
-  { label: "Profile",         icon: UserCircle,      path: "/teacher/profile" },
 ];
 
 const managementNavItems: NavItemDef[] = [
@@ -64,7 +64,6 @@ const managementNavItems: NavItemDef[] = [
   { label: "Attendance",     icon: CheckSquare,     path: "/management/attendance" },
   { label: "Study Material", icon: BookOpen,        path: "/management/study-materials" },
   { label: "Announcements",  icon: Megaphone,       path: "/management/announcements" },
-  { label: "Profile",        icon: UserCircle,      path: "/management/profile" },
 ];
 
 const studentNavItems: NavItemDef[] = [
@@ -73,7 +72,6 @@ const studentNavItems: NavItemDef[] = [
   { label: "Results",        icon: Star,            path: "/student/results" },
   { label: "Study Material", icon: BookOpen,        path: "/student/study-materials" },
   { label: "Announcements",  icon: Megaphone,       path: "/student/announcements" },
-  { label: "Profile",        icon: UserCircle,      path: "/student/profile" },
 ];
 
 // ─── Role Type ─────────────────────────────────────────────────────────────────
@@ -87,6 +85,14 @@ function detectRole(pathname: string): RoleContext {
   return "admin";
 }
 
+function getRoleContextFromRoleId(roleId?: RoleId): RoleContext | null {
+  if (roleId === ROLES.ADMIN) return "admin";
+  if (roleId === ROLES.MANAGEMENT) return "management";
+  if (roleId === ROLES.TEACHER) return "teacher";
+  if (roleId === ROLES.STUDENT) return "student";
+  return null;
+}
+
 // ─── Role Config ───────────────────────────────────────────────────────────────
 
 type RoleConfigEntry = {
@@ -96,9 +102,6 @@ type RoleConfigEntry = {
   menuLabel: string;
   accountLabel: string;
   portalLabel: string;
-  initials: string;
-  name: string;
-  roleBadge: string;
   roleColor: string;
   roleBg: string;
 };
@@ -112,52 +115,40 @@ const ROLE_CONFIG: {
   admin: {
     navItems: adminNavItems,
     mainEnd: 8,
-    secondaryEnd: 11,
+    secondaryEnd: 10,
     menuLabel: "Main Menu",
     accountLabel: "Resources",
     portalLabel: "Institute Portal",
-    initials: "AK",
-    name: "Aryan Kumar",
-    roleBadge: "Super Admin",
     roleColor: "#7c3aed",
     roleBg: "#f5f3ff",
   },
   teacher: {
     navItems: teacherNavItems,
     mainEnd: 6,
-    secondaryEnd: 7,
+    secondaryEnd: 6,
     menuLabel: "My Menu",
     accountLabel: "Account",
     portalLabel: "Teacher Portal",
-    initials: "RS",
-    name: "Ravi Shankar",
-    roleBadge: "Teacher",
     roleColor: "#0d9488",
     roleBg: "#f0fdfa",
   },
   management: {
     navItems: managementNavItems,
     mainEnd: 8,
-    secondaryEnd: 9,
+    secondaryEnd: 8,
     menuLabel: "Management",
     accountLabel: "Account",
     portalLabel: "Management Portal",
-    initials: "MJ",
-    name: "Meera Joshi",
-    roleBadge: "Management",
     roleColor: "#2563eb",
     roleBg: "#eff6ff",
   },
   student: {
     navItems: studentNavItems,
     mainEnd: 5,
-    secondaryEnd: 6,
+    secondaryEnd: 5,
     menuLabel: "My Portal",
     accountLabel: "Account",
     portalLabel: "Student Portal",
-    initials: "SP",
-    name: "Sneha Patel",
-    roleBadge: "Student",
     roleColor: "#d97706",
     roleBg: "#fffbeb",
   },
@@ -210,9 +201,35 @@ function NavItem({
 
 export function Sidebar() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const role = detectRole(location.pathname);
+  const [profile, setProfile] = useState<MyProfile | null>(null);
+  const session = getSession();
+  const sessionRoleId = session?.payload.role_id;
+  const profileRoleId = (profile as MyProfile & { role_id?: RoleId } | null)?.role_id;
+  const role =
+    getRoleContextFromRoleId(profileRoleId ?? sessionRoleId) ??
+    detectRole(location.pathname);
   const config = ROLE_CONFIG[role];
+  const roleBadge =
+    profile?.role_label?.trim() ||
+    profile?.role_name?.trim() ||
+    profile?.role?.trim() ||
+    (sessionRoleId ? getRoleLabel(sessionRoleId) : "User");
+
+  // Compute initials and display name from live profile, fall back gracefully
+  const displayName = profile?.full_name ?? "Loading…";
+  const initials = profile
+    ? profile.full_name.split(" ").filter(Boolean).map((w) => w[0].toUpperCase()).join("").slice(0, 2)
+    : "…";
+
+  useEffect(() => {
+    fetchMyProfile()
+      .then(setProfile)
+      .catch(() => setProfile(null));
+  }, []);
+
+  const profilePath = `${config.navItems[0]?.path === "/" ? "" : config.navItems[0]?.path}/profile`;
 
   const mainItems = config.navItems.slice(0, config.mainEnd);
   const secondaryItems = config.navItems.slice(config.mainEnd, config.secondaryEnd);
@@ -239,10 +256,14 @@ export function Sidebar() {
       <div className="px-6 py-5 border-b border-gray-100">
         <div className="flex items-center gap-3">
           <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center"
-            style={{ backgroundColor: "#0d9488" }}
+            className="flex items-center justify-center flex-shrink-0 overflow-hidden"
+            style={{ width: "42px", height: "42px" }}
           >
-            <GraduationCap size={20} color="white" strokeWidth={2} />
+            <img
+              src={logoSrc}
+              alt="CleanDesk"
+              style={{ width: "42px", height: "42px", objectFit: "contain" }}
+            />
           </div>
           <div>
             <p
@@ -299,13 +320,16 @@ export function Sidebar() {
 
       {/* Profile Card */}
       <div className="px-3 pb-4 pt-3 border-t border-gray-100 space-y-2">
-        <div className="flex items-center gap-3 px-3 py-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer group">
+        <div
+          onClick={() => navigate(profilePath)}
+          className="flex items-center gap-3 px-3 py-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer group"
+        >
           <div
             className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
-            style={{ backgroundColor: "#0d9488" }}
+            style={{ backgroundColor: config.roleColor }}
           >
             <span className="text-white" style={{ fontSize: "12px", fontWeight: 700 }}>
-              {config.initials}
+              {initials}
             </span>
           </div>
           <div className="flex-1 min-w-0">
@@ -313,7 +337,7 @@ export function Sidebar() {
               className="text-gray-800 truncate"
               style={{ fontSize: "13px", fontWeight: 600 }}
             >
-              {config.name}
+              {displayName}
             </p>
             <div className="flex items-center gap-1.5 mt-0.5">
               <span
@@ -325,7 +349,7 @@ export function Sidebar() {
                   color: config.roleColor,
                 }}
               >
-                {config.roleBadge}
+                {roleBadge}
               </span>
             </div>
           </div>

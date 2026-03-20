@@ -22,6 +22,17 @@ export const ROLE_ROUTES: Record<RoleId, string> = {
   [ROLES.STUDENT]: "/student",
 };
 
+export const ROLE_LABELS: Record<RoleId, string> = {
+  [ROLES.ADMIN]: "Admin",
+  [ROLES.MANAGEMENT]: "Management",
+  [ROLES.TEACHER]: "Teacher",
+  [ROLES.STUDENT]: "Student",
+};
+
+export function getRoleLabel(roleId: RoleId): string {
+  return ROLE_LABELS[roleId] ?? "User";
+}
+
 // ─── Token storage ────────────────────────────────────────────────────────────
 
 export function saveToken(token: string): void {

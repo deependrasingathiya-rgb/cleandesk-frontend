@@ -83,6 +83,20 @@ export async function markBatchAttendanceApi(
     }
   }
 }
+export type WeeklyTrendDay = {
+  day: string;
+  date: string;
+  pct: number;
+};
+
+export async function fetchWeeklyAttendanceTrend(): Promise<WeeklyTrendDay[]> {
+  const res = await fetch("/api/dashboard/attendance-weekly-trend", {
+    headers: authHeaders(),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Failed to fetch weekly trend");
+  return data.data as WeeklyTrendDay[];
+}
 
 // Update existing attendance records for a batch
 export async function updateBatchAttendanceApi(
@@ -94,7 +108,7 @@ export async function updateBatchAttendanceApi(
       method: "PATCH",
       headers,
       body: JSON.stringify({
-        status: entry.present ? "present" : "present",
+        status: entry.present ? "present" : "absent",
         late: entry.late,
         early_leave: entry.earlyLeave,
       }),

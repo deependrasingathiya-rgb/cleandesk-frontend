@@ -38,7 +38,6 @@ import {
   Users2,
   Check,
   TrendingUp,
-  Megaphone,
   UploadCloud,
   AlertCircle,
 } from "lucide-react";
@@ -1069,7 +1068,6 @@ function TestDetail({
   onDelete,
   onEnterMarks,
   onModifyMarks,
-  onAnnounceResult,
   onUploadMaterial,
   canManage,
 }: {
@@ -1079,7 +1077,6 @@ function TestDetail({
   onDelete: () => void;
   onEnterMarks: () => void;
   onModifyMarks: () => void;
-  onAnnounceResult: () => void;
   onUploadMaterial: () => void;
   canManage: boolean;
 }) {
@@ -1171,14 +1168,7 @@ function TestDetail({
                   <Pencil size={13} strokeWidth={2} />
                   Modify Marks
                 </button>
-                <button
-                  onClick={onAnnounceResult}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-all"
-                  style={{ fontSize: "13px", fontWeight: 600 }}
-                >
-                  <Megaphone size={13} strokeWidth={2} />
-                  Announce Result
-                </button>
+
                 <button
                   onClick={onUploadMaterial}
                   className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-all"
@@ -1649,7 +1639,6 @@ useEffect(() => {
         onDelete={() => handleDelete(test.id)}
         onEnterMarks={() => setView({ type: "marks", testId: test.id, mode: "enter" })}
         onModifyMarks={() => setView({ type: "marks", testId: test.id, mode: "modify" })}
-        onAnnounceResult={() => { /* wire to announcements flow */ }}
         onUploadMaterial={() => { /* wire to study materials flow */ }}
         canManage={canManage}
       />

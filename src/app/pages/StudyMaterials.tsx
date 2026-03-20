@@ -1,6 +1,11 @@
 // src/app/pages/StudyMaterials.tsx
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, type ElementType } from "react";
+import { fetchStudyMaterialsApi, uploadStudyMaterialApi, deleteStudyMaterialApi } from "../../Lib/api/study-materials";
+import { getSession, ROLES } from "../../app/auth";
+import { fetchClassBatchesApi } from "../../Lib/api/teachers";
+import { fetchSubjectCatalogApi } from "../../Lib/api/subjects";
+import { fetchTestsApi, type TestRow } from "../../Lib/api/tests";
 import {
   Search,
   Plus,
@@ -29,39 +34,7 @@ import {
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
-const BATCH_OPTIONS = [
-  "Science – Batch A",
-  "Commerce – Batch B",
-  "Arts – Batch C",
-  "Math – Batch D",
-  "Physics – Batch E",
-  "Biology – Batch F",
-];
 
-const SUBJECT_OPTIONS = [
-  "Physics",
-  "Mathematics",
-  "Chemistry",
-  "English",
-  "Business",
-  "Biology",
-  "Accounts",
-  "History",
-  "Geography",
-  "Computer Science",
-  "Economics",
-];
-
-const MOCK_TESTS = [
-  { id: 1, name: "Mid-Term Physics",          subject: "Physics",      batch: "Science – Batch A" },
-  { id: 2, name: "Algebra Unit Test",          subject: "Mathematics",  batch: "Math – Batch D" },
-  { id: 3, name: "Organic Chemistry Quiz",     subject: "Chemistry",    batch: "Science – Batch A" },
-  { id: 4, name: "English Literature Test",    subject: "English",      batch: "Arts – Batch C" },
-  { id: 5, name: "Business Studies Exam",      subject: "Business",     batch: "Commerce – Batch B" },
-  { id: 6, name: "Cell Biology Assessment",    subject: "Biology",      batch: "Biology – Batch F" },
-  { id: 7, name: "Thermodynamics Quiz",        subject: "Physics",      batch: "Physics – Batch E" },
-  { id: 8, name: "Commerce Accounts Unit 3",   subject: "Accounts",     batch: "Commerce – Batch B" },
-];
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -76,9 +49,10 @@ type Material = {
   type: MaterialType;
   size: string;
   uploadedBy: string;
+  uploadedById: string;   // raw user_id for ownership checks
   date: string;
   downloads: number;
-  linkedTestId: number | null;
+  linkedTestId: string | null;
   url?: string; // for link type
 };
 
@@ -93,8 +67,8 @@ type UploadForm = {
   title: string;
   description: string;
   subject: string;
-  batch: string;
-  linkedTestId: number | null;
+  batchId: string;   // now stores batch UUID
+  linkedTestId: string | null;  // now stores test UUID string
 };
 
 // ─── Lookups ───────────────────────────────────────────────────────────────────
@@ -113,7 +87,7 @@ const subjectColors: Record<string, { color: string; bg: string }> = {
   Economics:        { color: "#be185d", bg: "#fdf2f8" },
 };
 
-const typeConfig: Record<MaterialType, { icon: React.ElementType; color: string; bg: string; label: string }> = {
+const typeConfig: Record<MaterialType, { icon: ElementType; color: string; bg: string; label: string }> = {
   PDF:   { icon: FileText,  color: "#ea580c", bg: "#fff7ed",  label: "PDF"   },
   Video: { icon: Video,     color: "#7c3aed", bg: "#f5f3ff",  label: "Video" },
   Image: { icon: Image,     color: "#2563eb", bg: "#eff6ff",  label: "Image" },
@@ -147,20 +121,29 @@ function todayStr(): string {
 
 // ─── Initial Data ──────────────────────────────────────────────────────────────
 
-const initialMaterials: Material[] = [
-  { id: 1, title: "Thermodynamics – Complete Notes", description: "Comprehensive notes covering all concepts from the thermodynamics chapter including derivations and practice problems.", subject: "Physics", batch: "Physics – Batch E", type: "PDF", size: "4.2 MB", uploadedBy: "Dr. Ramesh Iyer", date: "Mar 5, 2026", downloads: 32, linkedTestId: 7 },
-  { id: 2, title: "Algebraic Structures – Video Lecture 3", description: "Third video in the series covering rings, fields, and group theory fundamentals.", subject: "Mathematics", batch: "Math – Batch D", type: "Video", size: "220 MB", uploadedBy: "Prof. Neha Shah", date: "Mar 4, 2026", downloads: 45, linkedTestId: 2 },
-  { id: 3, title: "Organic Chemistry Reference Sheet", description: "Quick reference card for all named reactions, mechanisms, and functional group identification.", subject: "Chemistry", batch: "Science – Batch A", type: "PDF", size: "1.8 MB", uploadedBy: "Ms. Priya Menon", date: "Mar 3, 2026", downloads: 67, linkedTestId: 3 },
-  { id: 4, title: "Shakespeare's Works – Study Guide", description: "Detailed study guide for Macbeth and Hamlet with character analysis and important quotes.", subject: "English", batch: "Arts – Batch C", type: "PDF", size: "2.1 MB", uploadedBy: "Mr. Aditya Roy", date: "Mar 2, 2026", downloads: 28, linkedTestId: 4 },
-  { id: 5, title: "Business Law – External Resource", description: "Curated external resource from NCERT portal covering Business Law for Class 12 Commerce.", subject: "Business", batch: "Commerce – Batch B", type: "Link", size: "—", uploadedBy: "Ms. Kavita Nair", date: "Mar 1, 2026", downloads: 19, linkedTestId: 5, url: "https://ncert.nic.in" },
-  { id: 6, title: "Cell Division – Animated Video", description: "Animated explainer video showing mitosis and meiosis step by step with narration.", subject: "Biology", batch: "Biology – Batch F", type: "Video", size: "180 MB", uploadedBy: "Dr. Suresh Patel", date: "Feb 28, 2026", downloads: 55, linkedTestId: 6 },
-  { id: 7, title: "Accounting Standards IND-AS Notes", description: "Detailed notes on IND-AS 1, 2, 7, 8 with examples from past board exams.", subject: "Accounts", batch: "Commerce – Batch B", type: "PDF", size: "3.5 MB", uploadedBy: "Ms. Kavita Nair", date: "Feb 27, 2026", downloads: 41, linkedTestId: 8 },
-  { id: 8, title: "Newton's Laws – Practice Problems", description: "50 solved problems on Newton's three laws with increasing difficulty levels.", subject: "Physics", batch: "Physics – Batch E", type: "PDF", size: "900 KB", uploadedBy: "Dr. Ramesh Iyer", date: "Feb 25, 2026", downloads: 72, linkedTestId: 1 },
-];
+function mapRecord(r: any): Material {
+  const filename = r.file_url.split("/").pop() ?? r.id;
+  const type = detectType(filename);
+  return {
+    id:           r.id,
+    title:        decodeURIComponent(filename.replace(/\.[^.]+$/, "").replace(/-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/, "")) || r.id,
+    description:  "",
+    subject:      "",
+    batch:        r.batch_name ?? "—",
+    type,
+    size:         "—",
+    uploadedBy:   r.uploader_name ?? "—",
+    uploadedById: r.created_by ?? "",
+    date:         new Date(r.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
+    downloads:    0,
+    linkedTestId: null,
+    url:          r.file_url,
+  };
+}
 
 const emptyForm: UploadForm = {
   files: [], isLink: false, linkUrl: "", linkTitle: "",
-  title: "", description: "", subject: "", batch: "", linkedTestId: null,
+  title: "", description: "", subject: "", batchId: "", linkedTestId: null,
 };
 
 // ─── Upload Modal ──────────────────────────────────────────────────────────────
@@ -176,7 +159,37 @@ function UploadModal({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Live data
+  const [batchOptions, setBatchOptions] = useState<{ id: string; name: string }[]>([]);
+  const [subjectOptions, setSubjectOptions] = useState<string[]>([]);
+  const [testOptions, setTestOptions] = useState<TestRow[]>([]);
+  const [loadingOptions, setLoadingOptions] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      fetchClassBatchesApi(),
+      fetchSubjectCatalogApi(),
+      fetchTestsApi(),
+    ])
+      .then(([batches, subjects, tests]) => {
+        setBatchOptions(batches);
+        setSubjectOptions(subjects);
+        // Only upcoming tests (test_date >= today)
+        const today = new Date().toISOString().split("T")[0];
+        setTestOptions(tests.filter((t) => t.test_date >= today));
+      })
+      .catch(() => setUploadError("Failed to load options."))
+      .finally(() => setLoadingOptions(false));
+  }, []);
+
+  // Filter tests to selected batch
+  const relevantTests = form.batchId
+    ? testOptions.filter((t) => t.class_batch_id === form.batchId)
+    : testOptions;
 
   const set = <K extends keyof UploadForm>(key: K) => (val: UploadForm[K]) =>
     setForm(f => ({ ...f, [key]: val }));
@@ -186,7 +199,6 @@ function UploadModal({
     const newFiles = Array.from(fileList);
     set("files")([...form.files, ...newFiles]);
     setErrors(e => ({ ...e, files: "" }));
-    // Auto-fill title if empty and single file
     if (!form.title && newFiles.length === 1) {
       set("title")(newFiles[0].name.replace(/\.[^.]+$/, ""));
     }
@@ -201,52 +213,95 @@ function UploadModal({
     if (!form.isLink && form.files.length === 0) e.files = "Please attach at least one file.";
     if (form.isLink && !form.linkUrl.trim()) e.linkUrl = "Please enter a URL.";
     if (form.isLink && !form.linkTitle.trim()) e.linkTitle = "Please enter a title for the link.";
-    if (!form.batch) e.batch = "Please select a batch.";
+    if (!form.batchId) e.batchId = "Please select a batch.";
     return e;
   }
 
-  function handleUpload() {
+  async function handleUpload() {
     const e = validate();
     if (Object.keys(e).filter(k => e[k]).length) { setErrors(e); return; }
-    setSaved(true);
+    setUploading(true);
+    setUploadError(null);
 
-    // Build material entries
-    const newMaterials: Material[] = form.isLink
-      ? [{
-          id: Date.now(),
+    try {
+      const newMaterials: Material[] = [];
+
+      if (form.isLink) {
+        // For link type: use the linked_id as either the test id or batch id
+        // Links are associated with an announcement or test; for now link to the
+        // selected test if provided, else we store as ANNOUNCEMENT linked to a
+        // placeholder. Since the backend requires linked_type + linked_id, and we
+        // want to link to a test, we use TEST when a test is selected.
+        const linked_id = form.linkedTestId ?? form.batchId;
+        const linked_type = form.linkedTestId ? "TEST" : "ANNOUNCEMENT";
+
+        // Link materials are stored as a URL — upload the metadata via the API
+        // using a minimal text blob so the backend receives a file field.
+        const blob = new Blob([form.linkUrl], { type: "text/plain" });
+        const fileData: BlobPart[] = [blob];
+        const fileOptions = { type: "text/plain" };
+        const file = new (window.File as any)(fileData, `${form.linkTitle || "link"}.url.txt`, fileOptions) as File;
+
+        const record = await uploadStudyMaterialApi({
+          file,
+          linked_type,
+          linked_id,
+          class_batch_id: form.batchId || null,
+        });
+
+        newMaterials.push({
+          id: record.id as unknown as number,
           title: form.linkTitle,
           description: form.description,
           subject: form.subject,
-          batch: form.batch,
+          batch: batchOptions.find(b => b.id === form.batchId)?.name ?? "",
           type: "Link",
           size: "—",
-          uploadedBy: "Aryan Kumar",
-          date: todayStr(),
+          uploadedBy: record.uploader_name ?? "—",
+          uploadedById: record.created_by ?? "",
+          date: new Date(record.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
           downloads: 0,
-          linkedTestId: form.linkedTestId,
+          linkedTestId: null,
           url: form.linkUrl,
-        }]
-      : form.files.map((f, i) => ({
-          id: Date.now() + i,
-          title: form.title || f.name.replace(/\.[^.]+$/, ""),
-          description: form.description,
-          subject: form.subject,
-          batch: form.batch,
-          type: detectType(f.name),
-          size: formatBytes(f.size),
-          uploadedBy: "Aryan Kumar",
-          date: todayStr(),
-          downloads: 0,
-          linkedTestId: form.linkedTestId,
-        }));
+        });
+      } else {
+        // Upload each file
+        for (const f of form.files) {
+          const linked_id = form.linkedTestId ?? form.batchId;
+          const linked_type = form.linkedTestId ? "TEST" : "ANNOUNCEMENT";
 
-    setTimeout(() => { onUpload(newMaterials); }, 1000);
+          const record = await uploadStudyMaterialApi({
+            file: f,
+            linked_type,
+            linked_id,
+            class_batch_id: form.batchId || null,
+          });
+
+          newMaterials.push({
+            id: record.id as unknown as number,
+            title: form.title || f.name.replace(/\.[^.]+$/, ""),
+            description: form.description,
+            subject: form.subject,
+            batch: batchOptions.find(b => b.id === form.batchId)?.name ?? "",
+            type: detectType(f.name),
+            size: formatBytes(f.size),
+            uploadedBy: record.uploader_name ?? "—",
+            uploadedById: record.created_by ?? "",
+            date: new Date(record.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
+            downloads: 0,
+            linkedTestId: null,
+          });
+        }
+      }
+
+      setSaved(true);
+      setTimeout(() => { onUpload(newMaterials); }, 1000);
+    } catch (err: any) {
+      setUploadError(err.message ?? "Upload failed. Please try again.");
+    } finally {
+      setUploading(false);
+    }
   }
-
-  // Filtered tests for linked-test dropdown (filter by batch if selected)
-  const relevantTests = form.batch
-    ? MOCK_TESTS.filter(t => t.batch === form.batch)
-    : MOCK_TESTS;
 
   if (saved) {
     return (
@@ -259,7 +314,7 @@ function UploadModal({
             {form.isLink ? "Link Added!" : `${form.files.length} File${form.files.length > 1 ? "s" : ""} Uploaded!`}
           </p>
           <p className="text-gray-400 text-center" style={{ fontSize: "13.5px" }}>
-            Material is now available for {form.batch || "the selected batch"}.
+            Material is now available for {batchOptions.find(b => b.id === form.batchId)?.name ?? "the selected batch"}.
           </p>
         </div>
       </div>
@@ -320,7 +375,7 @@ function UploadModal({
             ))}
           </div>
 
-          {/* ── File upload area ── */}
+          {/* File upload area */}
           {!form.isLink && (
             <div>
               <label className="block text-gray-700 mb-1.5" style={{ fontSize: "13px", fontWeight: 600 }}>
@@ -357,7 +412,6 @@ function UploadModal({
               </div>
               {errors.files && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.files}</p>}
 
-              {/* File list */}
               {form.files.length > 0 && (
                 <div className="mt-3 space-y-2">
                   {form.files.map((f, i) => {
@@ -388,7 +442,7 @@ function UploadModal({
             </div>
           )}
 
-          {/* ── Link fields ── */}
+          {/* Link fields */}
           {form.isLink && (
             <div className="space-y-4">
               <div>
@@ -422,7 +476,7 @@ function UploadModal({
             </div>
           )}
 
-          {/* Title (for files — optional override) */}
+          {/* Title (for files) */}
           {!form.isLink && (
             <div>
               <label className="block text-gray-700 mb-1.5" style={{ fontSize: "13px", fontWeight: 600 }}>
@@ -463,11 +517,12 @@ function UploadModal({
               <select
                 value={form.subject}
                 onChange={e => set("subject")(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white"
+                disabled={loadingOptions}
+                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white disabled:opacity-50"
                 style={{ fontSize: "13.5px", color: form.subject ? "#1f2937" : "#d1d5db" }}
               >
-                <option value="">Select subject</option>
-                {SUBJECT_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                <option value="">{loadingOptions ? "Loading…" : "Select subject"}</option>
+                {subjectOptions.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <div>
@@ -475,78 +530,104 @@ function UploadModal({
                 Batch <span className="text-red-500">*</span>
               </label>
               <select
-                value={form.batch}
-                onChange={e => { set("batch")(e.target.value); set("linkedTestId")(null); setErrors(er => ({ ...er, batch: "" })); }}
-                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white"
+                value={form.batchId}
+                onChange={e => {
+                  set("batchId")(e.target.value);
+                  set("linkedTestId")(null);
+                  setErrors(er => ({ ...er, batchId: "" }));
+                }}
+                disabled={loadingOptions}
+                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white disabled:opacity-50"
                 style={{
                   fontSize: "13.5px",
-                  color: form.batch ? "#1f2937" : "#d1d5db",
-                  borderColor: errors.batch ? "#fca5a5" : "#e5e7eb",
+                  color: form.batchId ? "#1f2937" : "#d1d5db",
+                  borderColor: errors.batchId ? "#fca5a5" : "#e5e7eb",
                 }}
               >
-                <option value="">Select batch</option>
-                {BATCH_OPTIONS.map(b => <option key={b} value={b}>{b}</option>)}
+                <option value="">{loadingOptions ? "Loading…" : "Select batch"}</option>
+                {batchOptions.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
-              {errors.batch && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.batch}</p>}
+              {errors.batchId && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.batchId}</p>}
             </div>
           </div>
 
-          {/* Link to Test (optional) */}
+          {/* Link to Test */}
           <div>
             <label className="block text-gray-700 mb-1.5" style={{ fontSize: "13px", fontWeight: 600 }}>
               Link to Test
-              <span className="text-gray-400 ml-1.5" style={{ fontWeight: 400, fontSize: "12px" }}>(optional — associates this material with a test)</span>
+              <span className="text-gray-400 ml-1.5" style={{ fontWeight: 400, fontSize: "12px" }}>(optional — upcoming tests for this batch)</span>
             </label>
             <select
               value={form.linkedTestId ?? ""}
-              onChange={e => set("linkedTestId")(e.target.value ? Number(e.target.value) : null)}
-              disabled={!form.batch}
+              onChange={e => set("linkedTestId")(e.target.value || null)}
+              disabled={!form.batchId || loadingOptions}
               className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white disabled:opacity-40 disabled:cursor-not-allowed"
               style={{ fontSize: "13.5px", color: form.linkedTestId ? "#1f2937" : "#d1d5db" }}
             >
-              <option value="">{form.batch ? "No test link" : "Select a batch first"}</option>
+              <option value="">
+                {!form.batchId
+                  ? "Select a batch first"
+                  : relevantTests.length === 0
+                  ? "No upcoming tests for this batch"
+                  : "No test link (general material)"}
+              </option>
               {relevantTests.map(t => (
-                <option key={t.id} value={t.id}>{t.name} · {t.subject}</option>
+                <option key={t.id} value={t.id}>
+                  {t.test_name} · {t.subject} · {new Date(t.test_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                </option>
               ))}
             </select>
-            {form.linkedTestId && (
-              <div className="flex items-center gap-2 mt-2 px-3 py-2 rounded-md" style={{ backgroundColor: "#f0fdfa" }}>
-                <ClipboardList size={13} color="#0d9488" strokeWidth={2} />
-                <p className="text-teal-700" style={{ fontSize: "12px", fontWeight: 500 }}>
-                  Linked to: {MOCK_TESTS.find(t => t.id === form.linkedTestId)?.name}
-                </p>
-              </div>
-            )}
+            {form.linkedTestId && (() => {
+              const linked = relevantTests.find(t => t.id === form.linkedTestId);
+              return linked ? (
+                <div className="flex items-center gap-2 mt-2 px-3 py-2 rounded-md" style={{ backgroundColor: "#f0fdfa" }}>
+                  <ClipboardList size={13} color="#0d9488" strokeWidth={2} />
+                  <p className="text-teal-700" style={{ fontSize: "12px", fontWeight: 500 }}>
+                    Linked to: {linked.test_name} · {linked.subject}
+                  </p>
+                </div>
+              ) : null;
+            })()}
           </div>
 
-          {/* Required note */}
           <p className="text-gray-400" style={{ fontSize: "11.5px" }}>
             <span className="text-red-400">*</span> Required fields
           </p>
+
+          {uploadError && (
+            <p className="text-red-500" style={{ fontSize: "12.5px" }}>{uploadError}</p>
+          )}
         </div>
 
         {/* Fixed footer */}
         <div className="flex gap-3 px-7 py-5 border-t border-gray-100">
           <button
             onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+            disabled={uploading}
+            className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
             style={{ fontSize: "13.5px", fontWeight: 600 }}
           >
             Cancel
           </button>
           <button
             onClick={handleUpload}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
+            disabled={uploading || loadingOptions}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
           >
             <Upload size={15} strokeWidth={2.5} />
-            {form.isLink ? "Add Link" : `Upload${form.files.length > 1 ? ` ${form.files.length} Files` : ""}`}
+            {uploading
+              ? "Uploading…"
+              : form.isLink
+              ? "Add Link"
+              : `Upload${form.files.length > 1 ? ` ${form.files.length} Files` : ""}`}
           </button>
         </div>
       </div>
     </div>
   );
 }
+  
 
 // ─── Delete Confirm Modal ──────────────────────────────────────────────────────
 
@@ -593,16 +674,26 @@ function DetailPanel({
   onClose,
   onDelete,
   canManage,
+  currentUserId,
+  currentUserRoleId,
 }: {
   material: Material;
   onClose: () => void;
   onDelete: () => void;
   canManage: boolean;
+  currentUserId?: string;
+  currentUserRoleId?: number;
 }) {
+  // Teachers may only delete their own uploads; Admin/Management can delete any
+  const canDelete = canManage && (
+    currentUserRoleId !== ROLES.TEACHER ||
+    material.uploadedById === currentUserId
+  );
   const tc = typeConfig[material.type];
   const sc = subjectColors[material.subject] ?? { color: "#0d9488", bg: "#f0fdfa" };
   const Icon = tc.icon;
-  const linkedTest = MOCK_TESTS.find(t => t.id === material.linkedTestId);
+  // linkedTestId is now a string UUID; the detail panel shows what was passed through
+  const linkedTestId = material.linkedTestId;
   const [showDelete, setShowDelete] = useState(false);
 
   return (
@@ -618,7 +709,7 @@ function DetailPanel({
           </span>
         </div>
         <div className="flex items-center gap-1.5">
-          {canManage && (
+          {canDelete && (
             <button
               onClick={() => setShowDelete(true)}
               className="w-8 h-8 rounded-md flex items-center justify-center border border-red-100 text-red-400 hover:bg-red-50 hover:border-red-200 transition-all"
@@ -656,27 +747,34 @@ function DetailPanel({
             target="_blank"
             rel="noopener noreferrer"
             className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl border border-teal-200 text-teal-700 hover:bg-teal-50 transition-all"
-            style={{ fontSize: "13px", fontWeight: 600 }}
+            style={{ fontSize: "13px", fontWeight: 600, textDecoration: "none" }}
           >
             <ExternalLink size={13} strokeWidth={2} />
             Open Link
           </a>
         ) : (
           <>
-            <button
+            <a
+              href={material.url ?? "#"}
+              target="_blank"
+              rel="noopener noreferrer"
               className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-all"
-              style={{ fontSize: "13px", fontWeight: 600 }}
+              style={{ fontSize: "13px", fontWeight: 600, textDecoration: "none" }}
             >
               <Eye size={13} strokeWidth={2} />
               Preview
-            </button>
-            <button
+            </a>
+            <a
+              href={material.url ?? "#"}
+              download
+              target="_blank"
+              rel="noopener noreferrer"
               className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl border border-teal-200 text-teal-700 hover:bg-teal-50 transition-all"
-              style={{ fontSize: "13px", fontWeight: 600 }}
+              style={{ fontSize: "13px", fontWeight: 600, textDecoration: "none" }}
             >
               <Download size={13} strokeWidth={2} />
               Download
-            </button>
+            </a>
           </>
         )}
       </div>
@@ -731,15 +829,15 @@ function DetailPanel({
         </div>
 
         {/* Linked test */}
-        {linkedTest && (
+        {linkedTestId && (
           <div className="flex items-start justify-between gap-3 pt-3 mt-3 border-t border-gray-50">
             <div className="flex items-center gap-1.5 text-gray-400 flex-shrink-0">
               <ClipboardList size={12} />
               <span style={{ fontSize: "12.5px" }}>Linked test</span>
             </div>
             <div className="text-right">
-              <p className="text-teal-700" style={{ fontSize: "12.5px", fontWeight: 700 }}>{linkedTest.name}</p>
-              <p className="text-gray-400" style={{ fontSize: "11.5px" }}>{linkedTest.subject} · {linkedTest.batch}</p>
+              <p className="text-teal-700" style={{ fontSize: "12.5px", fontWeight: 700 }}>Test linked</p>
+              <p className="text-gray-400" style={{ fontSize: "11.5px" }}>{String(linkedTestId).slice(0, 8)}…</p>
             </div>
           </div>
         )}
@@ -759,13 +857,59 @@ function DetailPanel({
 // ─── Main Study Materials Page ─────────────────────────────────────────────────
 
 export function StudyMaterials({ canManage = true }: { canManage?: boolean }) {
-  const [materials, setMaterials] = useState<Material[]>(initialMaterials);
+  const [materials, setMaterials] = useState<Material[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("All");
   const [batchFilter, setBatchFilter] = useState("All");
   const [selected, setSelected] = useState<Material | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Material | null>(null);
+  const session = getSession();
+  const currentUserId = session?.payload.user_id;
+  const currentUserRoleId = session?.payload.role_id;
+
+  function handlePreview(mat: Material) {
+    if (!mat.url) return;
+    window.open(mat.url, "_blank", "noopener,noreferrer");
+  }
+
+  async function handleDownload(mat: Material) {
+    if (!mat.url) return;
+    try {
+      const token = getSession()?.token;
+      const res = await fetch(`/api/study-materials/${mat.id}/download`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error("Failed to get download URL");
+      const json = await res.json();
+      const signedUrl: string = json.data?.url;
+      if (!signedUrl) throw new Error("No URL returned");
+      // Open the presigned URL — browser will download due to Content-Disposition: attachment
+      window.open(signedUrl, "_blank", "noopener,noreferrer");
+    } catch {
+      // Fallback: open the public URL directly
+      window.open(mat.url, "_blank", "noopener,noreferrer");
+    }
+  }
+
+  useEffect(() => {
+    loadMaterials();
+  }, []);
+
+  async function loadMaterials() {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const records = await fetchStudyMaterialsApi();
+      setMaterials(records.map(mapRecord));
+    } catch (err: any) {
+      setLoadError(err.message ?? "Failed to load study materials");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const filtered = materials.filter(m => {
     const matchType  = typeFilter  === "All" || m.type  === typeFilter;
@@ -777,12 +921,17 @@ export function StudyMaterials({ canManage = true }: { canManage?: boolean }) {
     return matchType && matchBatch && matchSearch;
   });
 
-  function handleUpload(newMats: Material[]) {
-    setMaterials(prev => [...newMats, ...prev]);
+  async function handleUpload(newMats: Material[]) {
+    await loadMaterials();
     setShowUpload(false);
   }
 
-  function handleDelete(id: number) {
+  async function handleDelete(id: number) {
+    try {
+      await deleteStudyMaterialApi(String(id));
+    } catch (err: any) {
+      console.error("Delete failed:", err.message);
+    }
     setMaterials(prev => prev.filter(m => m.id !== id));
     if (selected?.id === id) setSelected(null);
     setDeleteTarget(null);
@@ -876,17 +1025,28 @@ export function StudyMaterials({ canManage = true }: { canManage?: boolean }) {
             style={{ fontSize: "12.5px", fontWeight: 500 }}
           >
             <option value="All">All Batches</option>
-            {BATCH_OPTIONS.map(b => <option key={b} value={b}>{b}</option>)}
+            {materials
+              .map(m => m.batch)
+              .filter((b, i, arr) => b && b !== "—" && arr.indexOf(b) === i)
+              .map(b => <option key={b} value={b}>{b}</option>)}
           </select>
           <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
         </div>
       </div>
 
       {/* Two-column layout when detail panel open */}
+      {loadError && (
+        <div className="mb-4 px-4 py-3 rounded-xl border border-red-100 bg-red-50 text-red-500" style={{ fontSize: "13px" }}>
+          {loadError}
+        </div>
+      )}
       <div className="flex gap-6 items-start">
         {/* Table */}
         <div className={`transition-all duration-300 ${selected ? "flex-1 min-w-0" : "w-full"}`}>
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            {loading ? (
+              <div className="py-16 text-center text-gray-400" style={{ fontSize: "14px" }}>Loading study materials…</div>
+            ) : (
             <table className="w-full">
               <thead>
                 <tr style={{ backgroundColor: "#f9fafb" }}>
@@ -960,18 +1120,22 @@ export function StudyMaterials({ canManage = true }: { canManage?: boolean }) {
                       <td className="px-5 py-3.5" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
+                            onClick={(e) => { e.stopPropagation(); handlePreview(mat); }}
                             className="w-7 h-7 rounded-md flex items-center justify-center text-gray-400 hover:text-teal-600 hover:bg-teal-50 transition-colors"
                             title="Preview"
                           >
                             <Eye size={14} />
                           </button>
                           <button
+                            onClick={(e) => { e.stopPropagation(); handleDownload(mat); }}
                             className="w-7 h-7 rounded-md flex items-center justify-center text-gray-400 hover:text-teal-600 hover:bg-teal-50 transition-colors"
                             title="Download"
                           >
                             <Download size={14} />
                           </button>
                           {canManage && (
+                            currentUserRoleId !== ROLES.TEACHER || mat.uploadedById === currentUserId
+                          ) && (
                             <button
                               onClick={() => setDeleteTarget(mat)}
                               className="w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors"
@@ -987,6 +1151,7 @@ export function StudyMaterials({ canManage = true }: { canManage?: boolean }) {
                 })}
               </tbody>
             </table>
+            )}
           </div>
         </div>
 
@@ -998,6 +1163,8 @@ export function StudyMaterials({ canManage = true }: { canManage?: boolean }) {
               onClose={() => setSelected(null)}
               onDelete={() => handleDelete(selected.id)}
               canManage={canManage}
+              currentUserId={currentUserId}
+              currentUserRoleId={currentUserRoleId}
             />
           </div>
         )}

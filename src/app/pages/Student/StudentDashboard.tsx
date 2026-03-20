@@ -154,7 +154,7 @@ function TodayAttendanceBanner({ status }: { status: AttendanceStatus }) {
 
   return (
     <div
-      className="flex items-center gap-4 px-5 py-4 rounded-2xl mb-6"
+      className="flex items-start sm:items-center gap-3 sm:gap-4 px-4 sm:px-5 py-4 rounded-2xl"
       style={{
         backgroundColor: c.bg,
         border: `1px solid ${c.border}`,
@@ -167,24 +167,26 @@ function TodayAttendanceBanner({ status }: { status: AttendanceStatus }) {
         <Icon size={20} style={{ color: c.iconColor }} strokeWidth={2} />
       </div>
       <div className="flex-1 min-w-0">
-        <p style={{ fontSize: "14px", fontWeight: 650, color: "#111827", lineHeight: 1.3 }}>
-          {c.label}
-        </p>
-        <p className="text-gray-400 mt-0.5" style={{ fontSize: "12.5px" }}>
+        <div className="flex items-center gap-2 flex-wrap">
+          <p style={{ fontSize: "13.5px", fontWeight: 650, color: "#111827", lineHeight: 1.3 }}>
+            {c.label}
+          </p>
+          <span
+            className="flex-shrink-0 px-2.5 py-0.5 rounded-full"
+            style={{
+              fontSize: "11px",
+              fontWeight: 700,
+              color: c.badgeColor,
+              backgroundColor: c.badgeBg,
+            }}
+          >
+            {c.badgeText}
+          </span>
+        </div>
+        <p className="text-gray-400 mt-0.5" style={{ fontSize: "12px" }}>
           {c.sub}
         </p>
       </div>
-      <span
-        className="flex-shrink-0 px-3 py-1 rounded-full"
-        style={{
-          fontSize: "12px",
-          fontWeight: 700,
-          color: c.badgeColor,
-          backgroundColor: c.badgeBg,
-        }}
-      >
-        {c.badgeText}
-      </span>
     </div>
   );
 }
@@ -244,7 +246,7 @@ export function StudentDashboard() {
   // ── Loading skeleton ──
   if (loading) {
     return (
-      <div className="p-8" style={{ maxWidth: "1200px", margin: "0 auto" }}>
+      <div className="px-4 py-6 sm:px-6 sm:py-8 lg:px-8" style={{ maxWidth: "1200px", margin: "0 auto" }}>
         <div className="animate-pulse space-y-6">
           <div className="h-8 bg-gray-100 rounded-xl w-48" />
           <div className="h-4 bg-gray-100 rounded w-64" />
@@ -289,39 +291,42 @@ export function StudentDashboard() {
     <div className="p-8" style={{ maxWidth: "1200px", margin: "0 auto" }}>
 
       {/* ── Page Header ── */}
-      <div className="flex items-start justify-between mb-8">
-        <div>
-          <h1
-            className="text-gray-900"
-            style={{ fontSize: "24px", fontWeight: 700, letterSpacing: "-0.02em" }}
-          >
-            My Dashboard
-          </h1>
-          <p className="text-gray-400 mt-1" style={{ fontSize: "14px" }}>
-            Welcome back, {profile.full_name ?? profile.login_identifier} · {formatTodayLabel()}
-          </p>
-          <div className="flex items-center gap-2 mt-2">
-            {profile.batch_name && (
-              <span
-                className="px-2.5 py-0.5 rounded-full"
-                style={{ fontSize: "12px", fontWeight: 600, backgroundColor: "#f0fdfa", color: "#0d9488" }}
-              >
-                {profile.batch_name}
-              </span>
-            )}
-            <span className="text-gray-300" style={{ fontSize: "12px" }}>·</span>
-            <span className="text-gray-400" style={{ fontSize: "12px", fontFamily: "monospace" }}>
-              {profile.login_identifier}
+      <div className="mb-6 sm:mb-8">
+        <h1
+          className="text-gray-900"
+          style={{ fontSize: "22px", fontWeight: 700, letterSpacing: "-0.02em" }}
+        >
+          My Dashboard
+        </h1>
+        <p className="text-gray-400 mt-1" style={{ fontSize: "13px" }}>
+          Welcome back, {profile.full_name ?? profile.login_identifier}
+        </p>
+        <p className="text-gray-300 mt-0.5" style={{ fontSize: "11.5px" }}>
+          {formatTodayLabel()}
+        </p>
+        <div className="flex items-center gap-2 mt-2 flex-wrap">
+          {profile.batch_name && (
+            <span
+              className="px-2.5 py-0.5 rounded-full"
+              style={{ fontSize: "12px", fontWeight: 600, backgroundColor: "#f0fdfa", color: "#0d9488" }}
+            >
+              {profile.batch_name}
             </span>
-          </div>
+          )}
+          <span className="text-gray-300" style={{ fontSize: "12px" }}>·</span>
+          <span className="text-gray-400" style={{ fontSize: "12px", fontFamily: "monospace" }}>
+            {profile.login_identifier}
+          </span>
         </div>
       </div>
 
       {/* ── Today's Attendance Banner ── */}
-      <TodayAttendanceBanner status={today_attendance} />
+      <div className="mb-5 sm:mb-6">
+        <TodayAttendanceBanner status={today_attendance} />
+      </div>
 
       {/* ── Performance + Attendance Summary Cards ── */}
-      <div className="grid grid-cols-2 gap-5 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5 mb-6 sm:mb-8">
 
         {/* Performance Summary Card */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 hover:shadow-md hover:border-teal-100 transition-all">
@@ -335,27 +340,27 @@ export function StudentDashboard() {
               </p>
               <p
                 className="text-gray-900 mt-1"
-                style={{ fontSize: "32px", fontWeight: 750, letterSpacing: "-0.02em", lineHeight: 1 }}
+                style={{ fontSize: "28px", fontWeight: 750, letterSpacing: "-0.02em", lineHeight: 1 }}
               >
                 {avgPct !== null ? avgPct : "—"}
-                <span className="text-gray-400" style={{ fontSize: "16px", fontWeight: 500 }}>
+                <span className="text-gray-400" style={{ fontSize: "15px", fontWeight: 500 }}>
                   %
                 </span>
               </p>
-              <p className="text-gray-400 mt-1" style={{ fontSize: "13px" }}>
+              <p className="text-gray-400 mt-1" style={{ fontSize: "12px" }}>
                 Average Score
               </p>
             </div>
             <div
-              className="w-12 h-12 rounded-2xl flex items-center justify-center"
+              className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center"
               style={{ backgroundColor: "#f0fdfa" }}
             >
-              <Star size={22} style={{ color: "#0d9488" }} strokeWidth={2} />
+              <Star size={20} style={{ color: "#0d9488" }} strokeWidth={2} />
             </div>
           </div>
-          <div className="flex items-center gap-6 pt-4 border-t border-gray-50">
+          <div className="flex items-center gap-4 sm:gap-6 pt-4 border-t border-gray-50">
             <div>
-              <p className="text-gray-900" style={{ fontSize: "20px", fontWeight: 700 }}>
+              <p className="text-gray-900" style={{ fontSize: "18px", fontWeight: 700 }}>
                 {recent_marks.length}
               </p>
               <p className="text-gray-400" style={{ fontSize: "12px" }}>
@@ -363,7 +368,7 @@ export function StudentDashboard() {
               </p>
             </div>
             <div>
-              <p className="text-gray-900" style={{ fontSize: "20px", fontWeight: 700 }}>
+              <p className="text-gray-900" style={{ fontSize: "18px", fontWeight: 700 }}>
                 {aGradeCount}
               </p>
               <p className="text-gray-400" style={{ fontSize: "12px" }}>
@@ -385,22 +390,22 @@ export function StudentDashboard() {
               </p>
               <p
                 className="text-gray-900 mt-1"
-                style={{ fontSize: "32px", fontWeight: 750, letterSpacing: "-0.02em", lineHeight: 1 }}
+                style={{ fontSize: "28px", fontWeight: 750, letterSpacing: "-0.02em", lineHeight: 1 }}
               >
                 {attendance_stats.percentage !== null ? attendance_stats.percentage : "—"}
-                <span className="text-gray-400" style={{ fontSize: "16px", fontWeight: 500 }}>
+                <span className="text-gray-400" style={{ fontSize: "15px", fontWeight: 500 }}>
                   %
                 </span>
               </p>
-              <p className="text-gray-400 mt-1" style={{ fontSize: "13px" }}>
+              <p className="text-gray-400 mt-1" style={{ fontSize: "12px" }}>
                 Attendance Percentage
               </p>
             </div>
             <div
-              className="w-12 h-12 rounded-2xl flex items-center justify-center"
+              className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center"
               style={{ backgroundColor: "#f0fdf4" }}
             >
-              <CheckSquare size={22} style={{ color: "#16a34a" }} strokeWidth={2} />
+              <CheckSquare size={20} style={{ color: "#16a34a" }} strokeWidth={2} />
             </div>
           </div>
 
@@ -420,9 +425,9 @@ export function StudentDashboard() {
             </div>
           </div>
 
-          <div className="flex items-center gap-6 pt-4 border-t border-gray-50">
+          <div className="flex items-center gap-4 sm:gap-6 pt-4 border-t border-gray-50 flex-wrap">
             <div>
-              <p className="text-gray-900" style={{ fontSize: "20px", fontWeight: 700 }}>
+              <p className="text-gray-900" style={{ fontSize: "18px", fontWeight: 700 }}>
                 {attendance_stats.present}
               </p>
               <p className="text-gray-400" style={{ fontSize: "12px" }}>
@@ -430,27 +435,27 @@ export function StudentDashboard() {
               </p>
             </div>
             <div>
-              <p style={{ fontSize: "20px", fontWeight: 700, color: "#dc2626" }}>
+              <p style={{ fontSize: "18px", fontWeight: 700, color: "#dc2626" }}>
                 {attendance_stats.absent}
               </p>
               <p className="text-gray-400" style={{ fontSize: "12px" }}>
-                Total Absences
+                Absences
               </p>
             </div>
             {attendance_stats.min_required_met !== null && (
               <div>
-                <p className="text-gray-400" style={{ fontSize: "12px" }}>
+                <p className="text-gray-400" style={{ fontSize: "11px" }}>
                   Min. required
                 </p>
                 <p
                   style={{
-                    fontSize: "13px",
+                    fontSize: "12.5px",
                     fontWeight: 600,
                     color: attendance_stats.min_required_met ? "#16a34a" : "#dc2626",
                   }}
                 >
                   {attendance_stats.min_required_pct}%{" "}
-                  {attendance_stats.min_required_met ? "(met ✓)" : "(not met ✗)"}
+                  {attendance_stats.min_required_met ? "✓" : "✗"}
                 </p>
               </div>
             )}
@@ -459,23 +464,68 @@ export function StudentDashboard() {
       </div>
 
       {/* ── Two-Column Lower Layout ── */}
-      <div className="flex gap-6">
+      <div className="flex flex-col lg:flex-row gap-5 lg:gap-6">
 
         {/* LEFT COLUMN */}
-        <div className="flex-[2] flex flex-col gap-8 min-w-0">
+        <div className="flex-[2] flex flex-col gap-6 sm:gap-8 min-w-0">
 
           {/* Recent Test Results Table */}
           <div>
             <SectionHeader title="Recent Test Results" viewAllPath="/student/results" />
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               {recent_marks.length === 0 ? (
-                <div className="px-5 py-10 text-center">
-                  <p className="text-gray-400" style={{ fontSize: "13px" }}>
-                    No test results published yet.
-                  </p>
+              <div className="px-5 py-10 text-center">
+                <p className="text-gray-400" style={{ fontSize: "13px" }}>
+                  No test results published yet.
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Mobile card list */}
+                <div className="sm:hidden divide-y divide-gray-50">
+                  {recent_marks.map((test) => {
+                    const gc = getGradeColor(test.percentage);
+                    const sc = getSubjectStyle(test.subject);
+                    return (
+                      <div key={test.test_id} className="px-4 py-3.5 flex items-center gap-3">
+                        <div
+                          className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                          style={{ backgroundColor: sc.bg }}
+                        >
+                          <FileText size={15} style={{ color: sc.color }} strokeWidth={2} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-gray-800 truncate" style={{ fontSize: "13px", fontWeight: 600 }}>
+                            {test.test_name}
+                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span style={{ fontSize: "11px", color: sc.color, fontWeight: 600 }}>
+                              {test.subject}
+                            </span>
+                            <span className="text-gray-300">·</span>
+                            <span style={{ fontSize: "11px", color: "#9ca3af" }}>
+                              {formatDate(test.test_date)}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                          <span
+                            className="px-2 py-0.5 rounded-full"
+                            style={{ fontSize: "12px", fontWeight: 700, color: gc.color, backgroundColor: gc.bg }}
+                          >
+                            {getGradeLabel(test.percentage)}
+                          </span>
+                          <span style={{ fontSize: "11.5px", color: "#6b7280", fontWeight: 500 }}>
+                            {test.score}/{test.total_marks}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              ) : (
-                <table className="w-full">
+
+                {/* Desktop table */}
+                <table className="w-full hidden sm:table">
                   <thead>
                     <tr style={{ backgroundColor: "#f9fafb" }}>
                       {["Test", "Subject", "Score", "Grade", "Date"].map((col) => (
@@ -517,12 +567,7 @@ export function StudentDashboard() {
                           <td className="px-5 py-3.5">
                             <span
                               className="px-2.5 py-0.5 rounded-full"
-                              style={{
-                                fontSize: "11px",
-                                fontWeight: 600,
-                                color: sc.color,
-                                backgroundColor: sc.bg,
-                              }}
+                              style={{ fontSize: "11px", fontWeight: 600, color: sc.color, backgroundColor: sc.bg }}
                             >
                               {test.subject}
                             </span>
@@ -535,11 +580,7 @@ export function StudentDashboard() {
                                   style={{
                                     width: `${test.percentage}%`,
                                     backgroundColor:
-                                      test.percentage >= 90
-                                        ? "#0d9488"
-                                        : test.percentage >= 75
-                                        ? "#2563eb"
-                                        : "#d97706",
+                                      test.percentage >= 90 ? "#0d9488" : test.percentage >= 75 ? "#2563eb" : "#d97706",
                                   }}
                                 />
                               </div>
@@ -551,12 +592,7 @@ export function StudentDashboard() {
                           <td className="px-5 py-3.5">
                             <span
                               className="px-2.5 py-0.5 rounded-full"
-                              style={{
-                                fontSize: "12px",
-                                fontWeight: 700,
-                                color: gc.color,
-                                backgroundColor: gc.bg,
-                              }}
+                              style={{ fontSize: "12px", fontWeight: 700, color: gc.color, backgroundColor: gc.bg }}
                             >
                               {getGradeLabel(test.percentage)}
                             </span>
@@ -574,17 +610,15 @@ export function StudentDashboard() {
                     })}
                   </tbody>
                 </table>
-              )}
+              </>
+            )}
             </div>
           </div>
 
         </div>
 
         {/* RIGHT COLUMN */}
-        <div
-          className="flex flex-col gap-8 flex-shrink-0"
-          style={{ width: "300px" }}
-        >
+        <div className="flex flex-col gap-6 sm:gap-8 lg:flex-shrink-0 lg:w-[300px]">
 
           {/* Latest Announcements */}
           <div>
@@ -602,11 +636,11 @@ export function StudentDashboard() {
                   return (
                     <div
                       key={ann.id}
-                      className="bg-white rounded-xl border border-gray-100 p-4"
+                      className="bg-white rounded-xl border border-gray-100 p-4 active:bg-gray-50 transition-colors"
                     >
                       <div className="flex items-start gap-2.5">
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1.5">
+                          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                             <span
                               className="px-2 py-0.5 rounded-full"
                               style={{
@@ -637,7 +671,7 @@ export function StudentDashboard() {
                             style={{
                               fontSize: "11.5px",
                               display: "-webkit-box",
-                              WebkitLineClamp: 1,
+                              WebkitLineClamp: 2,
                               WebkitBoxOrient: "vertical" as const,
                             }}
                           >

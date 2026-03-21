@@ -201,6 +201,14 @@ function hasAuthorizationHeader(headers?: HeadersInit): boolean {
   return Object.keys(headers).some((key) => key.toLowerCase() === "authorization");
 }
 
+let isRefreshing = false;
+let refreshSubscribers: Array<(token: string | null) => void> = [];
+
+function onRefreshComplete(token: string | null) {
+  refreshSubscribers.forEach((cb) => cb(token));
+  refreshSubscribers = [];
+}
+
 async function withUnauthorizedHandling(
   request: Promise<Response>,
   options?: RequestInit
@@ -208,7 +216,47 @@ async function withUnauthorizedHandling(
   const response = await request;
 
   if (response.status === 401 && hasAuthorizationHeader(options?.headers)) {
-    handleUnauthorizedSession();
+    // Attempt a single silent token refresh before giving up
+    if (!isRefreshing) {
+      isRefreshing = true;
+      const { refreshAccessToken } = await import("./auth");
+      const newToken = await refreshAccessToken();
+      isRefreshing = false;
+      onRefreshComplete(newToken);
+
+      if (!newToken) {
+        // Refresh failed — session is truly dead
+        const { handleUnauthorizedSession } = await import("./auth");
+        handleUnauthorizedSession();
+        return response;
+      }
+
+      // Retry the original request with the new token
+      const retryHeaders = new Headers(options?.headers);
+      retryHeaders.set("Authorization", `Bearer ${newToken}`);
+      return _fetch(
+        typeof response.url === "string" ? response.url : "",
+        { ...options, headers: retryHeaders }
+      );
+    } else {
+      // Another request is already refreshing — queue this one
+      return new Promise((resolve) => {
+        refreshSubscribers.push(async (token) => {
+          if (!token) {
+            resolve(response);
+            return;
+          }
+          const retryHeaders = new Headers(options?.headers);
+          retryHeaders.set("Authorization", `Bearer ${token}`);
+          resolve(
+            _fetch(
+              typeof response.url === "string" ? response.url : "",
+              { ...options, headers: retryHeaders }
+            )
+          );
+        });
+      });
+    }
   }
 
   return response;
@@ -216,7 +264,8 @@ async function withUnauthorizedHandling(
 
 export async function apiFetch(path: string, options?: RequestInit) {
   const url = `${BASE_URL}${path.replace(/^\/api/, "")}`;
-  return withUnauthorizedHandling(fetch(url, options), options);
+  const optionsWithCredentials: RequestInit = { credentials: "include", ...options };
+  return withUnauthorizedHandling(fetch(url, optionsWithCredentials), optionsWithCredentials);
 }
 
 // ── Intercept ALL fetch("/api/...") calls globally ──────────────────────────
@@ -227,7 +276,10 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
       ? `${BASE_URL}${input.replace(/^\/api/, "")}`
       : input;
 
-    return withUnauthorizedHandling(_fetch(url, init), init);
+    // Always include credentials so the HttpOnly refresh token cookie is sent
+    const initWithCredentials: RequestInit = { credentials: "include", ...init };
+
+    return withUnauthorizedHandling(_fetch(url, initWithCredentials), initWithCredentials);
   }
 
   return _fetch(input, init);
@@ -352,6 +404,31 @@ function redirectToLogin(): void {
   }
 }
 
+/**
+ * Attempts to get a new access token using the HttpOnly refresh token cookie.
+ * Returns the new access token string, or null if refresh failed.
+ * Called automatically by apiFetch on 401 responses.
+ */
+export async function refreshAccessToken(): Promise<string | null> {
+  try {
+    const res = await fetch("/api/refresh", {
+      method: "POST",
+      credentials: "include", // sends the HttpOnly cookie
+    });
+
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    if (data.token) {
+      saveToken(data.token);
+      return data.token;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function logout(options?: { redirectToLogin?: boolean }): Promise<void> {
   const shouldRedirect = options?.redirectToLogin ?? true;
   const token = getToken();
@@ -360,6 +437,7 @@ export async function logout(options?: { redirectToLogin?: boolean }): Promise<v
     if (token) {
       await fetch("/api/logout", {
         method: "POST",
+        credentials: "include",
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -388,6 +466,251 @@ export function handleUnauthorizedSession(): void {
   }, 0);
 }
 
+
+// ===== FILE: src\app\components\errors\ErrorBoundary.tsx =====
+
+// src/app/components/errors/ErrorBoundary.tsx
+
+import { Component, type ReactNode } from "react";
+
+type Props = {
+  children: ReactNode;
+  fallback?: ReactNode;
+  section?: string; // optional label for logging e.g. "AttendancePage"
+};
+
+type State = {
+  hasError: boolean;
+  error: Error | null;
+};
+
+export class ErrorBoundary extends Component<Props, State> {
+  constructor(props: Props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): State {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, info: { componentStack: string }) {
+    // In production you'd send this to a logging service
+    console.error(
+      `[ErrorBoundary]${this.props.section ? ` [${this.props.section}]` : ""}`,
+      error,
+      info.componentStack
+    );
+  }
+
+  handleReset = () => {
+    this.setState({ hasError: false, error: null });
+  };
+
+  render() {
+    if (this.state.hasError) {
+      if (this.props.fallback) {
+        return this.props.fallback;
+      }
+
+      return (
+        <DefaultErrorFallback
+          error={this.state.error}
+          section={this.props.section}
+          onReset={this.handleReset}
+        />
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+function DefaultErrorFallback({
+  error,
+  section,
+  onReset,
+}: {
+  error: Error | null;
+  section?: string;
+  onReset: () => void;
+}) {
+  return (
+    <div
+      className="flex flex-col items-center justify-center p-12"
+      style={{ minHeight: "400px" }}
+    >
+      <div
+        className="w-14 h-14 rounded-2xl flex items-center justify-center mb-5"
+        style={{ backgroundColor: "#fef2f2" }}
+      >
+        <svg
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#dc2626"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+      </div>
+
+      <h2
+        className="text-gray-900 mb-2"
+        style={{ fontSize: "18px", fontWeight: 700, letterSpacing: "-0.01em" }}
+      >
+        Something went wrong
+      </h2>
+
+      <p
+        className="text-gray-400 text-center mb-1"
+        style={{ fontSize: "14px", maxWidth: "360px", lineHeight: 1.6 }}
+      >
+        {section
+          ? `An unexpected error occurred in ${section}.`
+          : "An unexpected error occurred."}
+        {" "}Your other work is safe.
+      </p>
+
+      {/* Show error message in development only */}
+      {import.meta.env.DEV && error?.message && (
+        <p
+          className="text-red-400 text-center mb-6 font-mono"
+          style={{ fontSize: "12px", maxWidth: "480px" }}
+        >
+          {error.message}
+        </p>
+      )}
+
+      <div className="flex gap-3 mt-4">
+        <button
+          onClick={onReset}
+          className="px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
+          style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+        >
+          Try Again
+        </button>
+        <button
+          onClick={() => window.location.reload()}
+          className="px-5 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-all"
+          style={{ fontSize: "13.5px", fontWeight: 600 }}
+        >
+          Reload Page
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ===== FILE: src\app\components\errors\RootErrorFallback.tsx =====
+
+// src/app/components/errors/RootErrorFallback.tsx
+
+export function RootErrorFallback({
+  error,
+  onReset,
+}: {
+  error: Error | null;
+  onReset: () => void;
+}) {
+  return (
+    <div
+      className="min-h-screen flex flex-col items-center justify-center p-8"
+      style={{ backgroundColor: "#f5f6f8" }}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-sm border border-gray-100 p-10 flex flex-col items-center"
+        style={{ maxWidth: "480px", width: "100%" }}
+      >
+        <div
+          className="w-16 h-16 rounded-2xl flex items-center justify-center mb-5"
+          style={{ backgroundColor: "#fef2f2" }}
+        >
+          <svg
+            width="28"
+            height="28"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#dc2626"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            <line x1="12" y1="9" x2="12" y2="13" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+        </div>
+
+        <h1
+          className="text-gray-900 mb-2 text-center"
+          style={{ fontSize: "20px", fontWeight: 700, letterSpacing: "-0.01em" }}
+        >
+          CleanDesk ran into a problem
+        </h1>
+
+        <p
+          className="text-gray-400 text-center mb-6"
+          style={{ fontSize: "14px", lineHeight: 1.7 }}
+        >
+          Something unexpected happened. Your data is safe — this is a display
+          error only. Try reloading the page.
+        </p>
+
+        {import.meta.env.DEV && error?.message && (
+          <div
+            className="w-full rounded-xl p-4 mb-5 font-mono"
+            style={{ backgroundColor: "#fef2f2" }}
+          >
+            <p className="text-red-500" style={{ fontSize: "12px" }}>
+              {error.message}
+            </p>
+          </div>
+        )}
+
+        <div className="flex gap-3 w-full">
+          <button
+            onClick={onReset}
+            className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
+            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+          >
+            Try Again
+          </button>
+          <button
+            onClick={() => window.location.href = "/login"}
+            className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-all"
+            style={{ fontSize: "13.5px", fontWeight: 600 }}
+          >
+            Back to Login
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ===== FILE: src\app\components\errors\withErrorBoundary.tsx =====
+
+// src/app/components/errors/withErrorBoundary.tsx
+
+import type { ReactNode } from "react";
+import { ErrorBoundary } from "./ErrorBoundary";
+
+export function withErrorBoundary(
+  children: ReactNode,
+  section: string
+): ReactNode {
+  return (
+    <ErrorBoundary section={section}>
+      {children}
+    </ErrorBoundary>
+  );
+}
 
 // ===== FILE: src\app\components\figma\ImageWithFallback.tsx =====
 
@@ -590,6 +913,7 @@ const managementNavItems: NavItemDef[] = [
   { label: "Dashboard",      icon: LayoutDashboard, path: "/management" },
   { label: "People",         icon: Users,           path: "/management/people" },
   { label: "Batches",        icon: Users2,          path: "/management/batches" },
+  { label: "Students",       icon: UserCheck,       path: "/management/students" },
   { label: "Tests",          icon: ClipboardList,   path: "/management/tests" },
   { label: "Marks",          icon: Star,            path: "/management/marks" },
   { label: "Attendance",     icon: CheckSquare,     path: "/management/attendance" },
@@ -665,8 +989,8 @@ const ROLE_CONFIG: {
   },
   management: {
     navItems: managementNavItems,
-    mainEnd: 8,
-    secondaryEnd: 8,
+    mainEnd: 9,
+    secondaryEnd: 9,
     menuLabel: "Management",
     accountLabel: "Account",
     portalLabel: "Management Portal",
@@ -10284,6 +10608,11 @@ import {
 } from "../../Lib/api/dashboard";
 import { getToken } from "../auth";
 import {
+  fetchNotificationsApi,
+  markNotificationsReadApi,
+  type NotificationRecord,
+} from "../../Lib/api/notifications";
+import {
   Users,
   Users2,
   ClipboardList,
@@ -10296,6 +10625,7 @@ import {
   X,
   CheckCircle2,
   ChevronDown,
+  BookOpen,
 } from "lucide-react";
 
 // ─── Config type — the only thing that differs between Admin and Management ────
@@ -10316,7 +10646,40 @@ const STAT_CONFIG = [
   { label: "Attendance Today", icon: CheckSquare,   color: "#16a34a", bg: "#f0fdf4" },
 ];
 
+// ─── Notification helpers ──────────────────────────────────────────────────────
 
+function getNotificationStyle(eventType: string): {
+  icon: React.ElementType;
+  color: string;
+  bg: string;
+} {
+  const map: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
+    STUDENT_ACCOUNT_CREATED:  { icon: Users,         color: "#0d9488", bg: "#f0fdfa" },
+    STUDENT_ABSENT:           { icon: CheckSquare,   color: "#dc2626", bg: "#fef2f2" },
+    STUDENT_LATE:             { icon: CheckSquare,   color: "#d97706", bg: "#fffbeb" },
+    STUDENT_EARLY_LEAVE:      { icon: CheckSquare,   color: "#7c3aed", bg: "#f5f3ff" },
+    TEST_CREATED:             { icon: ClipboardList, color: "#2563eb", bg: "#eff6ff" },
+    TEST_DATE_UPDATED:        { icon: ClipboardList, color: "#d97706", bg: "#fffbeb" },
+    TEST_RESULT_PUBLISHED:    { icon: TrendingUp,    color: "#16a34a", bg: "#f0fdf4" },
+    HOLIDAY_DECLARED:         { icon: Megaphone,     color: "#d97706", bg: "#fffbeb" },
+    GENERAL_ANNOUNCEMENT:     { icon: Megaphone,     color: "#0d9488", bg: "#f0fdfa" },
+    STUDY_MATERIAL_UPLOADED:  { icon: BookOpen,      color: "#7c3aed", bg: "#f5f3ff" },
+    PARENT_TEACHER_MEETING:   { icon: Users,         color: "#2563eb", bg: "#eff6ff" },
+    TEST_DAY_ANNOUNCED:       { icon: ClipboardList, color: "#db2777", bg: "#fdf2f8" },
+  };
+  return map[eventType] ?? { icon: Bell, color: "#6b7280", bg: "#f9fafb" };
+}
+
+function getRelativeTime(isoString: string): string {
+  const diff = Date.now() - new Date(isoString).getTime();
+  const mins  = Math.floor(diff / 60_000);
+  const hours = Math.floor(diff / 3_600_000);
+  const days  = Math.floor(diff / 86_400_000);
+  if (mins < 1)   return "Just now";
+  if (mins < 60)  return `${mins} min${mins > 1 ? "s" : ""} ago`;
+  if (hours < 24) return `${hours} hr${hours > 1 ? "s" : ""} ago`;
+  return `${days} day${days > 1 ? "s" : ""} ago`;
+}
 
 
 type FormState = {
@@ -10328,17 +10691,6 @@ type FormState = {
 
 const emptyForm: FormState = { type: "", title: "", body: "", batches: [] };
 
-// ─── Hardcoded notifications (until backend is ready) ─────────────────────────
-
-const notifications = [
-  { id: 1, icon: Users,        text: "New student enrolled: Sneha Patel in Science Batch A", time: "10 mins ago", color: "#0d9488", bg: "#f0fdfa" },
-  { id: 2, icon: TrendingUp,   text: "Marks uploaded for Mid-Term Chemistry – Batch A",      time: "42 mins ago", color: "#7c3aed", bg: "#f5f3ff" },
-  { id: 3, icon: CheckSquare,  text: "Attendance marked for Commerce Batch B – Mar 6",       time: "1 hr ago",    color: "#16a34a", bg: "#f0fdf4" },
-  { id: 4, icon: ClipboardList,text: "New test added: Algebra Unit Test – Math Batch D",     time: "2 hrs ago",   color: "#2563eb", bg: "#eff6ff" },
-  { id: 5, icon: Megaphone,    text: "Announcement posted: Sports Day Registration Open",    time: "3 hrs ago",   color: "#d97706", bg: "#fffbeb" },
-];
-
-// ─── BatchSelector ─────────────────────────────────────────────────────────────
 
 function BatchSelector({
   selected,
@@ -10465,6 +10817,8 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
   const [announcements, setAnnouncements]   = useState<{ id: string; title: string; preview: string; createdBy: string; date: string; tag: string; tagColor: string; tagBg: string }[]>([]);
   const [batchOptions, setBatchOptions]     = useState<string[]>(["Universal"]);
   const [batchObjects, setBatchObjects]     = useState<{ id: string; name: string }[]>([]);
+  const [notifications, setNotifications]   = useState<NotificationRecord[]>([]);
+  const [unreadCount, setUnreadCount]       = useState(0);
 
   useEffect(() => {
     let isActive = true;
@@ -10552,8 +10906,19 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
       } catch { /* fail silently */ }
     };
 
+    const loadNotifications = async () => {
+      try {
+        const result = await fetchNotificationsApi({ limit: 10 });
+        if (isActive) {
+          setNotifications(result.notifications);
+          setUnreadCount(result.unread_count);
+        }
+      } catch { /* fail silently */ }
+    };
+
+
     const refreshDashboard = async () => {
-      await Promise.allSettled([loadSummary(), loadTests(), loadAttendance(), loadAnnouncements(), loadBatches()]);
+      await Promise.allSettled([loadSummary(), loadTests(), loadAttendance(), loadAnnouncements(), loadBatches(), loadNotifications()]);
       if (isActive) setLastUpdated(new Date().toISOString());
     };
 
@@ -10729,30 +11094,66 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-gray-800" style={{ fontSize: "16px", fontWeight: 650, letterSpacing: "-0.01em" }}>Notifications</h2>
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ backgroundColor: "#f0fdfa" }}>
-                <Bell size={12} style={{ color: "#0d9488" }} />
-                <span style={{ fontSize: "11px", fontWeight: 600, color: "#0d9488" }}>{notifications.length} new</span>
-              </div>
+              {unreadCount > 0 && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ backgroundColor: "#f0fdfa" }}>
+                  <Bell size={12} style={{ color: "#0d9488" }} />
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: "#0d9488" }}>{unreadCount} new</span>
+                </div>
+              )}
             </div>
             <div className="space-y-1">
-              {notifications.map((notif) => {
-                const Icon = notif.icon;
-                return (
-                  <div key={notif.id} className="flex items-start gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer group">
-                    <div className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5" style={{ backgroundColor: notif.bg }}>
-                      <Icon size={15} style={{ color: notif.color }} strokeWidth={2} />
+              {notifications.length === 0 ? (
+                <p className="text-gray-300 text-center py-6" style={{ fontSize: "13px" }}>No notifications yet.</p>
+              ) : (
+                notifications.map((notif) => {
+                  const style = getNotificationStyle(notif.event_type);
+                  const Icon  = style.icon;
+                  const relativeTime = getRelativeTime(notif.created_at);
+                  return (
+                    <div
+                      key={notif.id}
+                      className="flex items-start gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer group"
+                      style={{ backgroundColor: notif.is_read ? "transparent" : "#f0fdfa22" }}
+                      onClick={() => {
+                        if (!notif.is_read) {
+                          markNotificationsReadApi([notif.id]).catch(() => {});
+                          setNotifications(prev =>
+                            prev.map(n => n.id === notif.id ? { ...n, is_read: true } : n)
+                          );
+                          setUnreadCount(c => Math.max(0, c - 1));
+                        }
+                      }}
+                    >
+                      <div className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5" style={{ backgroundColor: style.bg }}>
+                        <Icon size={15} style={{ color: style.color }} strokeWidth={2} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-gray-700 leading-snug" style={{ fontSize: "12.5px", fontWeight: notif.is_read ? 400 : 600 }}>
+                          {notif.message}
+                        </p>
+                        <p className="text-gray-300 mt-1" style={{ fontSize: "11px" }}>{relativeTime}</p>
+                      </div>
+                      {!notif.is_read && (
+                        <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5" style={{ backgroundColor: "#0d9488" }} />
+                      )}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-gray-700 leading-snug" style={{ fontSize: "12.5px", fontWeight: 450 }}>{notif.text}</p>
-                      <p className="text-gray-300 mt-1" style={{ fontSize: "11px" }}>{notif.time}</p>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
-            <button className="w-full mt-4 py-2.5 rounded-xl border border-gray-100 text-gray-400 hover:text-gray-600 hover:border-gray-200 transition-colors" style={{ fontSize: "12.5px", fontWeight: 500 }}>
-              View all notifications
-            </button>
+            {notifications.length > 0 && (
+              <button
+                onClick={() => {
+                  markNotificationsReadApi().catch(() => {});
+                  setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+                  setUnreadCount(0);
+                }}
+                className="w-full mt-4 py-2.5 rounded-xl border border-gray-100 text-gray-400 hover:text-gray-600 hover:border-gray-200 transition-colors"
+                style={{ fontSize: "12.5px", fontWeight: 500 }}
+              >
+                Mark all as read
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -13057,7 +13458,7 @@ function TodayAttendanceBanner({ status }: { status: AttendanceStatus }) {
 
   return (
     <div
-      className="flex items-center gap-4 px-5 py-4 rounded-2xl mb-6"
+      className="flex items-start sm:items-center gap-3 sm:gap-4 px-4 sm:px-5 py-4 rounded-2xl"
       style={{
         backgroundColor: c.bg,
         border: `1px solid ${c.border}`,
@@ -13070,24 +13471,26 @@ function TodayAttendanceBanner({ status }: { status: AttendanceStatus }) {
         <Icon size={20} style={{ color: c.iconColor }} strokeWidth={2} />
       </div>
       <div className="flex-1 min-w-0">
-        <p style={{ fontSize: "14px", fontWeight: 650, color: "#111827", lineHeight: 1.3 }}>
-          {c.label}
-        </p>
-        <p className="text-gray-400 mt-0.5" style={{ fontSize: "12.5px" }}>
+        <div className="flex items-center gap-2 flex-wrap">
+          <p style={{ fontSize: "13.5px", fontWeight: 650, color: "#111827", lineHeight: 1.3 }}>
+            {c.label}
+          </p>
+          <span
+            className="flex-shrink-0 px-2.5 py-0.5 rounded-full"
+            style={{
+              fontSize: "11px",
+              fontWeight: 700,
+              color: c.badgeColor,
+              backgroundColor: c.badgeBg,
+            }}
+          >
+            {c.badgeText}
+          </span>
+        </div>
+        <p className="text-gray-400 mt-0.5" style={{ fontSize: "12px" }}>
           {c.sub}
         </p>
       </div>
-      <span
-        className="flex-shrink-0 px-3 py-1 rounded-full"
-        style={{
-          fontSize: "12px",
-          fontWeight: 700,
-          color: c.badgeColor,
-          backgroundColor: c.badgeBg,
-        }}
-      >
-        {c.badgeText}
-      </span>
     </div>
   );
 }
@@ -13147,7 +13550,7 @@ export function StudentDashboard() {
   // ── Loading skeleton ──
   if (loading) {
     return (
-      <div className="p-8" style={{ maxWidth: "1200px", margin: "0 auto" }}>
+      <div className="px-4 py-6 sm:px-6 sm:py-8 lg:px-8" style={{ maxWidth: "1200px", margin: "0 auto" }}>
         <div className="animate-pulse space-y-6">
           <div className="h-8 bg-gray-100 rounded-xl w-48" />
           <div className="h-4 bg-gray-100 rounded w-64" />
@@ -13192,39 +13595,42 @@ export function StudentDashboard() {
     <div className="p-8" style={{ maxWidth: "1200px", margin: "0 auto" }}>
 
       {/* ── Page Header ── */}
-      <div className="flex items-start justify-between mb-8">
-        <div>
-          <h1
-            className="text-gray-900"
-            style={{ fontSize: "24px", fontWeight: 700, letterSpacing: "-0.02em" }}
-          >
-            My Dashboard
-          </h1>
-          <p className="text-gray-400 mt-1" style={{ fontSize: "14px" }}>
-            Welcome back, {profile.full_name ?? profile.login_identifier} · {formatTodayLabel()}
-          </p>
-          <div className="flex items-center gap-2 mt-2">
-            {profile.batch_name && (
-              <span
-                className="px-2.5 py-0.5 rounded-full"
-                style={{ fontSize: "12px", fontWeight: 600, backgroundColor: "#f0fdfa", color: "#0d9488" }}
-              >
-                {profile.batch_name}
-              </span>
-            )}
-            <span className="text-gray-300" style={{ fontSize: "12px" }}>·</span>
-            <span className="text-gray-400" style={{ fontSize: "12px", fontFamily: "monospace" }}>
-              {profile.login_identifier}
+      <div className="mb-6 sm:mb-8">
+        <h1
+          className="text-gray-900"
+          style={{ fontSize: "22px", fontWeight: 700, letterSpacing: "-0.02em" }}
+        >
+          My Dashboard
+        </h1>
+        <p className="text-gray-400 mt-1" style={{ fontSize: "13px" }}>
+          Welcome back, {profile.full_name ?? profile.login_identifier}
+        </p>
+        <p className="text-gray-300 mt-0.5" style={{ fontSize: "11.5px" }}>
+          {formatTodayLabel()}
+        </p>
+        <div className="flex items-center gap-2 mt-2 flex-wrap">
+          {profile.batch_name && (
+            <span
+              className="px-2.5 py-0.5 rounded-full"
+              style={{ fontSize: "12px", fontWeight: 600, backgroundColor: "#f0fdfa", color: "#0d9488" }}
+            >
+              {profile.batch_name}
             </span>
-          </div>
+          )}
+          <span className="text-gray-300" style={{ fontSize: "12px" }}>·</span>
+          <span className="text-gray-400" style={{ fontSize: "12px", fontFamily: "monospace" }}>
+            {profile.login_identifier}
+          </span>
         </div>
       </div>
 
       {/* ── Today's Attendance Banner ── */}
-      <TodayAttendanceBanner status={today_attendance} />
+      <div className="mb-5 sm:mb-6">
+        <TodayAttendanceBanner status={today_attendance} />
+      </div>
 
       {/* ── Performance + Attendance Summary Cards ── */}
-      <div className="grid grid-cols-2 gap-5 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5 mb-6 sm:mb-8">
 
         {/* Performance Summary Card */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 hover:shadow-md hover:border-teal-100 transition-all">
@@ -13238,27 +13644,27 @@ export function StudentDashboard() {
               </p>
               <p
                 className="text-gray-900 mt-1"
-                style={{ fontSize: "32px", fontWeight: 750, letterSpacing: "-0.02em", lineHeight: 1 }}
+                style={{ fontSize: "28px", fontWeight: 750, letterSpacing: "-0.02em", lineHeight: 1 }}
               >
                 {avgPct !== null ? avgPct : "—"}
-                <span className="text-gray-400" style={{ fontSize: "16px", fontWeight: 500 }}>
+                <span className="text-gray-400" style={{ fontSize: "15px", fontWeight: 500 }}>
                   %
                 </span>
               </p>
-              <p className="text-gray-400 mt-1" style={{ fontSize: "13px" }}>
+              <p className="text-gray-400 mt-1" style={{ fontSize: "12px" }}>
                 Average Score
               </p>
             </div>
             <div
-              className="w-12 h-12 rounded-2xl flex items-center justify-center"
+              className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center"
               style={{ backgroundColor: "#f0fdfa" }}
             >
-              <Star size={22} style={{ color: "#0d9488" }} strokeWidth={2} />
+              <Star size={20} style={{ color: "#0d9488" }} strokeWidth={2} />
             </div>
           </div>
-          <div className="flex items-center gap-6 pt-4 border-t border-gray-50">
+          <div className="flex items-center gap-4 sm:gap-6 pt-4 border-t border-gray-50">
             <div>
-              <p className="text-gray-900" style={{ fontSize: "20px", fontWeight: 700 }}>
+              <p className="text-gray-900" style={{ fontSize: "18px", fontWeight: 700 }}>
                 {recent_marks.length}
               </p>
               <p className="text-gray-400" style={{ fontSize: "12px" }}>
@@ -13266,7 +13672,7 @@ export function StudentDashboard() {
               </p>
             </div>
             <div>
-              <p className="text-gray-900" style={{ fontSize: "20px", fontWeight: 700 }}>
+              <p className="text-gray-900" style={{ fontSize: "18px", fontWeight: 700 }}>
                 {aGradeCount}
               </p>
               <p className="text-gray-400" style={{ fontSize: "12px" }}>
@@ -13288,22 +13694,22 @@ export function StudentDashboard() {
               </p>
               <p
                 className="text-gray-900 mt-1"
-                style={{ fontSize: "32px", fontWeight: 750, letterSpacing: "-0.02em", lineHeight: 1 }}
+                style={{ fontSize: "28px", fontWeight: 750, letterSpacing: "-0.02em", lineHeight: 1 }}
               >
                 {attendance_stats.percentage !== null ? attendance_stats.percentage : "—"}
-                <span className="text-gray-400" style={{ fontSize: "16px", fontWeight: 500 }}>
+                <span className="text-gray-400" style={{ fontSize: "15px", fontWeight: 500 }}>
                   %
                 </span>
               </p>
-              <p className="text-gray-400 mt-1" style={{ fontSize: "13px" }}>
+              <p className="text-gray-400 mt-1" style={{ fontSize: "12px" }}>
                 Attendance Percentage
               </p>
             </div>
             <div
-              className="w-12 h-12 rounded-2xl flex items-center justify-center"
+              className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center"
               style={{ backgroundColor: "#f0fdf4" }}
             >
-              <CheckSquare size={22} style={{ color: "#16a34a" }} strokeWidth={2} />
+              <CheckSquare size={20} style={{ color: "#16a34a" }} strokeWidth={2} />
             </div>
           </div>
 
@@ -13323,9 +13729,9 @@ export function StudentDashboard() {
             </div>
           </div>
 
-          <div className="flex items-center gap-6 pt-4 border-t border-gray-50">
+          <div className="flex items-center gap-4 sm:gap-6 pt-4 border-t border-gray-50 flex-wrap">
             <div>
-              <p className="text-gray-900" style={{ fontSize: "20px", fontWeight: 700 }}>
+              <p className="text-gray-900" style={{ fontSize: "18px", fontWeight: 700 }}>
                 {attendance_stats.present}
               </p>
               <p className="text-gray-400" style={{ fontSize: "12px" }}>
@@ -13333,27 +13739,27 @@ export function StudentDashboard() {
               </p>
             </div>
             <div>
-              <p style={{ fontSize: "20px", fontWeight: 700, color: "#dc2626" }}>
+              <p style={{ fontSize: "18px", fontWeight: 700, color: "#dc2626" }}>
                 {attendance_stats.absent}
               </p>
               <p className="text-gray-400" style={{ fontSize: "12px" }}>
-                Total Absences
+                Absences
               </p>
             </div>
             {attendance_stats.min_required_met !== null && (
               <div>
-                <p className="text-gray-400" style={{ fontSize: "12px" }}>
+                <p className="text-gray-400" style={{ fontSize: "11px" }}>
                   Min. required
                 </p>
                 <p
                   style={{
-                    fontSize: "13px",
+                    fontSize: "12.5px",
                     fontWeight: 600,
                     color: attendance_stats.min_required_met ? "#16a34a" : "#dc2626",
                   }}
                 >
                   {attendance_stats.min_required_pct}%{" "}
-                  {attendance_stats.min_required_met ? "(met ✓)" : "(not met ✗)"}
+                  {attendance_stats.min_required_met ? "✓" : "✗"}
                 </p>
               </div>
             )}
@@ -13362,23 +13768,68 @@ export function StudentDashboard() {
       </div>
 
       {/* ── Two-Column Lower Layout ── */}
-      <div className="flex gap-6">
+      <div className="flex flex-col lg:flex-row gap-5 lg:gap-6">
 
         {/* LEFT COLUMN */}
-        <div className="flex-[2] flex flex-col gap-8 min-w-0">
+        <div className="flex-[2] flex flex-col gap-6 sm:gap-8 min-w-0">
 
           {/* Recent Test Results Table */}
           <div>
             <SectionHeader title="Recent Test Results" viewAllPath="/student/results" />
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               {recent_marks.length === 0 ? (
-                <div className="px-5 py-10 text-center">
-                  <p className="text-gray-400" style={{ fontSize: "13px" }}>
-                    No test results published yet.
-                  </p>
+              <div className="px-5 py-10 text-center">
+                <p className="text-gray-400" style={{ fontSize: "13px" }}>
+                  No test results published yet.
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Mobile card list */}
+                <div className="sm:hidden divide-y divide-gray-50">
+                  {recent_marks.map((test) => {
+                    const gc = getGradeColor(test.percentage);
+                    const sc = getSubjectStyle(test.subject);
+                    return (
+                      <div key={test.test_id} className="px-4 py-3.5 flex items-center gap-3">
+                        <div
+                          className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                          style={{ backgroundColor: sc.bg }}
+                        >
+                          <FileText size={15} style={{ color: sc.color }} strokeWidth={2} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-gray-800 truncate" style={{ fontSize: "13px", fontWeight: 600 }}>
+                            {test.test_name}
+                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span style={{ fontSize: "11px", color: sc.color, fontWeight: 600 }}>
+                              {test.subject}
+                            </span>
+                            <span className="text-gray-300">·</span>
+                            <span style={{ fontSize: "11px", color: "#9ca3af" }}>
+                              {formatDate(test.test_date)}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                          <span
+                            className="px-2 py-0.5 rounded-full"
+                            style={{ fontSize: "12px", fontWeight: 700, color: gc.color, backgroundColor: gc.bg }}
+                          >
+                            {getGradeLabel(test.percentage)}
+                          </span>
+                          <span style={{ fontSize: "11.5px", color: "#6b7280", fontWeight: 500 }}>
+                            {test.score}/{test.total_marks}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              ) : (
-                <table className="w-full">
+
+                {/* Desktop table */}
+                <table className="w-full hidden sm:table">
                   <thead>
                     <tr style={{ backgroundColor: "#f9fafb" }}>
                       {["Test", "Subject", "Score", "Grade", "Date"].map((col) => (
@@ -13420,12 +13871,7 @@ export function StudentDashboard() {
                           <td className="px-5 py-3.5">
                             <span
                               className="px-2.5 py-0.5 rounded-full"
-                              style={{
-                                fontSize: "11px",
-                                fontWeight: 600,
-                                color: sc.color,
-                                backgroundColor: sc.bg,
-                              }}
+                              style={{ fontSize: "11px", fontWeight: 600, color: sc.color, backgroundColor: sc.bg }}
                             >
                               {test.subject}
                             </span>
@@ -13438,11 +13884,7 @@ export function StudentDashboard() {
                                   style={{
                                     width: `${test.percentage}%`,
                                     backgroundColor:
-                                      test.percentage >= 90
-                                        ? "#0d9488"
-                                        : test.percentage >= 75
-                                        ? "#2563eb"
-                                        : "#d97706",
+                                      test.percentage >= 90 ? "#0d9488" : test.percentage >= 75 ? "#2563eb" : "#d97706",
                                   }}
                                 />
                               </div>
@@ -13454,12 +13896,7 @@ export function StudentDashboard() {
                           <td className="px-5 py-3.5">
                             <span
                               className="px-2.5 py-0.5 rounded-full"
-                              style={{
-                                fontSize: "12px",
-                                fontWeight: 700,
-                                color: gc.color,
-                                backgroundColor: gc.bg,
-                              }}
+                              style={{ fontSize: "12px", fontWeight: 700, color: gc.color, backgroundColor: gc.bg }}
                             >
                               {getGradeLabel(test.percentage)}
                             </span>
@@ -13477,17 +13914,15 @@ export function StudentDashboard() {
                     })}
                   </tbody>
                 </table>
-              )}
+              </>
+            )}
             </div>
           </div>
 
         </div>
 
         {/* RIGHT COLUMN */}
-        <div
-          className="flex flex-col gap-8 flex-shrink-0"
-          style={{ width: "300px" }}
-        >
+        <div className="flex flex-col gap-6 sm:gap-8 lg:flex-shrink-0 lg:w-[300px]">
 
           {/* Latest Announcements */}
           <div>
@@ -13505,11 +13940,11 @@ export function StudentDashboard() {
                   return (
                     <div
                       key={ann.id}
-                      className="bg-white rounded-xl border border-gray-100 p-4"
+                      className="bg-white rounded-xl border border-gray-100 p-4 active:bg-gray-50 transition-colors"
                     >
                       <div className="flex items-start gap-2.5">
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1.5">
+                          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                             <span
                               className="px-2 py-0.5 rounded-full"
                               style={{
@@ -13540,7 +13975,7 @@ export function StudentDashboard() {
                             style={{
                               fontSize: "11.5px",
                               display: "-webkit-box",
-                              WebkitLineClamp: 1,
+                              WebkitLineClamp: 2,
                               WebkitBoxOrient: "vertical" as const,
                             }}
                           >
@@ -22790,6 +23225,7 @@ export function Users() {
 
 import { createElement } from "react";
 import { MyBatches } from "./pages/Teacher/MyBatches";
+import { ErrorBoundary } from "./components/errors/ErrorBoundary";
 import { MyAttendance } from "./pages/Student/MyAttendance";
 import { createBrowserRouter, redirect } from "react-router";
 import { Shell } from "./components/layout/Shell";
@@ -22869,8 +23305,14 @@ export const router = createBrowserRouter([
       { path: "teachers/:teacherId", Component: TeacherProfilePage },
       { path: "students", Component: Students },
       { path: "students/:studentId", Component: StudentProfilePage },
-      { path: "tests", Component: Tests },
-      { path: "attendance", Component: Attendance },
+      {
+        path: "tests",
+        element: createElement(ErrorBoundary, { section: "Tests", children: createElement(Tests) }),
+      },
+      {
+        path: "attendance",
+element: createElement(ErrorBoundary, { section: "Attendance", children: createElement(Attendance) }),
+      },
       { path: "announcements", Component: Announcements },
       { path: "study-materials", Component: StudyMaterials },
       { path: "profile", Component: Profile },
@@ -22885,8 +23327,14 @@ export const router = createBrowserRouter([
     children: [
       { index: true, Component: TeacherDashboard },
       { path: "batches", Component: MyBatches },
-      { path: "attendance", Component: Attendance },
-      { path: "tests", Component: Tests },
+      {
+        path: "attendance",
+element: createElement(ErrorBoundary, { section: "Attendance", children: createElement(Attendance) }),
+      },
+      {
+        path: "tests",
+        element: createElement(ErrorBoundary, { section: "Tests", children: createElement(Tests) }),
+      },
       { path: "announcements", Component: Announcements },
       { path: "study-materials", Component: StudyMaterials },
       { path: "profile", Component: Profile },
@@ -22904,6 +23352,8 @@ export const router = createBrowserRouter([
       { path: "batches", Component: Batches },
       { path: "tests", Component: Tests },
       { path: "marks", Component: Tests },
+      { path: "students", Component: Students },
+      { path: "students/:studentId", Component: StudentProfilePage },
       { path: "attendance", Component: Attendance },
       { path: "study-materials", Component: StudyMaterials },
       { path: "announcements", Component: Announcements },
@@ -22918,8 +23368,14 @@ export const router = createBrowserRouter([
     loader: requireRole(4),
     children: [
       { index: true, Component: StudentDashboard },
-      { path: "attendance", Component: MyAttendance },
-      { path: "results", Component: StudentMarks },
+      {
+        path: "attendance",
+element: createElement(ErrorBoundary, { section: "My Attendance", children: createElement(MyAttendance) }),
+      },
+      {
+        path: "results",
+element: createElement(ErrorBoundary, { section: "My Results", children: createElement(StudentMarks) }),
+      },
       { path: "study-materials", Component: StudentStudyMaterialsRoute },
       { path: "announcements", Component: StudentAnnouncementsRoute },
       { path: "profile", Component: Profile },
@@ -23685,6 +24141,57 @@ export async function declareHolidayApi(payload: DeclareHolidayPayload): Promise
   const json = await res.json();
   if (!res.ok) throw new Error(json.error ?? "Failed to declare holiday");
   return json.data as HolidayRow;
+}
+
+// ===== FILE: src\Lib\api\notifications.ts =====
+
+// src/Lib/api/notifications.ts
+
+import { getToken } from "../../app/auth";
+
+export type NotificationRecord = {
+  id: string;
+  event_type: string;
+  entity_id: string;
+  message: string;
+  is_read: boolean;
+  created_at: string;
+};
+
+function authHeaders(): HeadersInit {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+  return { Authorization: `Bearer ${token}` };
+}
+
+export async function fetchNotificationsApi(options?: {
+  limit?: number;
+  unreadOnly?: boolean;
+}): Promise<{ notifications: NotificationRecord[]; unread_count: number }> {
+  const params = new URLSearchParams();
+  if (options?.limit)      params.set("limit",       String(options.limit));
+  if (options?.unreadOnly) params.set("unread_only",  "true");
+
+  const res = await fetch(`/api/notifications?${params.toString()}`, {
+    headers: authHeaders(),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Failed to fetch notifications");
+  return { notifications: data.notifications, unread_count: data.unread_count };
+}
+
+export async function markNotificationsReadApi(
+  notificationIds?: string[]
+): Promise<void> {
+  const res = await fetch("/api/notifications/read", {
+    method:  "PATCH",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body:    JSON.stringify(
+      notificationIds?.length ? { notification_ids: notificationIds } : {}
+    ),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Failed to mark read");
 }
 
 // ===== FILE: src\Lib\api\profile.ts =====
@@ -24611,14 +25118,33 @@ export async function createUserApi(
 
 // ===== FILE: src\main.tsx =====
 
-  import "./app/api";          // ← add this line FIRST
+import "./app/api";
 
-  import { createRoot } from "react-dom/client";
-  import App from "./app/App.tsx";
-  import "./styles/index.css";
+import { createRoot } from "react-dom/client";
+import { useState } from "react";
+import App from "./app/App.tsx";
+import "./styles/index.css";
+import { ErrorBoundary } from "./app/components/errors/ErrorBoundary";
+import { RootErrorFallback } from "./app/components/errors/RootErrorFallback";
 
-  createRoot(document.getElementById("root")!).render(<App />);
-              
+function Root() {
+  const [errorKey, setErrorKey] = useState(0);
+
+  return (
+    <ErrorBoundary
+      fallback={
+        <RootErrorFallback
+          error={null}
+          onReset={() => setErrorKey((k) => k + 1)}
+        />
+      }
+    >
+      <App key={errorKey} />
+    </ErrorBoundary>
+  );
+}
+
+createRoot(document.getElementById("root")!).render(<Root />);
 
 // ===== FILE: src\styles\fonts.css =====
 

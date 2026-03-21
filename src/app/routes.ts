@@ -2,6 +2,7 @@
 
 import { createElement } from "react";
 import { MyBatches } from "./pages/Teacher/MyBatches";
+import { ErrorBoundary } from "./components/errors/ErrorBoundary";
 import { MyAttendance } from "./pages/Student/MyAttendance";
 import { createBrowserRouter, redirect } from "react-router";
 import { Shell } from "./components/layout/Shell";
@@ -81,8 +82,14 @@ export const router = createBrowserRouter([
       { path: "teachers/:teacherId", Component: TeacherProfilePage },
       { path: "students", Component: Students },
       { path: "students/:studentId", Component: StudentProfilePage },
-      { path: "tests", Component: Tests },
-      { path: "attendance", Component: Attendance },
+      {
+        path: "tests",
+        element: createElement(ErrorBoundary, { section: "Tests", children: createElement(Tests) }),
+      },
+      {
+        path: "attendance",
+element: createElement(ErrorBoundary, { section: "Attendance", children: createElement(Attendance) }),
+      },
       { path: "announcements", Component: Announcements },
       { path: "study-materials", Component: StudyMaterials },
       { path: "profile", Component: Profile },
@@ -97,8 +104,14 @@ export const router = createBrowserRouter([
     children: [
       { index: true, Component: TeacherDashboard },
       { path: "batches", Component: MyBatches },
-      { path: "attendance", Component: Attendance },
-      { path: "tests", Component: Tests },
+      {
+        path: "attendance",
+element: createElement(ErrorBoundary, { section: "Attendance", children: createElement(Attendance) }),
+      },
+      {
+        path: "tests",
+        element: createElement(ErrorBoundary, { section: "Tests", children: createElement(Tests) }),
+      },
       { path: "announcements", Component: Announcements },
       { path: "study-materials", Component: StudyMaterials },
       { path: "profile", Component: Profile },
@@ -116,6 +129,8 @@ export const router = createBrowserRouter([
       { path: "batches", Component: Batches },
       { path: "tests", Component: Tests },
       { path: "marks", Component: Tests },
+      { path: "students", Component: Students },
+      { path: "students/:studentId", Component: StudentProfilePage },
       { path: "attendance", Component: Attendance },
       { path: "study-materials", Component: StudyMaterials },
       { path: "announcements", Component: Announcements },
@@ -130,8 +145,14 @@ export const router = createBrowserRouter([
     loader: requireRole(4),
     children: [
       { index: true, Component: StudentDashboard },
-      { path: "attendance", Component: MyAttendance },
-      { path: "results", Component: StudentMarks },
+      {
+        path: "attendance",
+element: createElement(ErrorBoundary, { section: "My Attendance", children: createElement(MyAttendance) }),
+      },
+      {
+        path: "results",
+element: createElement(ErrorBoundary, { section: "My Results", children: createElement(StudentMarks) }),
+      },
       { path: "study-materials", Component: StudentStudyMaterialsRoute },
       { path: "announcements", Component: StudentAnnouncementsRoute },
       { path: "profile", Component: Profile },

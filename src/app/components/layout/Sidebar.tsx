@@ -61,6 +61,7 @@ const managementNavItems: NavItemDef[] = [
   { label: "Dashboard",      icon: LayoutDashboard, path: "/management" },
   { label: "People",         icon: Users,           path: "/management/people" },
   { label: "Batches",        icon: Users2,          path: "/management/batches" },
+  { label: "Students",       icon: UserCheck,       path: "/management/students" },
   { label: "Tests",          icon: ClipboardList,   path: "/management/tests" },
   { label: "Marks",          icon: Star,            path: "/management/marks" },
   { label: "Attendance",     icon: CheckSquare,     path: "/management/attendance" },
@@ -136,8 +137,8 @@ const ROLE_CONFIG: {
   },
   management: {
     navItems: managementNavItems,
-    mainEnd: 8,
-    secondaryEnd: 8,
+    mainEnd: 9,
+    secondaryEnd: 9,
     menuLabel: "Management",
     accountLabel: "Account",
     portalLabel: "Management Portal",

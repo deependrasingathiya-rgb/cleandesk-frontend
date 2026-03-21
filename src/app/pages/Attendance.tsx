@@ -54,12 +54,12 @@ type StudentAttendanceEntry = {
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
 function getTodayIso(): string {
-  return new Date().toISOString().split("T")[0];
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 }
 function getYesterdayIso(): string {
   const d = new Date();
   d.setDate(d.getDate() - 1);
-  return d.toISOString().split("T")[0];
+  return d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 }
 const TODAY = getTodayIso();
 const YESTERDAY = getYesterdayIso();

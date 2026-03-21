@@ -104,6 +104,31 @@ function redirectToLogin(): void {
   }
 }
 
+/**
+ * Attempts to get a new access token using the HttpOnly refresh token cookie.
+ * Returns the new access token string, or null if refresh failed.
+ * Called automatically by apiFetch on 401 responses.
+ */
+export async function refreshAccessToken(): Promise<string | null> {
+  try {
+    const res = await fetch("/api/refresh", {
+      method: "POST",
+      credentials: "include", // sends the HttpOnly cookie
+    });
+
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    if (data.token) {
+      saveToken(data.token);
+      return data.token;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function logout(options?: { redirectToLogin?: boolean }): Promise<void> {
   const shouldRedirect = options?.redirectToLogin ?? true;
   const token = getToken();
@@ -112,6 +137,7 @@ export async function logout(options?: { redirectToLogin?: boolean }): Promise<v
     if (token) {
       await fetch("/api/logout", {
         method: "POST",
+        credentials: "include",
         headers: {
           Authorization: `Bearer ${token}`,
         },

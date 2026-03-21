@@ -2,112 +2,224 @@
 
 import { useParams, useNavigate } from "react-router";
 import { useState, useEffect } from "react";
-import { fetchTeachersApi, unassignTeacherBatchApi, type TeacherListItem, type TeacherBatch } from "../../Lib/api/teachers";
+import {
+  fetchTeacherProfileApi,
+  fetchTeacherTestsApi,
+  type TeacherProfileData,
+  type TeacherTestRow,
+} from "../../Lib/api/teacher-profile";
+import { unassignTeacherBatchApi } from "../../Lib/api/teachers";
 import {
   ArrowLeft,
   Phone,
   Mail,
   CalendarDays,
   BookOpen,
-  FlaskConical,
-  TrendingUp,
-  Users2,
   ClipboardList,
-  BarChart2,
+  Calendar,
+  Users2,
   GraduationCap,
-  ExternalLink,
+  ChevronLeft,
+  ChevronRight,
   X,
+  AlertTriangle,
+  Loader2,
 } from "lucide-react";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Subject colour map (mirrors system-wide map) ─────────────────────────────
 
-type Teacher = {
-  id: string;
-  name: string;
-  loginIdentifier: string;
-  mobile: string | null;
-  email: string | null;
-  assignedBatches: TeacherBatch[];
-  active: boolean;
-  createdDate: string;
+const subjectColors: Record<string, { color: string; bg: string }> = {
+  Physics:            { color: "#db2777", bg: "#fdf2f8" },
+  Mathematics:        { color: "#2563eb", bg: "#eff6ff" },
+  Chemistry:          { color: "#ea580c", bg: "#fff7ed" },
+  English:            { color: "#6b7280", bg: "#f9fafb" },
+  Business:           { color: "#7c3aed", bg: "#f5f3ff" },
+  Biology:            { color: "#16a34a", bg: "#f0fdf4" },
+  Accounts:           { color: "#0d9488", bg: "#f0fdfa" },
+  History:            { color: "#b45309", bg: "#fffbeb" },
+  Geography:          { color: "#0369a1", bg: "#f0f9ff" },
+  "Computer Science": { color: "#4f46e5", bg: "#eef2ff" },
+  Economics:          { color: "#be185d", bg: "#fdf2f8" },
 };
 
-function mapApiTeacher(t: TeacherListItem): Teacher {
-  return {
-    id: t.id,
-    name: t.full_name,
-    loginIdentifier: t.login_identifier,
-    mobile: t.mobile ?? null,
-    email: t.email ?? null,
-    assignedBatches: t.assigned_batches,
-    active: t.is_active,
-    createdDate: new Date(t.created_at).toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    }),
-  };
+function getSubjectColor(subject: string | null) {
+  if (!subject) return { color: "#6b7280", bg: "#f9fafb" };
+  return subjectColors[subject] ?? { color: "#0d9488", bg: "#f0fdfa" };
 }
 
-// ─── Placeholder Section Card ─────────────────────────────────────────────────
-
-function PlaceholderCard({
-  icon: Icon,
-  title,
-  description,
-}: {
-  icon: React.ElementType;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-      <div className="flex items-center gap-2 mb-5">
-        <Icon size={15} className="text-teal-500" strokeWidth={2} />
-        <h2 className="text-gray-800" style={{ fontSize: "15px", fontWeight: 700 }}>
-          {title}
-        </h2>
-      </div>
-      <div
-        className="flex flex-col items-center justify-center py-10 rounded-xl"
-        style={{ backgroundColor: "#f9fafb" }}
-      >
-        <Icon size={28} className="text-gray-200 mb-3" strokeWidth={1.5} />
-        <p className="text-gray-400" style={{ fontSize: "13.5px", fontWeight: 500 }}>
-          {description}
-        </p>
-        <p className="text-gray-300 mt-1" style={{ fontSize: "12px" }}>
-          Data will appear here once wired
-        </p>
-      </div>
-    </div>
-  );
+function fmtDate(iso: string, short = false): string {
+  return new Date(iso).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: short ? "short" : "long",
+    year: "numeric",
+  });
 }
 
-// ─── Stat Pill ────────────────────────────────────────────────────────────────
+// ─── Tests "View All" modal ────────────────────────────────────────────────────
 
-function StatPill({
-  label,
-  value,
-  color,
-  bg,
+function AllTestsModal({
+  teacherId,
+  teacherName,
+  onClose,
 }: {
-  label: string;
-  value: string | number;
-  color: string;
-  bg: string;
+  teacherId: string;
+  teacherName: string;
+  onClose: () => void;
 }) {
+  const [tests,   setTests]   = useState<TeacherTestRow[]>([]);
+  const [total,   setTotal]   = useState(0);
+  const [page,    setPage]    = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState<string | null>(null);
+
+  const PAGE_SIZE = 15;
+
+  useEffect(() => {
+    setLoading(true);
+    fetchTeacherTestsApi(teacherId, {
+      limit:  PAGE_SIZE,
+      offset: (page - 1) * PAGE_SIZE,
+    })
+      .then(({ data, total }) => { setTests(data); setTotal(total); })
+      .catch((e: any) => setError(e.message ?? "Failed to load tests"))
+      .finally(() => setLoading(false));
+  }, [teacherId, page]);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
   return (
     <div
-      className="flex flex-col items-center justify-center rounded-2xl border border-gray-100 shadow-sm p-5"
-      style={{ backgroundColor: "white" }}
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ backgroundColor: "rgba(0,0,0,0.35)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <p style={{ fontSize: "28px", fontWeight: 800, color, letterSpacing: "-0.03em", lineHeight: 1 }}>
-        {value}
-      </p>
-      <p className="text-gray-400 mt-1.5" style={{ fontSize: "11.5px", fontWeight: 500 }}>
-        {label}
-      </p>
+      <div
+        className="bg-white rounded-2xl shadow-xl w-full flex flex-col"
+        style={{ maxWidth: "780px", maxHeight: "85vh", border: "1px solid #f3f4f6" }}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between px-7 pt-6 pb-5 border-b border-gray-100 flex-shrink-0">
+          <div>
+            <h2 className="text-gray-900" style={{ fontSize: "18px", fontWeight: 700, letterSpacing: "-0.01em" }}>
+              All Tests Conducted
+            </h2>
+            <p className="text-gray-400 mt-0.5" style={{ fontSize: "13px" }}>
+              {teacherName} · {total} test{total !== 1 ? "s" : ""}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-md flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Table */}
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="flex items-center justify-center py-16 gap-2 text-gray-400">
+              <Loader2 size={16} className="animate-spin" />
+              <span style={{ fontSize: "14px" }}>Loading tests…</span>
+            </div>
+          ) : error ? (
+            <div className="py-10 text-center">
+              <p className="text-red-400" style={{ fontSize: "13.5px" }}>{error}</p>
+            </div>
+          ) : tests.length === 0 ? (
+            <div className="py-16 text-center">
+              <ClipboardList size={28} className="text-gray-200 mx-auto mb-2" strokeWidth={1.5} />
+              <p className="text-gray-400" style={{ fontSize: "13.5px" }}>No tests found.</p>
+            </div>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr style={{ backgroundColor: "#f9fafb" }}>
+                  {["Test Name", "Subject", "Batch", "Date", "Total Marks", "Status"].map((col) => (
+                    <th
+                      key={col}
+                      className="text-left px-6 py-3 text-gray-400"
+                      style={{ fontSize: "11px", fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}
+                    >
+                      {col}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {tests.map((test) => {
+                  const sc = getSubjectColor(test.subject);
+                  return (
+                    <tr key={test.id} className="border-t border-gray-50">
+                      <td className="px-6 py-3.5">
+                        <p className="text-gray-800" style={{ fontSize: "13.5px", fontWeight: 600 }}>{test.test_name}</p>
+                      </td>
+                      <td className="px-6 py-3.5">
+                        <span className="px-2.5 py-0.5 rounded-full" style={{ fontSize: "11.5px", fontWeight: 600, color: sc.color, backgroundColor: sc.bg }}>
+                          {test.subject}
+                        </span>
+                      </td>
+                      <td className="px-6 py-3.5">
+                        <span className="text-gray-500" style={{ fontSize: "13px" }}>{test.batch_name}</span>
+                      </td>
+                      <td className="px-6 py-3.5">
+                        <div className="flex items-center gap-1.5">
+                          <Calendar size={12} className="text-gray-400" />
+                          <span className="text-gray-700" style={{ fontSize: "13px" }}>{fmtDate(test.test_date, true)}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-3.5">
+                        <span className="text-gray-700" style={{ fontSize: "13.5px", fontWeight: 600 }}>{test.total_marks}</span>
+                      </td>
+                      <td className="px-6 py-3.5">
+                        <span
+                          className="px-2.5 py-0.5 rounded-full"
+                          style={{
+                            fontSize: "11.5px",
+                            fontWeight: 600,
+                            color: test.has_marks ? "#16a34a" : "#d97706",
+                            backgroundColor: test.has_marks ? "#f0fdf4" : "#fffbeb",
+                          }}
+                        >
+                          {test.has_marks ? "Marks Done" : "Marks Pending"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-7 py-4 border-t border-gray-100 flex-shrink-0">
+            <span className="text-gray-400" style={{ fontSize: "12.5px" }}>
+              Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="w-8 h-8 rounded-md border flex items-center justify-center text-gray-400 hover:border-teal-300 hover:text-teal-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft size={14} />
+              </button>
+              <span className="text-gray-600 px-2" style={{ fontSize: "13px", fontWeight: 500 }}>
+                {page} / {totalPages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="w-8 h-8 rounded-md border flex items-center justify-center text-gray-400 hover:border-teal-300 hover:text-teal-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -116,51 +228,71 @@ function StatPill({
 
 export function TeacherProfilePage() {
   const { teacherId } = useParams<{ teacherId: string }>();
-  const navigate = useNavigate();
+  const navigate      = useNavigate();
 
-  const [teacher, setTeacher] = useState<Teacher | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState<string | null>(null);
+  const [profile,      setProfile]      = useState<TeacherProfileData | null>(null);
+  const [loading,      setLoading]      = useState(true);
+  const [error,        setError]        = useState<string | null>(null);
+  const [showAllTests, setShowAllTests] = useState(false);
 
   useEffect(() => {
     if (!teacherId) { setError("No teacher ID provided"); setLoading(false); return; }
 
     setLoading(true);
-    fetchTeachersApi()
-      .then((rows) => {
-        const match = rows.find((r) => r.id === teacherId);
-        if (!match) { setError("Teacher not found"); return; }
-        setTeacher(mapApiTeacher(match));
-      })
-      .catch((e: any) => setError(e.message ?? "Failed to load teacher"))
+    fetchTeacherProfileApi(teacherId)
+      .then(setProfile)
+      .catch((e: any) => setError(e.message ?? "Failed to load teacher profile"))
       .finally(() => setLoading(false));
   }, [teacherId]);
 
+  async function handleUnassignBatch(batchId: string) {
+    if (!teacherId || !profile) return;
+    try {
+      await unassignTeacherBatchApi(teacherId, batchId);
+      setProfile((prev) =>
+        prev
+          ? { ...prev, assigned_batches: prev.assigned_batches.filter((b) => b.id !== batchId) }
+          : prev
+      );
+    } catch (err: any) {
+      console.error("Unassign batch failed:", err.message);
+    }
+  }
+
+  // ── Loading ──
   if (loading) {
     return (
-      <div className="p-8 max-w-[1100px] mx-auto flex items-center justify-center h-64">
-        <p className="text-gray-400" style={{ fontSize: "14px" }}>Loading teacher profile…</p>
+      <div className="p-8 max-w-[1000px] mx-auto flex items-center justify-center" style={{ minHeight: "60vh" }}>
+        <div className="text-center">
+          <Loader2 size={24} className="animate-spin text-teal-500 mx-auto mb-3" />
+          <p className="text-gray-400" style={{ fontSize: "14px" }}>Loading teacher profile…</p>
+        </div>
       </div>
     );
   }
 
-  if (error || !teacher) {
+  // ── Error ──
+  if (error || !profile) {
     return (
-      <div className="p-8 max-w-[1100px] mx-auto flex items-center justify-center h-64">
-        <p className="text-red-400" style={{ fontSize: "14px" }}>{error ?? "Teacher not found."}</p>
+      <div className="p-8 max-w-[1000px] mx-auto flex items-center justify-center" style={{ minHeight: "60vh" }}>
+        <div className="text-center">
+          <AlertTriangle size={28} className="mx-auto mb-3" style={{ color: "#dc2626" }} strokeWidth={1.5} />
+          <p className="text-gray-800 mb-1" style={{ fontSize: "15px", fontWeight: 600 }}>Could not load profile</p>
+          <p className="text-gray-400" style={{ fontSize: "13px" }}>{error ?? "Teacher not found."}</p>
+        </div>
       </div>
     );
   }
 
-  const initials = teacher.name
+  const initials = profile.full_name
     .split(" ")
-    .filter((w) => /^[A-Z]/i.test(w))
+    .filter(Boolean)
     .map((w) => w[0].toUpperCase())
     .join("")
     .slice(0, 2);
 
   return (
-    <div className="p-8 max-w-[1100px] mx-auto">
+    <div className="p-8 max-w-[1000px] mx-auto">
 
       {/* ── Back ── */}
       <button
@@ -175,25 +307,18 @@ export function TeacherProfilePage() {
       {/* ── Hero card ── */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-7 mb-6">
         <div className="flex items-start gap-5">
-
-          {/* Avatar */}
           <div
             className="w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0"
             style={{ backgroundColor: "#eff6ff" }}
           >
             <span style={{ fontSize: "22px", fontWeight: 800, color: "#2563eb" }}>{initials}</span>
           </div>
-
-          {/* Identity */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-3 flex-wrap mb-1">
               <h1 className="text-gray-900" style={{ fontSize: "22px", fontWeight: 800, letterSpacing: "-0.02em" }}>
-                {teacher.name}
+                {profile.full_name}
               </h1>
-              <span
-                className="px-2.5 py-0.5 rounded-full"
-                style={{ fontSize: "11.5px", fontWeight: 600, color: "#2563eb", backgroundColor: "#eff6ff" }}
-              >
+              <span className="px-2.5 py-0.5 rounded-full" style={{ fontSize: "11.5px", fontWeight: 600, color: "#2563eb", backgroundColor: "#eff6ff" }}>
                 Teacher
               </span>
               <span
@@ -201,155 +326,211 @@ export function TeacherProfilePage() {
                 style={{
                   fontSize: "11.5px",
                   fontWeight: 600,
-                  color: teacher.active ? "#16a34a" : "#9ca3af",
-                  backgroundColor: teacher.active ? "#f0fdf4" : "#f9fafb",
+                  color: profile.is_active ? "#16a34a" : "#9ca3af",
+                  backgroundColor: profile.is_active ? "#f0fdf4" : "#f9fafb",
                 }}
               >
-                {teacher.active ? "Active" : "Inactive"}
+                {profile.is_active ? "Active" : "Inactive"}
               </span>
             </div>
-            <p className="text-gray-400 mt-1" style={{ fontSize: "13px" }}>
-              {teacher.loginIdentifier}
+            <p className="text-gray-400 mt-0.5" style={{ fontSize: "13px", fontFamily: "monospace" }}>
+              {profile.login_identifier}
             </p>
-
-            {/* Contact row */}
             <div className="flex items-center gap-5 mt-3 flex-wrap">
-              {teacher.mobile && (
+              {profile.mobile && (
                 <div className="flex items-center gap-1.5 text-gray-500" style={{ fontSize: "13px" }}>
                   <Phone size={13} strokeWidth={2} className="text-gray-400" />
-                  {teacher.mobile}
+                  {profile.mobile}
                 </div>
               )}
-              {teacher.email && (
+              {profile.email && (
                 <div className="flex items-center gap-1.5 text-gray-500" style={{ fontSize: "13px" }}>
                   <Mail size={13} strokeWidth={2} className="text-gray-400" />
-                  {teacher.email}
+                  {profile.email}
                 </div>
               )}
               <div className="flex items-center gap-1.5 text-gray-400" style={{ fontSize: "13px" }}>
                 <CalendarDays size={13} strokeWidth={2} />
-                Joined {teacher.createdDate}
+                Joined {fmtDate(profile.created_at, true)}
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* ── Quick stats row ── */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        <StatPill
-          label="Batches Assigned"
-          value={teacher.assignedBatches.length}
-          color="#2563eb"
-          bg="#eff6ff"
-        />
-        <StatPill label="Tests Conducted"  value="—" color="#0d9488" bg="#f0fdfa" />
-        <StatPill label="Students Taught"  value="—" color="#7c3aed" bg="#f5f3ff" />
-        <StatPill label="Avg. Class Score" value="—" color="#d97706" bg="#fffbeb" />
+        {/* Quick stats */}
+        <div className="grid grid-cols-2 gap-4 mt-6 pt-6 border-t border-gray-50">
+          <div className="bg-gray-50 rounded-xl p-4">
+            <p className="text-gray-400" style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>Batches Assigned</p>
+            <p className="text-gray-900 mt-1" style={{ fontSize: "28px", fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1, color: "#2563eb" }}>
+              {profile.assigned_batches.length}
+            </p>
+          </div>
+          <div className="bg-gray-50 rounded-xl p-4">
+            <p className="text-gray-400" style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>Tests Conducted</p>
+            <p className="text-gray-900 mt-1" style={{ fontSize: "28px", fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1, color: "#0d9488" }}>
+              {profile.tests_total}
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* ── Two-column layout ── */}
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-5 gap-6">
 
-        {/* Left col — batches (1 col) */}
-        <div className="col-span-1">
+        {/* Left — Assigned Batches (2 cols) */}
+        <div className="col-span-2">
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <BookOpen size={15} className="text-teal-500" strokeWidth={2} />
-                <h2 className="text-gray-800" style={{ fontSize: "15px", fontWeight: 700 }}>
-                  Assigned Batches
-                </h2>
-              </div>
-              <span className="text-gray-400" style={{ fontSize: "12px" }}>
-                {teacher.assignedBatches.length} total
+            <div className="flex items-center gap-2 mb-5">
+              <GraduationCap size={15} className="text-teal-500" strokeWidth={2} />
+              <h2 className="text-gray-800" style={{ fontSize: "15px", fontWeight: 700 }}>Assigned Batches</h2>
+              <span className="ml-auto text-gray-400" style={{ fontSize: "12px" }}>
+                {profile.assigned_batches.length} total
               </span>
             </div>
 
-            {teacher.assignedBatches.length === 0 ? (
-              <div
-                className="flex flex-col items-center justify-center py-10 rounded-xl"
-                style={{ backgroundColor: "#f9fafb" }}
-              >
+            {profile.assigned_batches.length === 0 ? (
+              <div className="py-10 flex flex-col items-center rounded-xl" style={{ backgroundColor: "#f9fafb" }}>
                 <BookOpen size={24} className="text-gray-200 mb-2" strokeWidth={1.5} />
                 <p className="text-gray-400" style={{ fontSize: "13px" }}>No batches assigned</p>
               </div>
             ) : (
-              <div className="space-y-2">
-                {teacher.assignedBatches.map((batch) => (
-                  <div
-                    key={batch.id}
-                    className="flex items-center gap-3 p-3 rounded-xl border border-gray-100"
-                  >
-                    <div
-                      className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0"
-                      style={{ backgroundColor: "#eff6ff" }}
-                    >
-                      <BookOpen size={14} style={{ color: "#2563eb" }} strokeWidth={2} />
+              <div className="space-y-2.5">
+                {profile.assigned_batches.map((batch) => {
+                  const sc = getSubjectColor(batch.subject);
+                  return (
+                    <div key={batch.id} className="flex items-start gap-3 p-3.5 rounded-xl border border-gray-100">
+                      <div
+                        className="w-9 h-9 rounded-md flex items-center justify-center flex-shrink-0"
+                        style={{ backgroundColor: sc.bg }}
+                      >
+                        <BookOpen size={15} style={{ color: sc.color }} strokeWidth={2} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-gray-800" style={{ fontSize: "13.5px", fontWeight: 600 }}>{batch.name}</p>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          {batch.subject && (
+                            <span className="px-2 py-0.5 rounded-full" style={{ fontSize: "11px", fontWeight: 600, color: sc.color, backgroundColor: sc.bg }}>
+                              {batch.subject}
+                            </span>
+                          )}
+                          <span className="text-gray-400" style={{ fontSize: "11.5px" }}>
+                            {batch.academic_year_label}
+                          </span>
+                          <span className="text-gray-400" style={{ fontSize: "11.5px" }}>
+                            · {batch.student_count} student{batch.student_count !== 1 ? "s" : ""}
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleUnassignBatch(batch.id)}
+                        className="w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-red-50 transition-all flex-shrink-0"
+                        title="Remove from batch"
+                      >
+                        <X size={13} strokeWidth={2.5} />
+                      </button>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
-                        {batch.name}
-                      </p>
-                      {batch.subject && (
-                        <p style={{ fontSize: "11.5px", color: "#6b7280", marginTop: "1px" }}>
-                          {batch.subject}
-                        </p>
-                      )}
-                    </div>
-                    <button
-                      onClick={async () => {
-                        await unassignTeacherBatchApi(teacher.id, batch.id);
-                        setTeacher((prev) =>
-                          prev
-                            ? { ...prev, assignedBatches: prev.assignedBatches.filter((b) => b.id !== batch.id) }
-                            : prev
-                        );
-                      }}
-                      className="w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all flex-shrink-0"
-                      title="Remove from batch"
-                    >
-                      <X size={13} strokeWidth={2.5} />
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
         </div>
 
-        {/* Right col — placeholders (2 cols) */}
-        <div className="col-span-2 flex flex-col gap-6">
+        {/* Right — Tests Conducted (3 cols) */}
+        <div className="col-span-3">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="flex items-center gap-2 px-6 py-5 border-b border-gray-100">
+              <ClipboardList size={15} className="text-teal-500" strokeWidth={2} />
+              <h2 className="text-gray-800" style={{ fontSize: "15px", fontWeight: 700 }}>Tests Conducted</h2>
+              <span className="ml-auto text-gray-400" style={{ fontSize: "12px" }}>
+                {profile.tests_total} total
+              </span>
+              {profile.tests_total > 5 && (
+                <button
+                  onClick={() => setShowAllTests(true)}
+                  className="flex items-center gap-1 text-teal-600 hover:text-teal-700 transition-colors ml-2"
+                  style={{ fontSize: "12.5px", fontWeight: 600 }}
+                >
+                  View All
+                  <ChevronRight size={13} strokeWidth={2.5} />
+                </button>
+              )}
+            </div>
 
-          <PlaceholderCard
-            icon={FlaskConical}
-            title="Tests Conducted"
-            description="Tests created and assigned by this teacher"
-          />
-
-          <PlaceholderCard
-            icon={TrendingUp}
-            title="Student Performance"
-            description="Average scores across batches over time"
-          />
-
+            {profile.tests_conducted.length === 0 ? (
+              <div className="py-14 flex flex-col items-center">
+                <ClipboardList size={28} className="text-gray-200 mb-2" strokeWidth={1.5} />
+                <p className="text-gray-400" style={{ fontSize: "13.5px" }}>No tests conducted yet</p>
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr style={{ backgroundColor: "#f9fafb" }}>
+                    {["Test", "Subject", "Batch", "Date", "Status"].map((col) => (
+                      <th
+                        key={col}
+                        className="text-left px-5 py-3 text-gray-400"
+                        style={{ fontSize: "11px", fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}
+                      >
+                        {col}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {profile.tests_conducted.map((test) => {
+                    const sc = getSubjectColor(test.subject);
+                    return (
+                      <tr key={test.id} className="border-t border-gray-50">
+                        <td className="px-5 py-3.5">
+                          <p className="text-gray-800" style={{ fontSize: "13px", fontWeight: 600 }}>{test.test_name}</p>
+                          <p className="text-gray-400" style={{ fontSize: "11.5px" }}>{test.total_marks} marks</p>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <span className="px-2.5 py-0.5 rounded-full" style={{ fontSize: "11.5px", fontWeight: 600, color: sc.color, backgroundColor: sc.bg }}>
+                            {test.subject}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <span className="text-gray-500" style={{ fontSize: "12.5px" }}>{test.batch_name}</span>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-1.5">
+                            <Calendar size={12} className="text-gray-400" />
+                            <span className="text-gray-700" style={{ fontSize: "12.5px" }}>{fmtDate(test.test_date, true)}</span>
+                          </div>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <span
+                            className="px-2.5 py-0.5 rounded-full"
+                            style={{
+                              fontSize: "11.5px",
+                              fontWeight: 600,
+                              color: test.has_marks ? "#16a34a" : "#d97706",
+                              backgroundColor: test.has_marks ? "#f0fdf4" : "#fffbeb",
+                            }}
+                          >
+                            {test.has_marks ? "Marks Done" : "Pending"}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* ── Bottom row — more placeholders ── */}
-      <div className="grid grid-cols-2 gap-6 mt-6">
-        <PlaceholderCard
-          icon={Users2}
-          title="Student Roster"
-          description="Students across all assigned batches"
+      {/* ── All Tests Modal ── */}
+      {showAllTests && (
+        <AllTestsModal
+          teacherId={teacherId!}
+          teacherName={profile.full_name}
+          onClose={() => setShowAllTests(false)}
         />
-        <PlaceholderCard
-          icon={BarChart2}
-          title="Subject Performance"
-          description="Breakdown by subject taught"
-        />
-      </div>
-
+      )}
     </div>
   );
 }

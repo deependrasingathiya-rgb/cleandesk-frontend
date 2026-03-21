@@ -116,7 +116,7 @@ function DayCell({
   const cfg    = STATUS_CONFIG[status];
 
   const { d }  = parseIso(iso);
-  const isToday = iso === "2026-03-08";
+  const isToday = iso === new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 
   if (!isCurrentMonth) {
     return <div className="aspect-square rounded-md" style={{ backgroundColor: "transparent" }} />;
@@ -515,7 +515,7 @@ export function MyAttendance() {
           </div>
         </div>
 
-        <div className="flex items-end gap-6 h-28">
+        <div className="flex items-end gap-3 h-28" style={{ justifyContent: "flex-end" }}>
           {monthTrend.map((m, i) => {
             const pct       = m.attendance_pct ?? 0;
             const isLast    = m.is_current_month;
@@ -525,23 +525,22 @@ export function MyAttendance() {
             const delta     = prev !== null ? pct - prev : null;
 
             return (
-              <div key={`${m.year}-${m.month}`} className="flex-1 flex flex-col items-center gap-2">
-                <div className="flex items-center gap-1">
-                  <span style={{ fontSize: "12px", fontWeight: 700, color: barColor }}>
-                    {pct}%
-                  </span>
-                  {delta !== null && (
-                    <span
-                      style={{
-                        fontSize: "10px",
-                        fontWeight: 600,
-                        color: delta >= 0 ? "#16a34a" : "#dc2626",
-                      }}
-                    >
-                      {delta >= 0 ? "↑" : "↓"}{Math.abs(delta)}
-                    </span>
-                  )}
-                </div>
+              <div key={`${m.year}-${m.month}`} className="flex flex-col items-center gap-2" style={{ width: "72px", flexShrink: 0 }}>
+  <div className="flex flex-col items-center" style={{ height: "36px", justifyContent: "flex-end" }}>
+    {delta !== null && (
+      <span
+        style={{
+          fontSize: "10px",
+          fontWeight: 600,
+          color: delta >= 0 ? "#16a34a" : "#dc2626",
+          lineHeight: 1.2,
+        }}
+      >
+        {delta >= 0 ? "↑" : "↓"}{Math.abs(delta)}
+      </span>
+    )}
+    <span style={{ fontSize: "12px", fontWeight: 700, color: barColor, lineHeight: 1.2 }}>{pct}%</span>
+  </div>
                 <div
                   className="w-full rounded-t-xl transition-all"
                   style={{

@@ -20,6 +20,11 @@ import {
 } from "../../Lib/api/dashboard";
 import { getToken } from "../auth";
 import {
+  fetchNotificationsApi,
+  markNotificationsReadApi,
+  type NotificationRecord,
+} from "../../Lib/api/notifications";
+import {
   Users,
   Users2,
   ClipboardList,
@@ -32,6 +37,7 @@ import {
   X,
   CheckCircle2,
   ChevronDown,
+  BookOpen,
 } from "lucide-react";
 
 // ─── Config type — the only thing that differs between Admin and Management ────
@@ -52,7 +58,40 @@ const STAT_CONFIG = [
   { label: "Attendance Today", icon: CheckSquare,   color: "#16a34a", bg: "#f0fdf4" },
 ];
 
+// ─── Notification helpers ──────────────────────────────────────────────────────
 
+function getNotificationStyle(eventType: string): {
+  icon: React.ElementType;
+  color: string;
+  bg: string;
+} {
+  const map: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
+    STUDENT_ACCOUNT_CREATED:  { icon: Users,         color: "#0d9488", bg: "#f0fdfa" },
+    STUDENT_ABSENT:           { icon: CheckSquare,   color: "#dc2626", bg: "#fef2f2" },
+    STUDENT_LATE:             { icon: CheckSquare,   color: "#d97706", bg: "#fffbeb" },
+    STUDENT_EARLY_LEAVE:      { icon: CheckSquare,   color: "#7c3aed", bg: "#f5f3ff" },
+    TEST_CREATED:             { icon: ClipboardList, color: "#2563eb", bg: "#eff6ff" },
+    TEST_DATE_UPDATED:        { icon: ClipboardList, color: "#d97706", bg: "#fffbeb" },
+    TEST_RESULT_PUBLISHED:    { icon: TrendingUp,    color: "#16a34a", bg: "#f0fdf4" },
+    HOLIDAY_DECLARED:         { icon: Megaphone,     color: "#d97706", bg: "#fffbeb" },
+    GENERAL_ANNOUNCEMENT:     { icon: Megaphone,     color: "#0d9488", bg: "#f0fdfa" },
+    STUDY_MATERIAL_UPLOADED:  { icon: BookOpen,      color: "#7c3aed", bg: "#f5f3ff" },
+    PARENT_TEACHER_MEETING:   { icon: Users,         color: "#2563eb", bg: "#eff6ff" },
+    TEST_DAY_ANNOUNCED:       { icon: ClipboardList, color: "#db2777", bg: "#fdf2f8" },
+  };
+  return map[eventType] ?? { icon: Bell, color: "#6b7280", bg: "#f9fafb" };
+}
+
+function getRelativeTime(isoString: string): string {
+  const diff = Date.now() - new Date(isoString).getTime();
+  const mins  = Math.floor(diff / 60_000);
+  const hours = Math.floor(diff / 3_600_000);
+  const days  = Math.floor(diff / 86_400_000);
+  if (mins < 1)   return "Just now";
+  if (mins < 60)  return `${mins} min${mins > 1 ? "s" : ""} ago`;
+  if (hours < 24) return `${hours} hr${hours > 1 ? "s" : ""} ago`;
+  return `${days} day${days > 1 ? "s" : ""} ago`;
+}
 
 
 type FormState = {
@@ -64,17 +103,6 @@ type FormState = {
 
 const emptyForm: FormState = { type: "", title: "", body: "", batches: [] };
 
-// ─── Hardcoded notifications (until backend is ready) ─────────────────────────
-
-const notifications = [
-  { id: 1, icon: Users,        text: "New student enrolled: Sneha Patel in Science Batch A", time: "10 mins ago", color: "#0d9488", bg: "#f0fdfa" },
-  { id: 2, icon: TrendingUp,   text: "Marks uploaded for Mid-Term Chemistry – Batch A",      time: "42 mins ago", color: "#7c3aed", bg: "#f5f3ff" },
-  { id: 3, icon: CheckSquare,  text: "Attendance marked for Commerce Batch B – Mar 6",       time: "1 hr ago",    color: "#16a34a", bg: "#f0fdf4" },
-  { id: 4, icon: ClipboardList,text: "New test added: Algebra Unit Test – Math Batch D",     time: "2 hrs ago",   color: "#2563eb", bg: "#eff6ff" },
-  { id: 5, icon: Megaphone,    text: "Announcement posted: Sports Day Registration Open",    time: "3 hrs ago",   color: "#d97706", bg: "#fffbeb" },
-];
-
-// ─── BatchSelector ─────────────────────────────────────────────────────────────
 
 function BatchSelector({
   selected,
@@ -201,6 +229,8 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
   const [announcements, setAnnouncements]   = useState<{ id: string; title: string; preview: string; createdBy: string; date: string; tag: string; tagColor: string; tagBg: string }[]>([]);
   const [batchOptions, setBatchOptions]     = useState<string[]>(["Universal"]);
   const [batchObjects, setBatchObjects]     = useState<{ id: string; name: string }[]>([]);
+  const [notifications, setNotifications]   = useState<NotificationRecord[]>([]);
+  const [unreadCount, setUnreadCount]       = useState(0);
 
   useEffect(() => {
     let isActive = true;
@@ -288,8 +318,19 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
       } catch { /* fail silently */ }
     };
 
+    const loadNotifications = async () => {
+      try {
+        const result = await fetchNotificationsApi({ limit: 10 });
+        if (isActive) {
+          setNotifications(result.notifications);
+          setUnreadCount(result.unread_count);
+        }
+      } catch { /* fail silently */ }
+    };
+
+
     const refreshDashboard = async () => {
-      await Promise.allSettled([loadSummary(), loadTests(), loadAttendance(), loadAnnouncements(), loadBatches()]);
+      await Promise.allSettled([loadSummary(), loadTests(), loadAttendance(), loadAnnouncements(), loadBatches(), loadNotifications()]);
       if (isActive) setLastUpdated(new Date().toISOString());
     };
 
@@ -465,30 +506,66 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-gray-800" style={{ fontSize: "16px", fontWeight: 650, letterSpacing: "-0.01em" }}>Notifications</h2>
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ backgroundColor: "#f0fdfa" }}>
-                <Bell size={12} style={{ color: "#0d9488" }} />
-                <span style={{ fontSize: "11px", fontWeight: 600, color: "#0d9488" }}>{notifications.length} new</span>
-              </div>
+              {unreadCount > 0 && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ backgroundColor: "#f0fdfa" }}>
+                  <Bell size={12} style={{ color: "#0d9488" }} />
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: "#0d9488" }}>{unreadCount} new</span>
+                </div>
+              )}
             </div>
             <div className="space-y-1">
-              {notifications.map((notif) => {
-                const Icon = notif.icon;
-                return (
-                  <div key={notif.id} className="flex items-start gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer group">
-                    <div className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5" style={{ backgroundColor: notif.bg }}>
-                      <Icon size={15} style={{ color: notif.color }} strokeWidth={2} />
+              {notifications.length === 0 ? (
+                <p className="text-gray-300 text-center py-6" style={{ fontSize: "13px" }}>No notifications yet.</p>
+              ) : (
+                notifications.map((notif) => {
+                  const style = getNotificationStyle(notif.event_type);
+                  const Icon  = style.icon;
+                  const relativeTime = getRelativeTime(notif.created_at);
+                  return (
+                    <div
+                      key={notif.id}
+                      className="flex items-start gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer group"
+                      style={{ backgroundColor: notif.is_read ? "transparent" : "#f0fdfa22" }}
+                      onClick={() => {
+                        if (!notif.is_read) {
+                          markNotificationsReadApi([notif.id]).catch(() => {});
+                          setNotifications(prev =>
+                            prev.map(n => n.id === notif.id ? { ...n, is_read: true } : n)
+                          );
+                          setUnreadCount(c => Math.max(0, c - 1));
+                        }
+                      }}
+                    >
+                      <div className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5" style={{ backgroundColor: style.bg }}>
+                        <Icon size={15} style={{ color: style.color }} strokeWidth={2} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-gray-700 leading-snug" style={{ fontSize: "12.5px", fontWeight: notif.is_read ? 400 : 600 }}>
+                          {notif.message}
+                        </p>
+                        <p className="text-gray-300 mt-1" style={{ fontSize: "11px" }}>{relativeTime}</p>
+                      </div>
+                      {!notif.is_read && (
+                        <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5" style={{ backgroundColor: "#0d9488" }} />
+                      )}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-gray-700 leading-snug" style={{ fontSize: "12.5px", fontWeight: 450 }}>{notif.text}</p>
-                      <p className="text-gray-300 mt-1" style={{ fontSize: "11px" }}>{notif.time}</p>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
-            <button className="w-full mt-4 py-2.5 rounded-xl border border-gray-100 text-gray-400 hover:text-gray-600 hover:border-gray-200 transition-colors" style={{ fontSize: "12.5px", fontWeight: 500 }}>
-              View all notifications
-            </button>
+            {notifications.length > 0 && (
+              <button
+                onClick={() => {
+                  markNotificationsReadApi().catch(() => {});
+                  setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+                  setUnreadCount(0);
+                }}
+                className="w-full mt-4 py-2.5 rounded-xl border border-gray-100 text-gray-400 hover:text-gray-600 hover:border-gray-200 transition-colors"
+                style={{ fontSize: "12.5px", fontWeight: 500 }}
+              >
+                Mark all as read
+              </button>
+            )}
           </div>
         </div>
       </div>

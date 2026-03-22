@@ -29,7 +29,24 @@ import {
   School,
   Users2,
   CalendarDays,
+  DollarSign,
+  Plus,
+  X,
+  AlertTriangle,
+  Loader2,
+  AlertCircle,
+  Pencil,
+  Printer,
 } from "lucide-react";
+import {
+  getStudentFeeTabApi,
+  recordStudentPaymentApi,
+  cancelStudentPaymentApi,
+  overrideInstallmentPlanApi,
+  type FeeTabData,
+  type PaymentRow,
+} from "../../Lib/api/student-fee";
+import { getSession, ROLES } from "../../app/auth";
 import {
   LineChart,
   Line,
@@ -455,6 +472,797 @@ function ResultDetail({ result, studentName, onBack }: {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+// ─── Receipt Modal ─────────────────────────────────────────────────────────────
+
+type ReceiptData = {
+  receiptNumber: string;
+  date: string;
+  amount: number;
+  paymentMode: string;
+  paymentReference: string | null;
+  note: string | null;
+  collectedBy: string | null;
+  studentName: string;
+  loginIdentifier: string;
+  batchName: string;
+  instituteName: string;
+};
+
+function ReceiptModal({
+  receipt,
+  onClose,
+}: {
+  receipt: ReceiptData;
+  onClose: () => void;
+}) {
+  const printId = "cleandesk-receipt-printable";
+
+  function handlePrint() {
+    const content = document.getElementById(printId);
+    if (!content) return;
+    const printWindow = window.open("", "_blank", "width=700,height=600");
+    if (!printWindow) return;
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Receipt ${receipt.receiptNumber}</title>
+          <style>
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body { font-family: 'Segoe UI', Arial, sans-serif; background: #fff; color: #111; }
+            .receipt { max-width: 480px; margin: 40px auto; padding: 36px; border: 1px solid #e5e7eb; border-radius: 12px; }
+            .header { text-align: center; margin-bottom: 28px; border-bottom: 2px solid #0d9488; padding-bottom: 20px; }
+            .institute { font-size: 20px; font-weight: 800; color: #0d9488; letter-spacing: -0.02em; }
+            .receipt-label { font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.1em; margin-top: 6px; }
+            .receipt-number { font-size: 15px; font-weight: 700; color: #374151; margin-top: 4px; font-family: monospace; }
+            .amount-block { text-align: center; margin: 24px 0; padding: 20px; background: #f0fdfa; border-radius: 10px; border: 1px solid #ccfbf1; }
+            .amount-label { font-size: 11px; font-weight: 600; color: #0d9488; text-transform: uppercase; letter-spacing: 0.08em; }
+            .amount-value { font-size: 36px; font-weight: 800; color: #0d9488; margin-top: 4px; }
+            .rows { margin-top: 24px; }
+            .row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f3f4f6; }
+            .row:last-child { border-bottom: none; }
+            .row-label { font-size: 12px; color: #6b7280; font-weight: 500; }
+            .row-value { font-size: 13px; color: #111827; font-weight: 600; text-align: right; max-width: 60%; }
+            .footer { margin-top: 28px; text-align: center; border-top: 1px dashed #e5e7eb; padding-top: 16px; }
+            .footer p { font-size: 11px; color: #9ca3af; }
+            .mode-badge { display: inline-block; padding: 2px 10px; border-radius: 20px; background: #eff6ff; color: #2563eb; font-size: 12px; font-weight: 600; }
+            @media print {
+              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              .receipt { border: none; margin: 0; padding: 20px; }
+            }
+          </style>
+        </head>
+        <body>
+          ${content.innerHTML}
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => { printWindow.print(); }, 300);
+  }
+
+  const formattedDate = new Date(receipt.date).toLocaleDateString("en-IN", {
+    day: "numeric", month: "long", year: "numeric",
+  });
+  const formattedAmount = `₹${Number(receipt.amount).toLocaleString("en-IN")}`;
+  const formattedMode = receipt.paymentMode.replace(/_/g, " ");
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-6"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[480px]">
+        {/* Modal header — not part of print */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h2 className="text-gray-900" style={{ fontSize: "16px", fontWeight: 700 }}>Payment Receipt</h2>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handlePrint}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-white hover:opacity-90 transition-all"
+              style={{ backgroundColor: "#0d9488", fontSize: "13px", fontWeight: 600 }}
+            >
+              <Printer size={14} strokeWidth={2.5} />
+              Print
+            </button>
+            <button onClick={onClose} className="w-8 h-8 rounded-md flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* Receipt body — this is what gets printed */}
+        <div className="px-6 py-5">
+          <div id={printId}>
+            <div className="receipt" style={{ maxWidth: "100%", padding: "28px", border: "1px solid #e5e7eb", borderRadius: "12px" }}>
+
+              {/* Header */}
+              <div className="header" style={{ textAlign: "center", marginBottom: "24px", borderBottom: "2px solid #0d9488", paddingBottom: "18px" }}>
+                <p className="institute" style={{ fontSize: "20px", fontWeight: 800, color: "#0d9488", letterSpacing: "-0.02em" }}>
+                  {receipt.instituteName}
+                </p>
+                <p className="receipt-label" style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.1em", marginTop: "6px" }}>
+                  Payment Receipt
+                </p>
+                <p className="receipt-number" style={{ fontSize: "14px", fontWeight: 700, color: "#374151", marginTop: "3px", fontFamily: "monospace" }}>
+                  {receipt.receiptNumber}
+                </p>
+              </div>
+
+              {/* Amount */}
+              <div style={{ textAlign: "center", margin: "20px 0", padding: "18px", backgroundColor: "#f0fdfa", borderRadius: "10px", border: "1px solid #ccfbf1" }}>
+                <p style={{ fontSize: "11px", fontWeight: 600, color: "#0d9488", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                  Amount Received
+                </p>
+                <p style={{ fontSize: "34px", fontWeight: 800, color: "#0d9488", marginTop: "4px" }}>
+                  {formattedAmount}
+                </p>
+              </div>
+
+              {/* Details rows */}
+              <div style={{ marginTop: "20px" }}>
+                {[
+                  { label: "Student Name",   value: receipt.studentName },
+                  { label: "Login ID",       value: receipt.loginIdentifier },
+                  { label: "Batch",          value: receipt.batchName },
+                  { label: "Payment Date",   value: formattedDate },
+                  { label: "Payment Mode",   value: formattedMode },
+                  ...(receipt.paymentReference ? [{ label: "Reference / UTR", value: receipt.paymentReference }] : []),
+                  { label: "Collected By",   value: receipt.collectedBy ?? "—" },
+                  ...(receipt.note ? [{ label: "Note", value: receipt.note }] : []),
+                ].map(({ label, value }) => (
+                  <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "9px 0", borderBottom: "1px solid #f3f4f6" }}>
+                    <span style={{ fontSize: "12px", color: "#6b7280", fontWeight: 500 }}>{label}</span>
+                    <span style={{ fontSize: "13px", color: "#111827", fontWeight: 600, textAlign: "right", maxWidth: "58%" }}>{value}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Footer */}
+              <div style={{ marginTop: "24px", textAlign: "center", borderTop: "1px dashed #e5e7eb", paddingTop: "16px" }}>
+                <p style={{ fontSize: "11px", color: "#9ca3af" }}>Thank you for your payment.</p>
+                <p style={{ fontSize: "10px", color: "#d1d5db", marginTop: "4px" }}>This is a computer-generated receipt.</p>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+// ─── Fee Status Badge ──────────────────────────────────────────────────────────
+
+function FeeStatusBadge({ status }: { status: string }) {
+  const config: Record<string, { color: string; bg: string; label: string }> = {
+    UNPAID:         { color: "#dc2626", bg: "#fef2f2",  label: "Unpaid"          },
+    PARTIALLY_PAID: { color: "#d97706", bg: "#fffbeb",  label: "Partially Paid"  },
+    PAID:           { color: "#16a34a", bg: "#f0fdf4",  label: "Paid"            },
+    OVERDUE:        { color: "#9333ea", bg: "#fdf4ff",  label: "Overdue"         },
+  };
+  const c = config[status] ?? { color: "#6b7280", bg: "#f9fafb", label: status };
+  return (
+    <span className="px-2.5 py-0.5 rounded-full" style={{ fontSize: "12px", fontWeight: 700, color: c.color, backgroundColor: c.bg }}>
+      {c.label}
+    </span>
+  );
+}
+
+// ─── Record Payment Modal ──────────────────────────────────────────────────────
+
+function RecordPaymentModal({
+  feeRecordId,
+  onClose,
+  onSuccess,
+}: {
+  feeRecordId: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [amount, setAmount]     = useState("");
+  const [mode, setMode]         = useState("");
+  const [date, setDate]         = useState(() => new Date().toISOString().split("T")[0]);
+  const [ref, setRef]           = useState("");
+  const [note, setNote]         = useState("");
+  const [errors, setErrors]     = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+
+  const MODES = ["CASH", "UPI", "BANK_TRANSFER", "CHEQUE", "CARD", "OTHER"];
+
+  async function handleSubmit() {
+    const e: Record<string, string> = {};
+    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) e.amount = "Valid amount required.";
+    if (!mode) e.mode = "Payment mode required.";
+    if (!date) e.date = "Date required.";
+    if (Object.keys(e).length) { setErrors(e); return; }
+
+    setSubmitting(true);
+    setApiError(null);
+    try {
+      await recordStudentPaymentApi(feeRecordId, {
+        amount: Number(amount),
+        payment_date: date,
+        payment_mode: mode,
+        payment_reference: ref.trim() || undefined,
+        note: note.trim() || undefined,
+      });
+      onSuccess();
+    } catch (err: any) {
+      setApiError(err.message ?? "Failed to record payment.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-6"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-7">
+        <div className="flex items-start justify-between mb-5">
+          <div>
+            <h2 className="text-gray-900" style={{ fontSize: "18px", fontWeight: 700 }}>Record Payment</h2>
+            <p className="text-gray-400 mt-0.5" style={{ fontSize: "13px" }}>Enter payment details below.</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-md flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-700 mb-1.5" style={{ fontSize: "13px", fontWeight: 600 }}>Amount (₹) *</label>
+              <input type="number" min={1} value={amount} onChange={(e) => { setAmount(e.target.value); setErrors((er) => { const c = { ...er }; delete c.amount; return c; }); }}
+                placeholder="e.g. 5000"
+                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all"
+                style={{ fontSize: "13.5px", borderColor: errors.amount ? "#fca5a5" : undefined }} />
+              {errors.amount && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.amount}</p>}
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-1.5" style={{ fontSize: "13px", fontWeight: 600 }}>Payment Mode *</label>
+              <select value={mode} onChange={(e) => { setMode(e.target.value); setErrors((er) => { const c = { ...er }; delete c.mode; return c; }); }}
+                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white"
+                style={{ fontSize: "13.5px", color: mode ? "#1f2937" : "#d1d5db", borderColor: errors.mode ? "#fca5a5" : undefined }}>
+                <option value="">Select</option>
+                {MODES.map((m) => <option key={m} value={m}>{m.replace("_", " ")}</option>)}
+              </select>
+              {errors.mode && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.mode}</p>}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-700 mb-1.5" style={{ fontSize: "13px", fontWeight: 600 }}>Payment Date *</label>
+              <input type="date" value={date} onChange={(e) => { setDate(e.target.value); setErrors((er) => { const c = { ...er }; delete c.date; return c; }); }}
+                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white"
+                style={{ fontSize: "13.5px" }} />
+              {errors.date && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.date}</p>}
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-1.5" style={{ fontSize: "13px", fontWeight: 600 }}>Reference / UTR</label>
+              <input type="text" value={ref} onChange={(e) => setRef(e.target.value)} placeholder="Optional"
+                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all"
+                style={{ fontSize: "13.5px" }} />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-gray-700 mb-1.5" style={{ fontSize: "13px", fontWeight: 600 }}>Note</label>
+            <input type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional note"
+              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all"
+              style={{ fontSize: "13.5px" }} />
+          </div>
+
+          {apiError && (
+            <div className="flex items-center gap-2 px-3 py-3 rounded-xl" style={{ backgroundColor: "#fef2f2", border: "1px solid #fecaca" }}>
+              <AlertCircle size={14} style={{ color: "#dc2626" }} strokeWidth={2} />
+              <p style={{ fontSize: "12.5px", color: "#dc2626" }}>{apiError}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-3 mt-6">
+          <button onClick={onClose} disabled={submitting}
+            className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
+            style={{ fontSize: "13.5px", fontWeight: 600 }}>Cancel</button>
+          <button onClick={handleSubmit} disabled={submitting}
+            className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}>
+            {submitting ? "Recording…" : "Record Payment"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Override Installment Plan Modal ──────────────────────────────────────────
+
+function OverrideInstallmentModal({
+  feeRecordId,
+  totalPayable,
+  onClose,
+  onSuccess,
+}: {
+  feeRecordId: string;
+  totalPayable: number;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [rows, setRows] = useState([{ amount: "", due_date: "" }]);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+
+  const rowSum = rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+  const sumMismatch = rows.length > 0 && Math.abs(rowSum - totalPayable) > 0.01;
+
+  function addRow() { if (rows.length < 12) setRows((r) => [...r, { amount: "", due_date: "" }]); }
+  function removeRow(i: number) { setRows((r) => r.filter((_, idx) => idx !== i)); }
+  function updateRow(i: number, field: "amount" | "due_date", val: string) {
+    setRows((r) => { const c = [...r]; c[i] = { ...c[i], [field]: val }; return c; });
+    setErrors((e) => { const c = { ...e }; delete c[`r_${i}_${field}`]; return c; });
+  }
+
+  async function handleSubmit() {
+    const e: Record<string, string> = {};
+    rows.forEach((r, i) => {
+      if (!r.amount || isNaN(Number(r.amount)) || Number(r.amount) <= 0) e[`r_${i}_amount`] = "Required";
+      if (!r.due_date) e[`r_${i}_due_date`] = "Required";
+    });
+    if (sumMismatch) e.sum = `Sum ₹${rowSum.toFixed(2)} must equal total payable ₹${totalPayable.toLocaleString("en-IN")}.`;
+    if (Object.keys(e).length) { setErrors(e); return; }
+
+    setSubmitting(true);
+    setApiError(null);
+    try {
+      await overrideInstallmentPlanApi(feeRecordId,
+        rows.map((r, i) => ({ installment_number: i + 1, amount: Number(r.amount), due_date: r.due_date }))
+      );
+      onSuccess();
+    } catch (err: any) {
+      setApiError(err.message ?? "Failed to override plan.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-6"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-[560px] flex flex-col" style={{ maxHeight: "88vh" }}>
+        <div className="flex items-start justify-between px-7 pt-7 pb-5 border-b border-gray-100 flex-shrink-0">
+          <div>
+            <h2 className="text-gray-900" style={{ fontSize: "18px", fontWeight: 700 }}>Override Installment Plan</h2>
+            <p className="text-gray-400 mt-0.5" style={{ fontSize: "13px" }}>
+              Total payable: <span className="font-semibold text-gray-700">₹{totalPayable.toLocaleString("en-IN")}</span>
+            </p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-md flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto px-7 py-5 flex-1">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-gray-600" style={{ fontSize: "13px", fontWeight: 600 }}>Installments <span className="text-gray-400 font-normal">(max 12)</span></p>
+            <button onClick={addRow} disabled={rows.length >= 12}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-teal-200 text-teal-700 hover:bg-teal-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ fontSize: "12px", fontWeight: 600 }}>
+              <Plus size={12} strokeWidth={2.5} /> Add Row
+            </button>
+          </div>
+
+          {/* Sum indicator */}
+          <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl"
+            style={{ backgroundColor: sumMismatch ? "#fef2f2" : "#f0fdfa", border: `1px solid ${sumMismatch ? "#fecaca" : "#ccfbf1"}` }}>
+            {sumMismatch
+              ? <AlertCircle size={13} style={{ color: "#dc2626" }} strokeWidth={2} />
+              : <CheckCircle2 size={13} style={{ color: "#0d9488" }} strokeWidth={2} />}
+            <span style={{ fontSize: "12px", fontWeight: 600, color: sumMismatch ? "#dc2626" : "#0d9488" }}>
+              Sum: ₹{rowSum.toFixed(2)} / ₹{totalPayable.toLocaleString("en-IN")}{!sumMismatch && rowSum > 0 && " ✓"}
+            </span>
+          </div>
+
+          <div className="rounded-xl border border-gray-100 overflow-hidden">
+            <div className="grid px-4 py-2.5" style={{ gridTemplateColumns: "36px 1fr 1fr 32px", backgroundColor: "#f9fafb", gap: "8px" }}>
+              {["#", "Amount (₹)", "Due Date", ""].map((h) => (
+                <p key={h} className="text-gray-400" style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.05em" }}>{h}</p>
+              ))}
+            </div>
+            <div className="divide-y divide-gray-50">
+              {rows.map((row, i) => (
+                <div key={i} className="grid px-4 py-3 items-start" style={{ gridTemplateColumns: "36px 1fr 1fr 32px", gap: "8px" }}>
+                  <span className="text-gray-400 pt-2.5" style={{ fontSize: "12.5px", fontWeight: 600 }}>{i + 1}</span>
+                  <div>
+                    <input type="number" min={0.01} value={row.amount} onChange={(e) => updateRow(i, "amount", e.target.value)} placeholder="0.00"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 transition-all"
+                      style={{ fontSize: "13px", borderColor: errors[`r_${i}_amount`] ? "#fca5a5" : undefined }} />
+                    {errors[`r_${i}_amount`] && <p className="text-red-400 mt-0.5" style={{ fontSize: "11px" }}>{errors[`r_${i}_amount`]}</p>}
+                  </div>
+                  <div>
+                    <input type="date" value={row.due_date} onChange={(e) => updateRow(i, "due_date", e.target.value)}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:border-teal-400 transition-all bg-white"
+                      style={{ fontSize: "13px", borderColor: errors[`r_${i}_due_date`] ? "#fca5a5" : undefined }} />
+                    {errors[`r_${i}_due_date`] && <p className="text-red-400 mt-0.5" style={{ fontSize: "11px" }}>{errors[`r_${i}_due_date`]}</p>}
+                  </div>
+                  <button onClick={() => removeRow(i)} className="mt-2 w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-red-50 transition-all">
+                    <X size={13} strokeWidth={2} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+          {errors.sum && <p className="text-red-500 mt-2" style={{ fontSize: "12px" }}>{errors.sum}</p>}
+          {apiError && (
+            <div className="flex items-center gap-2 px-3 py-3 rounded-xl mt-3" style={{ backgroundColor: "#fef2f2", border: "1px solid #fecaca" }}>
+              <AlertCircle size={14} style={{ color: "#dc2626" }} strokeWidth={2} />
+              <p style={{ fontSize: "12.5px", color: "#dc2626" }}>{apiError}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-3 px-7 py-5 border-t border-gray-100 flex-shrink-0">
+          <button onClick={onClose} disabled={submitting}
+            className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
+            style={{ fontSize: "13.5px", fontWeight: 600 }}>Cancel</button>
+          <button onClick={handleSubmit} disabled={submitting}
+            className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}>
+            {submitting ? "Saving…" : "Save Plan"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Fee Tab ───────────────────────────────────────────────────────────────────
+
+function FeeTab({
+  studentUserId,
+  feeData,
+  loading,
+  error,
+  isAdmin,
+  showPaymentModal,
+  setShowPaymentModal,
+  showOverrideModal,
+  setShowOverrideModal,
+  cancellingPaymentId,
+  setCancellingPaymentId,
+  onRefresh,
+}: {
+  studentUserId: string;
+  feeData: FeeTabData | null | undefined;
+  loading: boolean;
+  error: string | null;
+  isAdmin: boolean;
+  showPaymentModal: boolean;
+  setShowPaymentModal: (v: boolean) => void;
+  showOverrideModal: boolean;
+  setShowOverrideModal: (v: boolean) => void;
+  cancellingPaymentId: string | null;
+  setCancellingPaymentId: (v: string | null) => void;
+  onRefresh: () => void;
+}) {
+  const [cancelReason, setCancelReason]           = useState("");
+  const [cancelError, setCancelError]             = useState<string | null>(null);
+  const [cancelTarget, setCancelTarget]           = useState<string | null>(null);
+  const [viewingReceipt, setViewingReceipt]       = useState<PaymentRow | null>(null);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20 gap-2 text-gray-400">
+        <Loader2 size={18} className="animate-spin" />
+        <span style={{ fontSize: "14px" }}>Loading fee data…</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="py-16 flex flex-col items-center gap-3">
+        <AlertTriangle size={28} className="text-red-300" strokeWidth={1.5} />
+        <p className="text-red-400" style={{ fontSize: "14px" }}>{error}</p>
+        <button onClick={onRefresh} className="text-teal-600 underline" style={{ fontSize: "13px" }}>Retry</button>
+      </div>
+    );
+  }
+
+  if (feeData === null) {
+    return (
+      <div className="py-16 flex flex-col items-center gap-3">
+        <DollarSign size={32} className="text-gray-200" strokeWidth={1.5} />
+        <p className="text-gray-400" style={{ fontSize: "14px" }}>No fee record found for this student.</p>
+        <p className="text-gray-300 text-center" style={{ fontSize: "13px", maxWidth: "360px" }}>
+          This student was enrolled before a fee structure was set, or their batch has no active fee structure.
+        </p>
+      </div>
+    );
+  }
+
+  if (!feeData) return null;
+
+  const { fee_record: fr, payments } = feeData;
+  const isLumpSum = fr.plan_type === "LUMP_SUM";
+  const today = new Date().toISOString().split("T")[0];
+
+  async function handleCancel(paymentId: string) {
+    if (!cancelReason.trim()) { setCancelError("Cancellation reason is required."); return; }
+    setCancellingPaymentId(paymentId);
+    setCancelError(null);
+    try {
+      await cancelStudentPaymentApi(paymentId, cancelReason.trim());
+      setCancelTarget(null);
+      setCancelReason("");
+      onRefresh();
+    } catch (err: any) {
+      setCancelError(err.message ?? "Failed to cancel payment.");
+    } finally {
+      setCancellingPaymentId(null);
+    }
+  }
+
+  return (
+    <>
+      {/* ── Overview Card ── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-5">
+        <div className="flex items-start justify-between mb-5">
+          <div>
+            <p className="text-gray-400 uppercase mb-1" style={{ fontSize: "10.5px", fontWeight: 700, letterSpacing: "0.08em" }}>
+              Fee Structure
+            </p>
+            <p className="text-gray-900" style={{ fontSize: "16px", fontWeight: 700 }}>{fr.fee_structure_label}</p>
+            <p className="text-gray-400 mt-0.5" style={{ fontSize: "13px" }}>{fr.batch_name}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <FeeStatusBadge status={fr.fee_status} />
+            {fr.has_custom_plan && (
+              <span className="px-2.5 py-0.5 rounded-full" style={{ fontSize: "11px", fontWeight: 600, color: "#7c3aed", backgroundColor: "#f5f3ff" }}>
+                Custom Plan
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-4 gap-4 pt-5 border-t border-gray-50">
+          {[
+            { label: "Total Payable",        value: `₹${Number(fr.total_payable).toLocaleString("en-IN")}`,        color: "#374151" },
+            { label: "Total Collected",      value: `₹${Number(fr.total_collected).toLocaleString("en-IN")}`,      color: "#16a34a" },
+            { label: "Outstanding Balance",  value: `₹${Number(fr.outstanding_balance).toLocaleString("en-IN")}`,  color: Number(fr.outstanding_balance) > 0 ? "#dc2626" : "#16a34a" },
+            { label: "Final Due Date",       value: new Date(fr.final_due_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }), color: fr.final_due_date < today && fr.fee_status !== "PAID" ? "#dc2626" : "#374151" },
+          ].map(({ label, value, color }) => (
+            <div key={label}>
+              <p className="text-gray-400" style={{ fontSize: "11px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "4px" }}>
+                {label}
+              </p>
+              <p style={{ fontSize: "18px", fontWeight: 800, color, letterSpacing: "-0.01em" }}>{value}</p>
+            </div>
+          ))}
+        </div>
+
+        {fr.discount_amount > 0 && (
+          <div className="mt-4 flex items-center gap-2 px-4 py-2.5 rounded-xl" style={{ backgroundColor: "#f0fdfa", border: "1px solid #ccfbf1" }}>
+            <CheckCircle2 size={13} style={{ color: "#0d9488" }} strokeWidth={2.5} />
+            <span className="text-teal-700" style={{ fontSize: "12.5px" }}>
+              Discount applied: <span style={{ fontWeight: 700 }}>₹{Number(fr.discount_amount).toLocaleString("en-IN")}</span>
+              {fr.discount_reason && <span className="text-teal-600"> — {fr.discount_reason}</span>}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* ── Action buttons ── */}
+      <div className="flex items-center gap-3 mb-5">
+        <button
+          onClick={() => setShowPaymentModal(true)}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
+          style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+        >
+          <Plus size={15} strokeWidth={2.5} />
+          Record Payment
+        </button>
+        {isAdmin && !isLumpSum && (
+          <button
+            onClick={() => setShowOverrideModal(true)}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-all"
+            style={{ fontSize: "13.5px", fontWeight: 600 }}
+          >
+            <Pencil size={14} strokeWidth={2} />
+            Override Installment Plan
+          </button>
+        )}
+      </div>
+
+      {/* ── Installment Schedule ── */}
+      {!isLumpSum && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-5">
+          <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2" style={{ backgroundColor: "#f9fafb" }}>
+            <ClipboardList size={14} className="text-teal-500" />
+            <h3 className="text-gray-700" style={{ fontSize: "13.5px", fontWeight: 700 }}>Installment Schedule</h3>
+            {fr.has_custom_plan && (
+              <span className="ml-1 px-2 py-0.5 rounded-full" style={{ fontSize: "10.5px", fontWeight: 600, color: "#7c3aed", backgroundColor: "#f5f3ff" }}>
+                Custom Plan
+              </span>
+            )}
+          </div>
+          <table className="w-full">
+            <thead>
+              <tr style={{ backgroundColor: "#f9fafb" }}>
+                {["#", "Due Date", "Amount Due", "Status"].map((col) => (
+                  <th key={col} className="text-left px-5 py-3 text-gray-400" style={{ fontSize: "11px", fontWeight: 600, letterSpacing: "0.05em" }}>
+                    {col.toUpperCase()}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {/* Note: installment data comes from fee_record if we extend the API.
+                  For now show a placeholder row directing user to payments tab */}
+              <tr>
+                <td colSpan={4} className="px-5 py-8 text-center">
+                  <p className="text-gray-400" style={{ fontSize: "13px" }}>
+                    Installment schedule is managed via the installment plan. Use "Override Installment Plan" to customise.
+                  </p>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ── Payment History ── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between" style={{ backgroundColor: "#f9fafb" }}>
+          <div className="flex items-center gap-2">
+            <DollarSign size={14} className="text-teal-500" />
+            <h3 className="text-gray-700" style={{ fontSize: "13.5px", fontWeight: 700 }}>Payment History</h3>
+          </div>
+          <span className="text-gray-400" style={{ fontSize: "12.5px" }}>{payments.length} record{payments.length !== 1 ? "s" : ""}</span>
+        </div>
+
+        {payments.length === 0 ? (
+          <div className="py-12 text-center">
+            <p className="text-gray-300" style={{ fontSize: "14px" }}>No payments recorded yet.</p>
+          </div>
+        ) : (
+          <table className="w-full">
+            <thead>
+              <tr style={{ backgroundColor: "#f9fafb" }}>
+                {["Receipt", "Date", "Amount", "Mode", "Collected By", "Reference", ""].map((col) => (
+                  <th key={col} className="text-left px-5 py-3 text-gray-400" style={{ fontSize: "11px", fontWeight: 600, letterSpacing: "0.05em" }}>
+                    {col.toUpperCase()}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {payments.map((p) => (
+                <tr key={p.id} className="border-t border-gray-50" style={{ opacity: p.is_cancelled ? 0.5 : 1 }}>
+                  <td className="px-5 py-3.5">
+                    <span className="font-mono text-gray-700" style={{ fontSize: "12.5px", fontWeight: 600 }}>{p.receipt_number}</span>
+                    {p.is_cancelled && (
+                      <span className="ml-2 px-1.5 py-0.5 rounded" style={{ fontSize: "10px", fontWeight: 700, color: "#dc2626", backgroundColor: "#fef2f2" }}>
+                        Cancelled
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <span className="text-gray-600" style={{ fontSize: "13px" }}>
+                      {new Date(p.payment_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <span style={{ fontSize: "13.5px", fontWeight: 700, color: p.is_cancelled ? "#9ca3af" : "#16a34a" }}>
+                      ₹{Number(p.amount).toLocaleString("en-IN")}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <span className="px-2 py-0.5 rounded-full" style={{ fontSize: "11.5px", fontWeight: 600, color: "#2563eb", backgroundColor: "#eff6ff" }}>
+                      {p.payment_mode.replace("_", " ")}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <span className="text-gray-500" style={{ fontSize: "13px" }}>{p.recorded_by_name ?? "—"}</span>
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <span className="text-gray-400 font-mono" style={{ fontSize: "12px" }}>{p.payment_reference ?? "—"}</span>
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setViewingReceipt(p)}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:border-teal-300 hover:text-teal-700 hover:bg-teal-50 transition-all"
+                        style={{ fontSize: "12px", fontWeight: 600 }}
+                      >
+                        <Printer size={12} strokeWidth={2} />
+                        Receipt
+                      </button>
+                    {!p.is_cancelled && (
+                      cancelTarget === p.id ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={cancelReason}
+                            onChange={(e) => { setCancelReason(e.target.value); setCancelError(null); }}
+                            placeholder="Reason…"
+                            className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 transition-all"
+                            style={{ fontSize: "12px", width: "140px" }}
+                          />
+                          <button
+                            onClick={() => handleCancel(p.id)}
+                            disabled={cancellingPaymentId === p.id}
+                            className="px-2.5 py-1.5 rounded-lg text-white hover:opacity-90 transition-all disabled:opacity-50"
+                            style={{ fontSize: "12px", fontWeight: 600, backgroundColor: "#dc2626" }}
+                          >
+                            {cancellingPaymentId === p.id ? "…" : "Confirm"}
+                          </button>
+                          <button onClick={() => { setCancelTarget(null); setCancelReason(""); setCancelError(null); }}
+                            className="w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:text-gray-600 hover:bg-gray-100 transition-all">
+                            <X size={13} strokeWidth={2} />
+                          </button>
+                          {cancelError && <p className="text-red-500" style={{ fontSize: "11px" }}>{cancelError}</p>}
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setCancelTarget(p.id)}
+                          className="px-2.5 py-1.5 rounded-lg border border-red-100 text-red-400 hover:bg-red-50 hover:border-red-200 transition-all"
+                          style={{ fontSize: "12px", fontWeight: 600 }}
+                        >
+                          Cancel
+                        </button>
+                      )
+                    )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* ── Modals ── */}
+      {showPaymentModal && (
+        <RecordPaymentModal
+          feeRecordId={fr.id}
+          onClose={() => setShowPaymentModal(false)}
+          onSuccess={() => { setShowPaymentModal(false); onRefresh(); }}
+        />
+      )}
+      {showOverrideModal && (
+        <OverrideInstallmentModal
+          feeRecordId={fr.id}
+          totalPayable={Number(fr.total_payable)}
+          onClose={() => setShowOverrideModal(false)}
+          onSuccess={() => { setShowOverrideModal(false); onRefresh(); }}
+        />
+      )}
+      {viewingReceipt && (
+        <ReceiptModal
+          receipt={{
+            receiptNumber:    viewingReceipt.receipt_number,
+            date:             viewingReceipt.payment_date,
+            amount:           Number(viewingReceipt.amount),
+            paymentMode:      viewingReceipt.payment_mode,
+            paymentReference: viewingReceipt.payment_reference,
+            note:             viewingReceipt.note,
+            collectedBy:      viewingReceipt.recorded_by_name,
+            studentName:      fr.student_name,
+            loginIdentifier:  fr.login_identifier,
+            batchName:        fr.batch_name,
+            instituteName:    fr.institute_name,
+          }}
+          onClose={() => setViewingReceipt(null)}
+        />
+      )}
+    </>
+  );
+}
+
 export function StudentProfilePage() {
   const { studentId } = useParams<{ studentId: string }>();
   const navigate      = useNavigate();
@@ -465,10 +1273,39 @@ export function StudentProfilePage() {
   const [loading, setLoading]             = useState(true);
   const [fetchError, setFetchError]       = useState<string | null>(null);
 
+  const [activeTab, setActiveTab] = useState<"results" | "fee">("results");
+
   const [selectedTestId, setSelectedTestId]     = useState<string | null>(null);
   const [selectedSubject, setSelectedSubject]   = useState<string | null>(null);
   const [search, setSearch]                     = useState("");
   const [subjectFilter, setSubjectFilter]       = useState("All");
+
+  // Fee tab data
+  const [feeData, setFeeData]         = useState<FeeTabData | null | undefined>(undefined);
+  const [loadingFee, setLoadingFee]   = useState(false);
+  const [feeError, setFeeError]       = useState<string | null>(null);
+
+  // Record payment modal
+  const [showPaymentModal, setShowPaymentModal]     = useState(false);
+  // Override installment plan modal
+  const [showOverrideModal, setShowOverrideModal]   = useState(false);
+  // Cancel payment
+  const [cancellingPaymentId, setCancellingPaymentId] = useState<string | null>(null);
+
+  const session = getSession();
+  const isAdmin = session?.payload.role_id === ROLES.ADMIN;
+
+  useEffect(() => {
+    if (activeTab !== "fee" || !studentId) return;
+    if (feeData !== undefined) return; // already loaded
+    setLoadingFee(true);
+    setFeeError(null);
+    getStudentFeeTabApi(studentId)
+      .then(setFeeData)
+      .catch((e: any) => setFeeError(e.message ?? "Failed to load fee data"))
+      .finally(() => setLoadingFee(false));
+  }, [activeTab, studentId]);
+
 
   useEffect(() => {
     if (!studentId) { setFetchError("No student ID provided"); setLoading(false); return; }
@@ -605,15 +1442,53 @@ export function StudentProfilePage() {
         </div>
       </div>
 
-      {/* ── Page header ── */}
-      <div className="mb-6">
-        <h2 className="text-gray-900" style={{ fontSize: "18px", fontWeight: 700, letterSpacing: "-0.01em" }}>
-          Results & Performance
-        </h2>
-        <p className="text-gray-400 mt-0.5" style={{ fontSize: "13.5px" }}>
-          Performance analytics across all subjects and tests
-        </p>
+      {/* ── Tab bar ── */}
+      <div className="flex gap-1 p-1 rounded-xl mb-6 w-fit" style={{ backgroundColor: "#f3f4f6" }}>
+        {(["results", "fee"] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className="px-5 py-2 rounded-md capitalize transition-all"
+            style={{
+              fontSize: "13.5px",
+              fontWeight: 600,
+              backgroundColor: activeTab === tab ? "white" : "transparent",
+              color: activeTab === tab ? "#111827" : "#9ca3af",
+              boxShadow: activeTab === tab ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+            }}
+          >
+            {tab === "results" ? "Results & Performance" : "Fee"}
+          </button>
+        ))}
       </div>
+
+      {/* ── Fee Tab ── */}
+      {activeTab === "fee" && (
+        <FeeTab
+          studentUserId={studentId!}
+          feeData={feeData}
+          loading={loadingFee}
+          error={feeError}
+          isAdmin={isAdmin}
+          showPaymentModal={showPaymentModal}
+          setShowPaymentModal={setShowPaymentModal}
+          showOverrideModal={showOverrideModal}
+          setShowOverrideModal={setShowOverrideModal}
+          cancellingPaymentId={cancellingPaymentId}
+          setCancellingPaymentId={setCancellingPaymentId}
+          onRefresh={() => {
+            setFeeData(undefined);
+            setLoadingFee(true);
+            setFeeError(null);
+            getStudentFeeTabApi(studentId!)
+              .then(setFeeData)
+              .catch((e: any) => setFeeError(e.message ?? "Failed to load fee data"))
+              .finally(() => setLoadingFee(false));
+          }}
+        />
+      )}
+
+      {activeTab === "results" && (<>
 
       {/* ── Summary Cards ── */}
       <div className="grid grid-cols-5 gap-4 mb-6">
@@ -851,6 +1726,7 @@ export function StudentProfilePage() {
           </tbody>
         </table>
       </div>
+      </>)}
     </div>
   );
 }

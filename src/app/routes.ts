@@ -21,11 +21,13 @@ import { Tests } from "./pages/Tests";
 import { Attendance } from "./pages/Attendance";
 import { Announcements } from "./pages/Announcements";
 import { StudyMaterials } from "./pages/StudyMaterials";
+import { FeeManagement } from "./pages/FeeManagement";
 import { Profile } from "./pages/Profile";
 import { TeacherDashboard } from "./pages/Teacher/TeacherDashboard";
 import { ManagementDashboard } from "./pages/Management/ManagementDashboard";
 import { StudentDashboard } from "./pages/Student/StudentDashboard";
 import { StudentMarks } from "./pages/Student/StudentMarks";
+import { MyFee } from "./pages/Student/MyFee";
 import { Login } from "./pages/Login";
 import { clearToken, getToken, parseToken, isTokenExpired, ROLE_ROUTES } from "./auth";
 
@@ -92,6 +94,7 @@ element: createElement(ErrorBoundary, { section: "Attendance", children: createE
       },
       { path: "announcements", Component: Announcements },
       { path: "study-materials", Component: StudyMaterials },
+      { path: "fee-management", Component: FeeManagement },
       { path: "profile", Component: Profile },
     ],
   },
@@ -134,6 +137,7 @@ element: createElement(ErrorBoundary, { section: "Attendance", children: createE
       { path: "attendance", Component: Attendance },
       { path: "study-materials", Component: StudyMaterials },
       { path: "announcements", Component: Announcements },
+      { path: "fee-management", Component: FeeManagement },
       { path: "profile", Component: Profile },
     ],
   },
@@ -155,6 +159,7 @@ element: createElement(ErrorBoundary, { section: "My Results", children: createE
       },
       { path: "study-materials", Component: StudentStudyMaterialsRoute },
       { path: "announcements", Component: StudentAnnouncementsRoute },
+      { path: "fee", Component: MyFee },
       { path: "profile", Component: Profile },
     ],
   },

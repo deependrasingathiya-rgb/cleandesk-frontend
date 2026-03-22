@@ -12,6 +12,15 @@ import {
   type BatchStudent,
 } from "../../Lib/api/class-batches";
 import {
+  createFeeStructureApi,
+  getFeeStructureForBatchApi,
+  type PlanType,
+  type LateFeeType,
+  type InstallmentInput,
+  type FeeStructureRecord,
+  type CreateFeeStructurePayload,
+} from "../../Lib/api/fee-structure";
+import {
   Search,
   Plus,
   Users,
@@ -23,6 +32,10 @@ import {
   Mail,
   BookOpen,
   Edit2,
+  DollarSign,
+  AlertCircle,
+  CheckCircle2,
+  Trash2,
   Loader2,
 } from "lucide-react";
 
@@ -45,7 +58,573 @@ function getSubjectColor(subject: string) {
 
 
 
+// ─── Create Fee Structure Modal ───────────────────────────────────────────────
 
+type FeeFormState = {
+  label: string;
+  totalAmount: string;
+  planType: PlanType;
+  finalDueDate: string;
+  lateFeeAmount: string;
+  lateFeeType: LateFeeType | "";
+  requireAdvance: boolean;
+  installments: { amount: string; due_date: string }[];
+};
+
+const emptyFeeForm: FeeFormState = {
+  label: "",
+  totalAmount: "",
+  planType: "LUMP_SUM",
+  finalDueDate: "",
+  lateFeeAmount: "",
+  lateFeeType: "",
+  requireAdvance: false,
+  installments: [],
+};
+
+function CreateFeeStructureModal({
+  batchId,
+  batchName,
+  onClose,
+  onCreated,
+}: {
+  batchId: string;
+  batchName: string;
+  onClose: () => void;
+  onCreated: (structure: FeeStructureRecord) => void;
+}) {
+  const [form, setForm] = useState<FeeFormState>(emptyFeeForm);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  // ── Derived helpers ──────────────────────────────────────────────────────
+  const totalAmountNum = parseFloat(form.totalAmount) || 0;
+  const installmentSum = form.installments.reduce(
+    (s, inst) => s + (parseFloat(inst.amount) || 0),
+    0
+  );
+  const sumMismatch =
+    form.planType === "FIXED_INSTALLMENTS" &&
+    form.installments.length > 0 &&
+    Math.abs(installmentSum - totalAmountNum) > 0.01;
+
+  // ── Installment row helpers ──────────────────────────────────────────────
+  function addInstallment() {
+    if (form.installments.length >= 12) return;
+    setForm((f) => ({
+      ...f,
+      installments: [...f.installments, { amount: "", due_date: "" }],
+    }));
+  }
+
+  function removeInstallment(idx: number) {
+    setForm((f) => ({
+      ...f,
+      installments: f.installments.filter((_, i) => i !== idx),
+    }));
+  }
+
+  function updateInstallment(
+    idx: number,
+    field: "amount" | "due_date",
+    value: string
+  ) {
+    setForm((f) => {
+      const updated = [...f.installments];
+      updated[idx] = { ...updated[idx], [field]: value };
+      return { ...f, installments: updated };
+    });
+    // Clear per-installment error on change
+    setErrors((e) => {
+      const next = { ...e };
+      delete next[`inst_${idx}_${field}`];
+      return next;
+    });
+  }
+
+  function setPlanType(pt: PlanType) {
+    setForm((f) => ({ ...f, planType: pt, installments: [] }));
+    setErrors({});
+  }
+
+  // ── Validation ────────────────────────────────────────────────────────────
+  function validate(): Record<string, string> {
+    const e: Record<string, string> = {};
+
+    if (!form.label.trim()) e.label = "Label is required.";
+    if (!form.totalAmount || isNaN(Number(form.totalAmount)) || Number(form.totalAmount) <= 0)
+      e.totalAmount = "Total amount must be greater than 0.";
+    if (!form.finalDueDate) e.finalDueDate = "Final due date is required.";
+
+    const hasLateFeeAmount = form.lateFeeAmount !== "" && !isNaN(Number(form.lateFeeAmount)) && Number(form.lateFeeAmount) > 0;
+    const hasLateFeeType = form.lateFeeType !== "";
+    if (hasLateFeeAmount && !hasLateFeeType)
+      e.lateFeeType = "Select a late fee type when providing a late fee amount.";
+    if (!hasLateFeeAmount && hasLateFeeType)
+      e.lateFeeAmount = "Enter a late fee amount when a late fee type is selected.";
+
+    if (form.planType === "FIXED_INSTALLMENTS") {
+      if (form.installments.length === 0)
+        e.installments = "At least one installment row is required.";
+      if (form.installments.length > 12)
+        e.installments = "Maximum 12 installment rows allowed.";
+
+      form.installments.forEach((inst, idx) => {
+        if (!inst.amount || isNaN(Number(inst.amount)) || Number(inst.amount) <= 0)
+          e[`inst_${idx}_amount`] = "Required";
+        if (!inst.due_date)
+          e[`inst_${idx}_due_date`] = "Required";
+      });
+
+      if (form.installments.length > 0 && Math.abs(installmentSum - totalAmountNum) > 0.01)
+        e.installments = `Installment amounts sum to ₹${installmentSum.toFixed(2)}, but total is ₹${totalAmountNum.toFixed(2)}.`;
+    }
+
+    return e;
+  }
+
+  // ── Submit ────────────────────────────────────────────────────────────────
+  async function handleSubmit() {
+    const e = validate();
+    if (Object.keys(e).length > 0) { setErrors(e); return; }
+    setSubmitting(true);
+    setApiError(null);
+
+    const payload: CreateFeeStructurePayload = {
+      class_batch_id: batchId,
+      label: form.label.trim(),
+      total_amount: Number(form.totalAmount),
+      plan_type: form.planType,
+      final_due_date: form.finalDueDate,
+      require_advance: form.requireAdvance,
+    };
+
+    if (form.lateFeeAmount !== "" && form.lateFeeType !== "") {
+      payload.late_fee_amount = Number(form.lateFeeAmount);
+      payload.late_fee_type = form.lateFeeType as LateFeeType;
+    }
+
+    if (form.planType === "FIXED_INSTALLMENTS") {
+      payload.installments = form.installments.map((inst, idx) => ({
+        installment_number: idx + 1,
+        amount: Number(inst.amount),
+        due_date: inst.due_date,
+      }));
+    }
+
+    try {
+      const result = await createFeeStructureApi(payload);
+      setSaved(true);
+      setTimeout(() => onCreated(result), 900);
+    } catch (err: any) {
+      setApiError(err.message ?? "Failed to create fee structure.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // ── Success state ──────────────────────────────────────────────────────
+  if (saved) {
+    return (
+      <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-6">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-10 flex flex-col items-center">
+          <div
+            className="w-14 h-14 rounded-full flex items-center justify-center mb-4"
+            style={{ backgroundColor: "#f0fdfa" }}
+          >
+            <CheckCircle2 size={28} color="#0d9488" strokeWidth={2} />
+          </div>
+          <p className="text-gray-900" style={{ fontSize: "18px", fontWeight: 700 }}>
+            Fee Structure Created!
+          </p>
+          <p className="text-gray-400 mt-1 text-center" style={{ fontSize: "13.5px" }}>
+            {batchName} now has an active fee structure.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Form ──────────────────────────────────────────────────────────────────
+  return (
+    <div
+      className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-6"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-xl w-full max-w-[600px] flex flex-col"
+        style={{ maxHeight: "92vh" }}
+      >
+        {/* Fixed header */}
+        <div className="flex items-start justify-between px-7 pt-7 pb-5 border-b border-gray-100 flex-shrink-0">
+          <div>
+            <h2 className="text-gray-900" style={{ fontSize: "18px", fontWeight: 700, letterSpacing: "-0.01em" }}>
+              Create Fee Structure
+            </h2>
+            <p className="text-gray-400 mt-0.5" style={{ fontSize: "13px" }}>
+              {batchName} — define how fees are collected for this batch.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-md flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors flex-shrink-0"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="overflow-y-auto px-7 py-6 space-y-5 flex-1">
+
+          {/* Label */}
+          <div>
+            <label className="block text-gray-700 mb-1.5" style={{ fontSize: "13px", fontWeight: 600 }}>
+              Label <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={form.label}
+              onChange={(e) => { setForm((f) => ({ ...f, label: e.target.value })); setErrors((er) => { const c = { ...er }; delete c.label; return c; }); }}
+              placeholder="e.g. Annual Fees 2025–26"
+              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all"
+              style={{ fontSize: "13.5px" }}
+            />
+            {errors.label && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.label}</p>}
+          </div>
+
+          {/* Total Amount */}
+          <div>
+            <label className="block text-gray-700 mb-1.5" style={{ fontSize: "13px", fontWeight: 600 }}>
+              Total Amount (₹) <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              min={1}
+              value={form.totalAmount}
+              onChange={(e) => { setForm((f) => ({ ...f, totalAmount: e.target.value })); setErrors((er) => { const c = { ...er }; delete c.totalAmount; return c; }); }}
+              placeholder="e.g. 50000"
+              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all"
+              style={{ fontSize: "13.5px" }}
+            />
+            {errors.totalAmount && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.totalAmount}</p>}
+          </div>
+
+          {/* Plan Type */}
+          <div>
+            <label className="block text-gray-700 mb-2" style={{ fontSize: "13px", fontWeight: 600 }}>
+              Plan Type <span className="text-red-500">*</span>
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {(
+                [
+                  { value: "LUMP_SUM", label: "Lump Sum", desc: "Single payment by deadline" },
+                  { value: "FIXED_INSTALLMENTS", label: "Fixed Installments", desc: "Set installments for all students" },
+                  { value: "CUSTOM_INSTALLMENTS", label: "Custom Installments", desc: "Plans generated per student" },
+                ] as { value: PlanType; label: string; desc: string }[]
+              ).map((opt) => {
+                const isSelected = form.planType === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setPlanType(opt.value)}
+                    className="flex flex-col items-start p-3 rounded-xl border transition-all text-left"
+                    style={{
+                      borderColor: isSelected ? "#0d9488" : "#f3f4f6",
+                      backgroundColor: isSelected ? "#f0fdfa" : "white",
+                    }}
+                  >
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <div
+                        className="w-3 h-3 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: isSelected ? "#0d9488" : "#d1d5db" }}
+                      />
+                      <span
+                        style={{
+                          fontSize: "12.5px",
+                          fontWeight: isSelected ? 700 : 500,
+                          color: isSelected ? "#0d9488" : "#374151",
+                        }}
+                      >
+                        {opt.label}
+                      </span>
+                    </div>
+                    <span className="text-gray-400" style={{ fontSize: "11px", paddingLeft: "18px" }}>
+                      {opt.desc}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Final Due Date */}
+          <div>
+            <label className="block text-gray-700 mb-1.5" style={{ fontSize: "13px", fontWeight: 600 }}>
+              Final Due Date <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="date"
+              value={form.finalDueDate}
+              onChange={(e) => { setForm((f) => ({ ...f, finalDueDate: e.target.value })); setErrors((er) => { const c = { ...er }; delete c.finalDueDate; return c; }); }}
+              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white"
+              style={{ fontSize: "13.5px" }}
+            />
+            {errors.finalDueDate && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.finalDueDate}</p>}
+          </div>
+
+          {/* Late Fee Rule (optional) */}
+          <div className="border border-gray-100 rounded-xl p-4 space-y-3">
+            <p className="text-gray-500" style={{ fontSize: "12.5px", fontWeight: 600 }}>
+              Late Fee Rule{" "}
+              <span className="text-gray-400" style={{ fontWeight: 400 }}>(optional)</span>
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-gray-600 mb-1" style={{ fontSize: "12px", fontWeight: 600 }}>
+                  Late Fee Amount (₹)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  value={form.lateFeeAmount}
+                  onChange={(e) => { setForm((f) => ({ ...f, lateFeeAmount: e.target.value })); setErrors((er) => { const c = { ...er }; delete c.lateFeeAmount; return c; }); }}
+                  placeholder="e.g. 500"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 transition-all"
+                  style={{ fontSize: "13px" }}
+                />
+                {errors.lateFeeAmount && <p className="text-red-500 mt-1" style={{ fontSize: "11.5px" }}>{errors.lateFeeAmount}</p>}
+              </div>
+              <div>
+                <label className="block text-gray-600 mb-1" style={{ fontSize: "12px", fontWeight: 600 }}>
+                  Late Fee Type
+                </label>
+                <select
+                  value={form.lateFeeType}
+                  onChange={(e) => { setForm((f) => ({ ...f, lateFeeType: e.target.value as LateFeeType | "" })); setErrors((er) => { const c = { ...er }; delete c.lateFeeType; return c; }); }}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-gray-800 focus:outline-none focus:border-teal-400 transition-all bg-white"
+                  style={{ fontSize: "13px", color: form.lateFeeType ? "#1f2937" : "#d1d5db" }}
+                >
+                  <option value="">None</option>
+                  <option value="FLAT">Flat (fixed ₹ amount)</option>
+                  <option value="PERCENT">Percent (% of outstanding)</option>
+                </select>
+                {errors.lateFeeType && <p className="text-red-500 mt-1" style={{ fontSize: "11.5px" }}>{errors.lateFeeType}</p>}
+              </div>
+            </div>
+          </div>
+
+          {/* Require Advance Toggle */}
+          <div className="flex items-center justify-between py-3 px-4 rounded-xl border border-gray-100">
+            <div>
+              <p className="text-gray-700" style={{ fontSize: "13.5px", fontWeight: 600 }}>
+                Require Advance Payment
+              </p>
+              <p className="text-gray-400 mt-0.5" style={{ fontSize: "12px" }}>
+                Students must pay an advance before enrollment is confirmed.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setForm((f) => ({ ...f, requireAdvance: !f.requireAdvance }))}
+              className="relative inline-flex items-center rounded-full transition-all duration-200 flex-shrink-0 ml-4"
+              style={{ width: "44px", height: "24px", backgroundColor: form.requireAdvance ? "#0d9488" : "#e5e7eb" }}
+            >
+              <span
+                className="inline-block rounded-full bg-white shadow transition-transform duration-200"
+                style={{ width: "18px", height: "18px", transform: form.requireAdvance ? "translateX(22px)" : "translateX(2px)" }}
+              />
+            </button>
+          </div>
+
+          {/* Fixed Installments — dynamic rows */}
+          {form.planType === "FIXED_INSTALLMENTS" && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-gray-700" style={{ fontSize: "13px", fontWeight: 600 }}>
+                  Installments <span className="text-red-500">*</span>
+                  <span className="text-gray-400 ml-1.5" style={{ fontWeight: 400, fontSize: "12px" }}>
+                    (max 12)
+                  </span>
+                </label>
+                <button
+                  type="button"
+                  onClick={addInstallment}
+                  disabled={form.installments.length >= 12}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-teal-200 text-teal-700 hover:bg-teal-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{ fontSize: "12px", fontWeight: 600 }}
+                >
+                  <Plus size={12} strokeWidth={2.5} />
+                  Add Row
+                </button>
+              </div>
+
+              {/* Sum live indicator */}
+              {form.installments.length > 0 && (
+                <div
+                  className="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl"
+                  style={{
+                    backgroundColor: sumMismatch ? "#fef2f2" : "#f0fdfa",
+                    border: `1px solid ${sumMismatch ? "#fecaca" : "#ccfbf1"}`,
+                  }}
+                >
+                  {sumMismatch ? (
+                    <AlertCircle size={13} style={{ color: "#dc2626" }} strokeWidth={2} />
+                  ) : (
+                    <CheckCircle2 size={13} style={{ color: "#0d9488" }} strokeWidth={2} />
+                  )}
+                  <span
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      color: sumMismatch ? "#dc2626" : "#0d9488",
+                    }}
+                  >
+                    Sum: ₹{installmentSum.toFixed(2)} / ₹{totalAmountNum.toFixed(2)}
+                    {!sumMismatch && installmentSum > 0 && " ✓"}
+                  </span>
+                </div>
+              )}
+
+              {form.installments.length === 0 ? (
+                <div
+                  className="py-6 flex flex-col items-center justify-center rounded-xl"
+                  style={{ backgroundColor: "#f9fafb", border: "1px dashed #e5e7eb" }}
+                >
+                  <p className="text-gray-400" style={{ fontSize: "13px" }}>
+                    No installments added yet. Click "Add Row" to begin.
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-gray-100 overflow-hidden">
+                  <div
+                    className="grid px-4 py-2.5"
+                    style={{ gridTemplateColumns: "40px 1fr 1fr 32px", backgroundColor: "#f9fafb", gap: "8px" }}
+                  >
+                    {["#", "Amount (₹)", "Due Date", ""].map((col) => (
+                      <p key={col} className="text-gray-400" style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.05em" }}>
+                        {col.toUpperCase()}
+                      </p>
+                    ))}
+                  </div>
+                  <div className="divide-y divide-gray-50">
+                    {form.installments.map((inst, idx) => (
+                      <div
+                        key={idx}
+                        className="grid px-4 py-3 items-start"
+                        style={{ gridTemplateColumns: "40px 1fr 1fr 32px", gap: "8px" }}
+                      >
+                        <span className="text-gray-400 pt-2.5" style={{ fontSize: "12.5px", fontWeight: 600 }}>
+                          {idx + 1}
+                        </span>
+                        <div>
+                          <input
+                            type="number"
+                            min={0.01}
+                            value={inst.amount}
+                            onChange={(e) => updateInstallment(idx, "amount", e.target.value)}
+                            placeholder="0.00"
+                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 transition-all"
+                            style={{
+                              fontSize: "13px",
+                              borderColor: errors[`inst_${idx}_amount`] ? "#fca5a5" : undefined,
+                            }}
+                          />
+                          {errors[`inst_${idx}_amount`] && (
+                            <p className="text-red-400 mt-0.5" style={{ fontSize: "11px" }}>
+                              {errors[`inst_${idx}_amount`]}
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <input
+                            type="date"
+                            value={inst.due_date}
+                            onChange={(e) => updateInstallment(idx, "due_date", e.target.value)}
+                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:border-teal-400 transition-all bg-white"
+                            style={{
+                              fontSize: "13px",
+                              borderColor: errors[`inst_${idx}_due_date`] ? "#fca5a5" : undefined,
+                            }}
+                          />
+                          {errors[`inst_${idx}_due_date`] && (
+                            <p className="text-red-400 mt-0.5" style={{ fontSize: "11px" }}>
+                              {errors[`inst_${idx}_due_date`]}
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeInstallment(idx)}
+                          className="mt-2 w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-red-50 transition-all"
+                        >
+                          <Trash2 size={13} strokeWidth={2} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {errors.installments && (
+                <p className="text-red-500 mt-1.5" style={{ fontSize: "12px" }}>{errors.installments}</p>
+              )}
+            </div>
+          )}
+
+          {/* Custom Installments — informational note */}
+          {form.planType === "CUSTOM_INSTALLMENTS" && (
+            <div
+              className="flex items-start gap-3 px-4 py-3 rounded-xl"
+              style={{ backgroundColor: "#eff6ff", border: "1px solid #bfdbfe" }}
+            >
+              <AlertCircle size={15} style={{ color: "#2563eb", marginTop: "1px" }} strokeWidth={2} />
+              <p className="text-blue-700" style={{ fontSize: "13px", lineHeight: 1.6 }}>
+                Installment plans for Custom Installments are generated individually per student at enrollment — no rows need to be entered here.
+              </p>
+            </div>
+          )}
+
+          <p className="text-gray-400" style={{ fontSize: "11.5px" }}>
+            <span className="text-red-400">*</span> Required fields
+          </p>
+
+          {apiError && (
+            <div
+              className="flex items-center gap-2 px-3 py-3 rounded-xl"
+              style={{ backgroundColor: "#fef2f2", border: "1px solid #fecaca" }}
+            >
+              <AlertCircle size={14} style={{ color: "#dc2626" }} strokeWidth={2} />
+              <p style={{ fontSize: "12.5px", color: "#dc2626" }}>{apiError}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Fixed footer */}
+        <div className="flex gap-3 px-7 py-5 border-t border-gray-100 flex-shrink-0">
+          <button
+            onClick={onClose}
+            disabled={submitting}
+            className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
+            style={{ fontSize: "13.5px", fontWeight: 600 }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={submitting}
+            className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+          >
+            {submitting ? "Creating…" : "Create Fee Structure"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 
 
@@ -271,7 +850,21 @@ function BatchDetailPanel({
   const [studentsError, setStudentsError]     = useState<string | null>(null);
   const [showAllStudents, setShowAllStudents] = useState(false);
 
+  // Fee structure
+  const [feeStructure, setFeeStructure]         = useState<FeeStructureRecord | null | undefined>(undefined);
+  const [loadingFee, setLoadingFee]             = useState(true);
+  const [showFeeModal, setShowFeeModal]         = useState(false);
+
   const PREVIEW_LIMIT = 5;
+
+  // Load fee structure for this batch
+  useEffect(() => {
+    setLoadingFee(true);
+    getFeeStructureForBatchApi(batch.id)
+      .then(setFeeStructure)
+      .catch(() => setFeeStructure(null))
+      .finally(() => setLoadingFee(false));
+  }, [batch.id]);
 
   // Load first 5 students on mount
   useEffect(() => {
@@ -399,6 +992,128 @@ function BatchDetailPanel({
                 )}
               </div>
 
+{/* Fee Structure */}
+              <div className="px-6 py-4 border-b border-gray-50">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-gray-400 uppercase" style={{ fontSize: "10px", fontWeight: 600, letterSpacing: "0.08em" }}>
+                    Fee Structure
+                  </p>
+                  {!loadingFee && !feeStructure && (
+                    <button
+                      onClick={() => setShowFeeModal(true)}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-teal-200 text-teal-700 hover:bg-teal-50 transition-all"
+                      style={{ fontSize: "12px", fontWeight: 600 }}
+                    >
+                      <Plus size={12} strokeWidth={2.5} />
+                      Create
+                    </button>
+                  )}
+                </div>
+
+                {loadingFee ? (
+                  <div className="flex items-center gap-2 text-gray-400">
+                    <Loader2 size={14} className="animate-spin" />
+                    <span style={{ fontSize: "13px" }}>Loading…</span>
+                  </div>
+                ) : feeStructure ? (
+                  <div className="rounded-xl border border-gray-100 overflow-hidden">
+                    <div className="px-4 py-3 space-y-2.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-gray-800" style={{ fontSize: "13.5px", fontWeight: 700 }}>
+                            {feeStructure.label}
+                          </p>
+                          <span
+                            className="px-2 py-0.5 rounded-full mt-1 inline-block"
+                            style={{
+                              fontSize: "11px", fontWeight: 600,
+                              color: feeStructure.plan_type === "LUMP_SUM" ? "#2563eb" : feeStructure.plan_type === "FIXED_INSTALLMENTS" ? "#7c3aed" : "#d97706",
+                              backgroundColor: feeStructure.plan_type === "LUMP_SUM" ? "#eff6ff" : feeStructure.plan_type === "FIXED_INSTALLMENTS" ? "#f5f3ff" : "#fffbeb",
+                            }}
+                          >
+                            {feeStructure.plan_type === "LUMP_SUM"
+                              ? "Lump Sum"
+                              : feeStructure.plan_type === "FIXED_INSTALLMENTS"
+                              ? "Fixed Installments"
+                              : "Custom Installments"}
+                          </span>
+                        </div>
+                        <p className="text-gray-900 flex-shrink-0" style={{ fontSize: "16px", fontWeight: 800, letterSpacing: "-0.02em" }}>
+                          ₹{Number(feeStructure.total_amount).toLocaleString("en-IN")}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-400" style={{ fontSize: "12px" }}>Final due</span>
+                        <span className="text-gray-700" style={{ fontSize: "12.5px", fontWeight: 600 }}>
+                          {new Date(feeStructure.final_due_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                        </span>
+                      </div>
+
+                      {feeStructure.late_fee_amount && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-400" style={{ fontSize: "12px" }}>Late fee</span>
+                          <span className="text-gray-700" style={{ fontSize: "12.5px", fontWeight: 600 }}>
+                            {feeStructure.late_fee_type === "PERCENT"
+                              ? `${feeStructure.late_fee_amount}%`
+                              : `₹${Number(feeStructure.late_fee_amount).toLocaleString("en-IN")}`}{" "}
+                            ({feeStructure.late_fee_type === "PERCENT" ? "of outstanding" : "flat"})
+                          </span>
+                        </div>
+                      )}
+
+                      {feeStructure.require_advance && (
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <CheckCircle2 size={12} style={{ color: "#0d9488" }} strokeWidth={2.5} />
+                          <span className="text-teal-700" style={{ fontSize: "12px", fontWeight: 500 }}>
+                            Advance payment required
+                          </span>
+                        </div>
+                      )}
+
+                      {feeStructure.plan_type === "FIXED_INSTALLMENTS" && feeStructure.installments.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-gray-50 space-y-1">
+                          <p className="text-gray-400" style={{ fontSize: "11px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                            Installments
+                          </p>
+                          {feeStructure.installments.map((inst) => (
+                            <div key={inst.id} className="flex items-center justify-between">
+                              <span className="text-gray-500" style={{ fontSize: "12px" }}>
+                                #{inst.installment_number}
+                              </span>
+                              <div className="text-right">
+                                <span className="text-gray-700" style={{ fontSize: "12.5px", fontWeight: 600 }}>
+                                  ₹{Number(inst.amount).toLocaleString("en-IN")}
+                                </span>
+                                <span className="text-gray-400 ml-2" style={{ fontSize: "11.5px" }}>
+                                  due {new Date(inst.due_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    className="py-5 flex flex-col items-center justify-center rounded-xl"
+                    style={{ backgroundColor: "#f9fafb", border: "1px dashed #e5e7eb" }}
+                  >
+                    <DollarSign size={22} className="text-gray-300 mb-1.5" strokeWidth={1.5} />
+                    <p className="text-gray-400" style={{ fontSize: "13px" }}>No fee structure yet</p>
+                    <button
+                      onClick={() => setShowFeeModal(true)}
+                      className="mt-2 px-4 py-1.5 rounded-lg text-white hover:opacity-90 transition-all"
+                      style={{ fontSize: "12.5px", fontWeight: 600, backgroundColor: "#0d9488" }}
+                    >
+                      Create Fee Structure
+                    </button>
+                  </div>
+                )}
+              </div>
+
+
               {/* Batch Strength */}
               <div className="px-6 py-4 border-b border-gray-50">
                 <p className="text-gray-400 uppercase mb-3" style={{ fontSize: "10px", fontWeight: 600, letterSpacing: "0.08em" }}>
@@ -525,6 +1240,19 @@ function BatchDetailPanel({
                 Edit Batch
               </button>
             </div>
+
+            {/* Fee Structure Modal */}
+            {showFeeModal && (
+              <CreateFeeStructureModal
+                batchId={batch.id}
+                batchName={batch.name}
+                onClose={() => setShowFeeModal(false)}
+                onCreated={(structure) => {
+                  setFeeStructure(structure);
+                  setShowFeeModal(false);
+                }}
+              />
+            )}
           </>
         )}
       </div>

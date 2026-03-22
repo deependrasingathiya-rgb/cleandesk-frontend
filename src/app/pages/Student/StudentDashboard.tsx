@@ -15,7 +15,13 @@ import {
   Sun,
   Umbrella,
   ChevronRight,
+  DollarSign,
+  AlertTriangle,
 } from "lucide-react";
+import {
+  fetchOwnFeeRecordApi,
+  type StudentOwnFeeRecord,
+} from "../../../Lib/api/student-fee-self";
 import {
   fetchStudentDashboard,
   type StudentDashboardData,
@@ -233,13 +239,22 @@ export function StudentDashboard() {
   const [data, setData] = useState<StudentDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [feeRecord, setFeeRecord]   = useState<StudentOwnFeeRecord | null | undefined>(undefined);
+  const [feeLoading, setFeeLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setFeeLoading(true);
+
     fetchStudentDashboard()
       .then((d) => { if (!cancelled) { setData(d); setLoading(false); } })
       .catch((err) => { if (!cancelled) { setError(err.message ?? "Failed to load dashboard"); setLoading(false); } });
+
+    fetchOwnFeeRecordApi()
+      .then((rec) => { if (!cancelled) { setFeeRecord(rec); setFeeLoading(false); } })
+      .catch(() => { if (!cancelled) { setFeeRecord(null); setFeeLoading(false); } });
+
     return () => { cancelled = true; };
   }, []);
 
@@ -462,6 +477,148 @@ export function StudentDashboard() {
           </div>
         </div>
       </div>
+
+
+{/* ── Fee Summary Card ── */}
+      {(feeLoading || feeRecord !== null) && (() => {
+        // Determine next due installment — first installment whose due_date >= today
+        const today = new Date().toISOString().split("T")[0];
+        const nextInstallment = feeRecord?.installments
+          ?.filter((i) => i.due_date >= today)
+          .sort((a, b) => a.due_date.localeCompare(b.due_date))[0] ?? null;
+
+        const statusConfig: Record<string, { color: string; bg: string; label: string }> = {
+          UNPAID:         { color: "#dc2626", bg: "#fef2f2",  label: "Unpaid"         },
+          PARTIALLY_PAID: { color: "#d97706", bg: "#fffbeb",  label: "Partially Paid" },
+          PAID:           { color: "#16a34a", bg: "#f0fdf4",  label: "Paid"           },
+          OVERDUE:        { color: "#9333ea", bg: "#fdf4ff",  label: "Overdue"        },
+        };
+        const sc = feeRecord ? (statusConfig[feeRecord.fee_status] ?? statusConfig["UNPAID"]) : null;
+
+        return (
+          <div
+            className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6 sm:mb-8 hover:shadow-md hover:border-teal-100 transition-all"
+            onClick={() => navigate("/student/fee")}
+            style={{ cursor: "pointer" }}
+          >
+            {/* Header row */}
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <p className="text-gray-400 uppercase" style={{ fontSize: "10px", fontWeight: 600, letterSpacing: "0.08em" }}>
+                  Fee Summary
+                </p>
+                {feeLoading ? (
+                  <div className="h-7 w-24 bg-gray-100 rounded-lg animate-pulse mt-1" />
+                ) : feeRecord ? (
+                  <div className="flex items-center gap-2 mt-1">
+                    <p className="text-gray-900" style={{ fontSize: "20px", fontWeight: 750, letterSpacing: "-0.02em", lineHeight: 1 }}>
+                      ₹{Number(feeRecord.outstanding_balance).toLocaleString("en-IN")}
+                    </p>
+                    <span style={{ fontSize: "11.5px", color: "#9ca3af", fontWeight: 400 }}>outstanding</span>
+                  </div>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-2">
+                {!feeLoading && feeRecord && sc && (
+                  <span
+                    className="px-2.5 py-0.5 rounded-full"
+                    style={{ fontSize: "11.5px", fontWeight: 700, color: sc.color, backgroundColor: sc.bg }}
+                  >
+                    {sc.label}
+                  </span>
+                )}
+                <div
+                  className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
+                  style={{ backgroundColor: "#eff6ff" }}
+                >
+                  <DollarSign size={18} style={{ color: "#2563eb" }} strokeWidth={2} />
+                </div>
+              </div>
+            </div>
+
+            {/* Stats row */}
+            {feeLoading ? (
+              <div className="flex gap-6 pt-4 border-t border-gray-50">
+                {[1,2,3].map((i) => (
+                  <div key={i} className="h-10 w-20 bg-gray-100 rounded-lg animate-pulse" />
+                ))}
+              </div>
+            ) : feeRecord ? (
+              <>
+                <div className="flex items-center gap-5 pt-4 border-t border-gray-50 flex-wrap">
+                  <div>
+                    <p className="text-gray-900" style={{ fontSize: "15px", fontWeight: 700 }}>
+                      ₹{Number(feeRecord.total_payable).toLocaleString("en-IN")}
+                    </p>
+                    <p className="text-gray-400" style={{ fontSize: "11.5px" }}>Total payable</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-900" style={{ fontSize: "15px", fontWeight: 700, color: "#16a34a" }}>
+                      ₹{Number(feeRecord.total_collected).toLocaleString("en-IN")}
+                    </p>
+                    <p className="text-gray-400" style={{ fontSize: "11.5px" }}>Paid so far</p>
+                  </div>
+
+                  {/* Next due (installment-based) */}
+                  {nextInstallment && (
+                    <div>
+                      <p style={{ fontSize: "15px", fontWeight: 700, color: nextInstallment.due_date < today ? "#dc2626" : "#d97706" }}>
+                        ₹{Number(nextInstallment.amount).toLocaleString("en-IN")}
+                      </p>
+                      <p className="text-gray-400" style={{ fontSize: "11.5px" }}>
+                        Due {new Date(nextInstallment.due_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Final due date */}
+                  <div className="ml-auto">
+                    <p className="text-gray-400" style={{ fontSize: "11px", textAlign: "right" }}>Final due date</p>
+                    <p
+                      style={{
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        color: feeRecord.final_due_date < today && feeRecord.fee_status !== "PAID"
+                          ? "#dc2626" : "#374151",
+                        textAlign: "right",
+                      }}
+                    >
+                      {new Date(feeRecord.final_due_date).toLocaleDateString("en-IN", {
+                        day: "numeric", month: "short", year: "numeric",
+                      })}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                {feeRecord.total_payable > 0 && (
+                  <div className="mt-4">
+                    <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: "#f3f4f6" }}>
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{
+                          width: `${Math.min(100, Math.round((feeRecord.total_collected / feeRecord.total_payable) * 100))}%`,
+                          backgroundColor: feeRecord.fee_status === "PAID" ? "#16a34a" : "#0d9488",
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : null}
+
+            {/* "View details" hint */}
+            {!feeLoading && feeRecord && (
+              <div className="flex items-center justify-end mt-3 gap-1">
+                <span className="text-teal-600" style={{ fontSize: "12px", fontWeight: 500 }}>View fee details</span>
+                <ChevronRight size={13} style={{ color: "#0d9488" }} strokeWidth={2.5} />
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+
 
       {/* ── Two-Column Lower Layout ── */}
       <div className="flex flex-col lg:flex-row gap-5 lg:gap-6">

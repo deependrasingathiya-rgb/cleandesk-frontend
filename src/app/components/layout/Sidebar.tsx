@@ -17,6 +17,7 @@ import {
   Star,
   TrendingUp,
   LogOut,
+  Wallet,
 } from "lucide-react";
 import { logout, getRoleLabel, getSession, ROLES, type RoleId } from "../../auth";
 import { useSidebarCollapsed } from "./SidebarContext";
@@ -44,6 +45,7 @@ const adminNavItems: NavItemDef[] = [
   { label: "Students",        icon: UserCheck,       path: "/students" },
   { label: "Tests",           icon: ClipboardList,   path: "/tests" },
   { label: "Attendance",      icon: CheckSquare,     path: "/attendance" },
+  { label: "Fee Management",  icon: Wallet,          path: "/fee-management" },
   { label: "Announcements",   icon: Megaphone,       path: "/announcements" },
   { label: "Study Materials", icon: BookOpen,        path: "/study-materials" },
 ];
@@ -58,21 +60,23 @@ const teacherNavItems: NavItemDef[] = [
 ];
 
 const managementNavItems: NavItemDef[] = [
-  { label: "Dashboard",      icon: LayoutDashboard, path: "/management" },
-  { label: "People",         icon: Users,           path: "/management/people" },
-  { label: "Batches",        icon: Users2,          path: "/management/batches" },
-  { label: "Students",       icon: UserCheck,       path: "/management/students" },
-  { label: "Tests",          icon: ClipboardList,   path: "/management/tests" },
-  { label: "Marks",          icon: Star,            path: "/management/marks" },
-  { label: "Attendance",     icon: CheckSquare,     path: "/management/attendance" },
-  { label: "Study Material", icon: BookOpen,        path: "/management/study-materials" },
-  { label: "Announcements",  icon: Megaphone,       path: "/management/announcements" },
+  { label: "Dashboard",       icon: LayoutDashboard, path: "/management" },
+  { label: "People",          icon: Users,           path: "/management/people" },
+  { label: "Batches",         icon: Users2,          path: "/management/batches" },
+  { label: "Students",        icon: UserCheck,       path: "/management/students" },
+  { label: "Tests",           icon: ClipboardList,   path: "/management/tests" },
+  { label: "Marks",           icon: Star,            path: "/management/marks" },
+  { label: "Attendance",      icon: CheckSquare,     path: "/management/attendance" },
+  { label: "Fee Management",  icon: Wallet,          path: "/management/fee-management" },
+  { label: "Study Material",  icon: BookOpen,        path: "/management/study-materials" },
+  { label: "Announcements",   icon: Megaphone,       path: "/management/announcements" },
 ];
 
 const studentNavItems: NavItemDef[] = [
   { label: "Dashboard",      icon: LayoutDashboard, path: "/student" },
   { label: "Attendance",     icon: CheckSquare,     path: "/student/attendance" },
   { label: "Results",        icon: Star,            path: "/student/results" },
+  { label: "My Fee",         icon: Wallet,          path: "/student/fee" },
   { label: "Study Material", icon: BookOpen,        path: "/student/study-materials" },
   { label: "Announcements",  icon: Megaphone,       path: "/student/announcements" },
 ];
@@ -117,8 +121,8 @@ const ROLE_CONFIG: {
 } = {
   admin: {
     navItems: adminNavItems,
-    mainEnd: 8,
-    secondaryEnd: 10,
+    mainEnd: 9,
+    secondaryEnd: 11,
     menuLabel: "Main Menu",
     accountLabel: "Resources",
     portalLabel: "Institute Portal",
@@ -137,8 +141,8 @@ const ROLE_CONFIG: {
   },
   management: {
     navItems: managementNavItems,
-    mainEnd: 9,
-    secondaryEnd: 9,
+    mainEnd: 10,
+    secondaryEnd: 10,
     menuLabel: "Management",
     accountLabel: "Account",
     portalLabel: "Management Portal",
@@ -147,8 +151,8 @@ const ROLE_CONFIG: {
   },
   student: {
     navItems: studentNavItems,
-    mainEnd: 5,
-    secondaryEnd: 5,
+    mainEnd: 6,
+    secondaryEnd: 6,
     menuLabel: "My Portal",
     accountLabel: "Account",
     portalLabel: "Student Portal",

@@ -10,6 +10,12 @@ import {
   type StudentRow,
   type StudentStats,
 } from "../../Lib/api/students";
+import {
+  getFeeStructureForBatchApi as getBatchFeeStructureApi,
+  getStudentFeeRecordApi,
+  recordAdvancePaymentApi,
+  type FeeStructureRecord,
+} from "../../Lib/api/fee-structure";
 import { fetchAcademicYearsApi, fetchClassBatchesByYearApi } from "../../Lib/api/class-batches";
 import {
   Search,
@@ -30,6 +36,9 @@ import {
   Copy,
   Check,
   ExternalLink,
+  DollarSign,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -82,11 +91,14 @@ type EnrollForm = {
   mobile: string;
   alternateMobile: string;
   board: EducationBoard | "";
+  discountAmount: string;
+  discountReason: string;
 };
 
 const emptyForm: EnrollForm = {
   name: "", fatherName: "", batch: "", academicYearId: "",
   school: "", mobile: "", alternateMobile: "", board: "",
+  discountAmount: "", discountReason: "",
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -148,6 +160,23 @@ function EnrollStudentForm({ onBack, onSubmit }: {
   const [batches, setBatches] = useState<{ id: string; name: string }[]>([]);
   const [loadingData, setLoadingData] = useState(true);
 
+  // Fee structure for the selected batch
+  const [batchFeeStructure, setBatchFeeStructure] = useState<FeeStructureRecord | null | undefined>(undefined);
+  const [loadingFee, setLoadingFee] = useState(false);
+
+  // Advance payment (shown after enrollment when require_advance = true)
+  const [advanceStep, setAdvanceStep] = useState(false);
+  const [feeRecordId, setFeeRecordId] = useState<string | null>(null);
+  const [advanceAmount, setAdvanceAmount] = useState("");
+  const [advanceMode, setAdvanceMode] = useState("");
+  const [advanceDate, setAdvanceDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [advanceRef, setAdvanceRef] = useState("");
+  const [advanceNote, setAdvanceNote] = useState("");
+  const [advanceErrors, setAdvanceErrors] = useState<Record<string, string>>({});
+  const [submittingPayment, setSubmittingPayment] = useState(false);
+  const [paymentDone, setPaymentDone] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+
   // Load academic years once on mount; auto-select the active one
   useEffect(() => {
     fetchAcademicYearsApi()
@@ -165,6 +194,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
     if (!form.academicYearId) {
       setBatches([]);
       setForm((f) => ({ ...f, batch: "" }));
+      setBatchFeeStructure(undefined);
       return;
     }
     fetchClassBatchesByYearApi(form.academicYearId)
@@ -178,6 +208,19 @@ function EnrollStudentForm({ onBack, onSubmit }: {
       })
       .catch(() => setApiError("Failed to load batches for the selected year."));
   }, [form.academicYearId]);
+
+  // Fetch fee structure whenever the selected batch changes
+  useEffect(() => {
+    if (!form.batch) {
+      setBatchFeeStructure(undefined);
+      return;
+    }
+    setLoadingFee(true);
+    getBatchFeeStructureApi(form.batch)
+      .then(setBatchFeeStructure)
+      .catch(() => setBatchFeeStructure(null))
+      .finally(() => setLoadingFee(false));
+  }, [form.batch]);
 
   const set = (key: keyof EnrollForm) => (val: string) =>
     setForm((f) => ({ ...f, [key]: val }));
@@ -193,6 +236,15 @@ function EnrollStudentForm({ onBack, onSubmit }: {
       e.alternateMobile = "Enter a valid 10-digit number.";
     if (!form.academicYearId) e.academicYearId = "Academic year is required.";
     if (!form.batch) e.batch = "Batch selection is required.";
+
+    const discountNum = parseFloat(form.discountAmount) || 0;
+    if (form.discountAmount !== "" && (isNaN(Number(form.discountAmount)) || Number(form.discountAmount) < 0))
+      e.discountAmount = "Discount must be a positive number.";
+    if (batchFeeStructure && discountNum > Number(batchFeeStructure.total_amount))
+      e.discountAmount = "Discount cannot exceed the total fee.";
+    if (discountNum > 0 && !form.discountReason.trim())
+      e.discountReason = "Reason is required when a discount is applied.";
+
     return e;
   }
 
@@ -202,6 +254,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
     setSubmitting(true);
     setApiError(null);
     try {
+      const discountNum = parseFloat(form.discountAmount) || 0;
       const result = await enrollStudentApi({
         full_name: form.name.trim(),
         father_name: form.fatherName.trim() || undefined,
@@ -211,9 +264,29 @@ function EnrollStudentForm({ onBack, onSubmit }: {
         education_board: form.board,
         academic_year_id: form.academicYearId,
         class_batch_id: form.batch || undefined,
+        ...(discountNum > 0 && {
+          discount_amount: discountNum,
+          discount_reason: form.discountReason.trim(),
+        }),
       });
       setCreatedStudent(result);
       onSubmit(form.name, result.login_identifier, result.temporary_password);
+
+      // If batch requires advance payment, fetch the fee record before showing success
+      if (batchFeeStructure?.require_advance) {
+        try {
+          const feeRec = await getStudentFeeRecordApi(result.id);
+          if (feeRec) {
+            setFeeRecordId(feeRec.id);
+            setAdvanceAmount(String(feeRec.total_payable));
+            setAdvanceStep(true);
+            return; // Don't show success screen yet — show advance payment first
+          }
+        } catch {
+          // If fee record lookup fails, fall through to normal success screen
+        }
+      }
+
       setSubmitted(true);
     } catch (err: any) {
       setApiError(err.message ?? "Enrollment failed. Please try again.");
@@ -230,6 +303,175 @@ function EnrollStudentForm({ onBack, onSubmit }: {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
+  }
+
+  // ── Advance Payment Step ──────────────────────────────────────────────────
+  if (advanceStep && createdStudent && feeRecordId && !paymentDone) {
+    const totalPayable = batchFeeStructure ? Number(batchFeeStructure.total_amount) - (parseFloat(form.discountAmount) || 0) : 0;
+
+    async function handlePaymentSubmit() {
+      const e: Record<string, string> = {};
+      if (!advanceAmount || isNaN(Number(advanceAmount)) || Number(advanceAmount) <= 0)
+        e.advanceAmount = "Amount is required.";
+      if (totalPayable > 0 && Number(advanceAmount) > totalPayable)
+        e.advanceAmount = `Cannot exceed total payable ₹${totalPayable.toLocaleString("en-IN")}.`;
+      if (!advanceMode) e.advanceMode = "Payment mode is required.";
+      if (!advanceDate) e.advanceDate = "Payment date is required.";
+      if (Object.keys(e).length > 0) { setAdvanceErrors(e); return; }
+
+      setSubmittingPayment(true);
+      setPaymentError(null);
+      try {
+        await recordAdvancePaymentApi(feeRecordId!, {
+          amount: Number(advanceAmount),
+          payment_date: advanceDate,
+          payment_mode: advanceMode,
+          payment_reference: advanceRef.trim() || undefined,
+          note: advanceNote.trim() || undefined,
+        });
+        setPaymentDone(true);
+      } catch (err: any) {
+        setPaymentError(err.message ?? "Failed to record payment.");
+      } finally {
+        setSubmittingPayment(false);
+      }
+    }
+
+    if (paymentDone) {
+      return (
+        <div className="p-8 max-w-[600px] mx-auto flex flex-col items-center justify-center" style={{ minHeight: "60vh" }}>
+          <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: "#f0fdfa" }}>
+            <CheckCircle2 size={32} color="#0d9488" strokeWidth={2} />
+          </div>
+          <h2 className="text-gray-900 mb-1" style={{ fontSize: "20px", fontWeight: 700 }}>All Done!</h2>
+          <p className="text-gray-400 text-center mb-6" style={{ fontSize: "14px" }}>
+            {form.name} has been enrolled and the advance payment has been recorded.
+          </p>
+          <button
+            onClick={() => setSubmitted(true)}
+            className="px-6 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
+            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+          >
+            View Credentials
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="p-8 max-w-[600px] mx-auto">
+        <div
+          className="flex items-start gap-3 px-4 py-3 rounded-xl mb-6"
+          style={{ backgroundColor: "#fffbeb", border: "1px solid #fde68a" }}
+        >
+          <AlertTriangle size={15} style={{ color: "#d97706", marginTop: "1px" }} strokeWidth={2} />
+          <div>
+            <p className="text-amber-800" style={{ fontSize: "13.5px", fontWeight: 700 }}>
+              Advance Payment Required
+            </p>
+            <p className="text-amber-700 mt-0.5" style={{ fontSize: "12.5px" }}>
+              {form.name} has been enrolled. This batch requires an advance payment before the enrollment is fully activated. Record it now or skip.
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
+          <h2 className="text-gray-900" style={{ fontSize: "17px", fontWeight: 700, letterSpacing: "-0.01em" }}>
+            Record Advance Payment
+          </h2>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <FieldLabel required>Amount (₹)</FieldLabel>
+              <TextInput
+                type="number"
+                value={advanceAmount}
+                onChange={(v) => { setAdvanceAmount(v); setAdvanceErrors((e) => { const c = { ...e }; delete c.advanceAmount; return c; }); }}
+                placeholder="e.g. 5000"
+              />
+              {advanceErrors.advanceAmount && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{advanceErrors.advanceAmount}</p>}
+            </div>
+
+            <div>
+              <FieldLabel required>Payment Mode</FieldLabel>
+              <select
+                value={advanceMode}
+                onChange={(e) => { setAdvanceMode(e.target.value); setAdvanceErrors((er) => { const c = { ...er }; delete c.advanceMode; return c; }); }}
+                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white"
+                style={{ fontSize: "13.5px", color: advanceMode ? "#1f2937" : "#d1d5db" }}
+              >
+                <option value="">Select mode</option>
+                {["CASH", "UPI", "BANK_TRANSFER", "CHEQUE", "CARD", "OTHER"].map((m) => (
+                  <option key={m} value={m}>{m.replace("_", " ")}</option>
+                ))}
+              </select>
+              {advanceErrors.advanceMode && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{advanceErrors.advanceMode}</p>}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <FieldLabel required>Payment Date</FieldLabel>
+              <input
+                type="date"
+                value={advanceDate}
+                onChange={(e) => { setAdvanceDate(e.target.value); setAdvanceErrors((er) => { const c = { ...er }; delete c.advanceDate; return c; }); }}
+                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white"
+                style={{ fontSize: "13.5px" }}
+              />
+              {advanceErrors.advanceDate && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{advanceErrors.advanceDate}</p>}
+            </div>
+
+            <div>
+              <FieldLabel>Reference / UTR</FieldLabel>
+              <TextInput
+                value={advanceRef}
+                onChange={setAdvanceRef}
+                placeholder="Optional"
+              />
+            </div>
+          </div>
+
+          <div>
+            <FieldLabel>Note</FieldLabel>
+            <TextInput
+              value={advanceNote}
+              onChange={setAdvanceNote}
+              placeholder="Optional note"
+            />
+          </div>
+
+          {paymentError && (
+            <div
+              className="flex items-center gap-2 px-3 py-3 rounded-xl"
+              style={{ backgroundColor: "#fef2f2", border: "1px solid #fecaca" }}
+            >
+              <AlertCircle size={14} style={{ color: "#dc2626" }} strokeWidth={2} />
+              <p style={{ fontSize: "12.5px", color: "#dc2626" }}>{paymentError}</p>
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={handlePaymentSubmit}
+              disabled={submittingPayment}
+              className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+              style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+            >
+              {submittingPayment ? "Recording…" : "Record Payment"}
+            </button>
+            <button
+              onClick={() => setSubmitted(true)}
+              disabled={submittingPayment}
+              className="px-5 py-2.5 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 transition-all disabled:opacity-50"
+              style={{ fontSize: "13.5px", fontWeight: 500 }}
+            >
+              Skip for now
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (submitted && createdStudent) {
@@ -400,6 +642,189 @@ function EnrollStudentForm({ onBack, onSubmit }: {
             {errors.batch && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.batch}</p>}
           </div>
         </div>
+
+        {/* Fee Structure Preview — shown once a batch is selected */}
+        {form.batch && (
+          <div className="mb-6">
+            {loadingFee ? (
+              <div
+                className="flex items-center gap-2 px-4 py-3 rounded-xl border border-gray-100"
+                style={{ backgroundColor: "#f9fafb" }}
+              >
+                <Loader2 size={14} className="animate-spin text-gray-400" />
+                <span className="text-gray-400" style={{ fontSize: "13px" }}>
+                  Loading fee structure…
+                </span>
+              </div>
+            ) : batchFeeStructure ? (
+              <div
+                className="rounded-xl border border-gray-100 overflow-hidden"
+                style={{ backgroundColor: "#f9fafb" }}
+              >
+                <div className="px-4 py-2.5 border-b border-gray-100 flex items-center gap-2">
+                  <DollarSign size={13} style={{ color: "#0d9488" }} strokeWidth={2} />
+                  <p className="text-gray-500 uppercase" style={{ fontSize: "10.5px", fontWeight: 700, letterSpacing: "0.07em" }}>
+                    Fee Structure
+                  </p>
+                </div>
+                <div className="px-4 py-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-gray-800" style={{ fontSize: "13.5px", fontWeight: 700 }}>
+                      {batchFeeStructure.label}
+                    </p>
+                    <p className="text-gray-900" style={{ fontSize: "15px", fontWeight: 800, letterSpacing: "-0.02em" }}>
+                      ₹{Number(batchFeeStructure.total_amount).toLocaleString("en-IN")}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span
+                      className="px-2 py-0.5 rounded-full"
+                      style={{
+                        fontSize: "11px", fontWeight: 600,
+                        color: batchFeeStructure.plan_type === "LUMP_SUM" ? "#2563eb" : batchFeeStructure.plan_type === "FIXED_INSTALLMENTS" ? "#7c3aed" : "#d97706",
+                        backgroundColor: batchFeeStructure.plan_type === "LUMP_SUM" ? "#eff6ff" : batchFeeStructure.plan_type === "FIXED_INSTALLMENTS" ? "#f5f3ff" : "#fffbeb",
+                      }}
+                    >
+                      {batchFeeStructure.plan_type === "LUMP_SUM" ? "Lump Sum" : batchFeeStructure.plan_type === "FIXED_INSTALLMENTS" ? "Fixed Installments" : "Custom Installments"}
+                    </span>
+                    <span className="text-gray-400" style={{ fontSize: "12px" }}>
+                      · Due{" "}
+                      {new Date(batchFeeStructure.final_due_date).toLocaleDateString("en-IN", {
+                        day: "numeric", month: "short", year: "numeric",
+                      })}
+                    </span>
+                    {batchFeeStructure.require_advance && (
+                      <span className="text-teal-600" style={{ fontSize: "12px", fontWeight: 500 }}>
+                        · Advance required
+                      </span>
+                    )}
+                  </div>
+                  {batchFeeStructure.plan_type === "FIXED_INSTALLMENTS" && batchFeeStructure.installments.length > 0 && (
+                    <div className="pt-2 mt-1 border-t border-gray-100 space-y-1">
+                      {batchFeeStructure.installments.map((inst) => (
+                        <div key={inst.id} className="flex items-center justify-between">
+                          <span className="text-gray-400" style={{ fontSize: "12px" }}>
+                            Instalment #{inst.installment_number}
+                          </span>
+                          <span className="text-gray-600" style={{ fontSize: "12.5px", fontWeight: 600 }}>
+                            ₹{Number(inst.amount).toLocaleString("en-IN")}
+                            <span className="text-gray-400 font-normal ml-1.5" style={{ fontSize: "11.5px" }}>
+                              due {new Date(inst.due_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                            </span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : batchFeeStructure === null ? (
+              <div
+                className="flex items-center gap-2.5 px-4 py-3 rounded-xl border"
+                style={{ backgroundColor: "#fffbeb", borderColor: "#fde68a" }}
+              >
+                <AlertTriangle size={14} style={{ color: "#d97706" }} strokeWidth={2} />
+                <p className="text-amber-700" style={{ fontSize: "13px" }}>
+                  No fee structure set for this batch. The student can still be enrolled, but no fee record will be auto-created.
+                </p>
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        {/* Discount + Total Payable — only shown when a fee structure exists */}
+        {batchFeeStructure && (
+          <div className="mb-6 space-y-4">
+            <div className="grid grid-cols-2 gap-5">
+              <div>
+                <FieldLabel>Discount Amount (₹)</FieldLabel>
+                <TextInput
+                  type="number"
+                  value={form.discountAmount}
+                  onChange={(v) => {
+                    set("discountAmount")(v);
+                    setErrors((prev) => ({ ...prev, discountAmount: undefined }));
+                  }}
+                  placeholder="e.g. 2000"
+                />
+                {errors.discountAmount && (
+                  <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.discountAmount}</p>
+                )}
+              </div>
+              <div>
+                <FieldLabel>
+                  Discount Reason
+                  {(parseFloat(form.discountAmount) || 0) > 0 && (
+                    <span className="text-red-500 ml-0.5">*</span>
+                  )}
+                </FieldLabel>
+                <TextInput
+                  value={form.discountReason}
+                  onChange={(v) => {
+                    set("discountReason")(v);
+                    setErrors((prev) => ({ ...prev, discountReason: undefined }));
+                  }}
+                  placeholder="e.g. Merit scholarship"
+                />
+                {errors.discountReason && (
+                  <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.discountReason}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Live Total Payable preview */}
+            {(() => {
+              const total = Number(batchFeeStructure.total_amount);
+              const discount = parseFloat(form.discountAmount) || 0;
+              const payable = Math.max(0, total - discount);
+              const hasDiscount = discount > 0 && discount <= total;
+              return (
+                <div
+                  className="rounded-xl px-4 py-3 flex items-center justify-between"
+                  style={{
+                    backgroundColor: hasDiscount ? "#f0fdfa" : "#f9fafb",
+                    border: `1px solid ${hasDiscount ? "#ccfbf1" : "#f3f4f6"}`,
+                  }}
+                >
+                  <div className="flex items-center gap-4 text-gray-500" style={{ fontSize: "13px" }}>
+                    <span>
+                      Original:{" "}
+                      <span className="text-gray-700 font-semibold">
+                        ₹{total.toLocaleString("en-IN")}
+                      </span>
+                    </span>
+                    {hasDiscount && (
+                      <>
+                        <span className="text-gray-300">−</span>
+                        <span>
+                          Discount:{" "}
+                          <span style={{ color: "#dc2626", fontWeight: 600 }}>
+                            ₹{discount.toLocaleString("en-IN")}
+                          </span>
+                        </span>
+                      </>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <p className="text-gray-400" style={{ fontSize: "10.5px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                      Total Payable
+                    </p>
+                    <p
+                      style={{
+                        fontSize: "18px",
+                        fontWeight: 800,
+                        letterSpacing: "-0.02em",
+                        color: hasDiscount ? "#0d9488" : "#374151",
+                      }}
+                    >
+                      ₹{payable.toLocaleString("en-IN")}
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
 
         {apiError && (
           <p className="text-red-500 mb-4" style={{ fontSize: "12.5px" }}>{apiError}</p>

@@ -1,7 +1,7 @@
 // src/app/components/layout/Sidebar.tsx
 
 import { NavLink, useLocation } from "react-router";
-import logoSrc from "../../../assets/Logo.png";
+import logoSrc from "../../../assets/icononlylogo.png";
 import {
   LayoutDashboard,
   CalendarDays,

@@ -4,7 +4,7 @@ import { getToken } from "../../app/auth";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type PlanType = "LUMP_SUM" | "FIXED_INSTALLMENTS" | "CUSTOM_INSTALLMENTS";
+// (PlanType removed as it's replaced by independent toggles)
 
 export type LateFeeType = "FLAT" | "PERCENT";
 
@@ -18,7 +18,9 @@ export type CreateFeeStructurePayload = {
   class_batch_id: string;
   label: string;
   total_amount: number;
-  plan_type: PlanType;
+  lump_sum_enabled: boolean;
+  installments_enabled: boolean;
+  lump_sum_discount?: number | null;
   final_due_date: string; // YYYY-MM-DD
   late_fee_amount?: number | null;
   late_fee_type?: LateFeeType | null;
@@ -31,7 +33,9 @@ export type FeeStructureRecord = {
   class_batch_id: string;
   label: string;
   total_amount: number;
-  plan_type: PlanType;
+  lump_sum_enabled: boolean;
+  installments_enabled: boolean;
+  lump_sum_discount: number | null;
   final_due_date: string;
   late_fee_amount: number | null;
   late_fee_type: LateFeeType | null;

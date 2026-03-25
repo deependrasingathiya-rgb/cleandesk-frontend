@@ -28,6 +28,7 @@ import { ManagementDashboard } from "./pages/Management/ManagementDashboard";
 import { StudentDashboard } from "./pages/Student/StudentDashboard";
 import { StudentMarks } from "./pages/Student/StudentMarks";
 import { MyFee } from "./pages/Student/MyFee";
+import { Notifications } from "./pages/Notifications";
 import { Login } from "./pages/Login";
 import { clearToken, getToken, parseToken, isTokenExpired, ROLE_ROUTES } from "./auth";
 
@@ -95,6 +96,7 @@ element: createElement(ErrorBoundary, { section: "Attendance", children: createE
       { path: "announcements", Component: Announcements },
       { path: "study-materials", Component: StudyMaterials },
       { path: "fee-management", Component: FeeManagement },
+      { path: "notifications", Component: Notifications },
       { path: "profile", Component: Profile },
     ],
   },
@@ -117,6 +119,7 @@ element: createElement(ErrorBoundary, { section: "Attendance", children: createE
       },
       { path: "announcements", Component: Announcements },
       { path: "study-materials", Component: StudyMaterials },
+      { path: "notifications", Component: Notifications },
       { path: "profile", Component: Profile },
     ],
   },
@@ -138,6 +141,7 @@ element: createElement(ErrorBoundary, { section: "Attendance", children: createE
       { path: "study-materials", Component: StudyMaterials },
       { path: "announcements", Component: Announcements },
       { path: "fee-management", Component: FeeManagement },
+      { path: "notifications", Component: Notifications },
       { path: "profile", Component: Profile },
     ],
   },
@@ -160,6 +164,7 @@ element: createElement(ErrorBoundary, { section: "My Results", children: createE
       { path: "study-materials", Component: StudentStudyMaterialsRoute },
       { path: "announcements", Component: StudentAnnouncementsRoute },
       { path: "fee", Component: MyFee },
+      { path: "notifications", Component: Notifications },
       { path: "profile", Component: Profile },
     ],
   },

@@ -18,6 +18,7 @@ import {
   TrendingUp,
   LogOut,
   Wallet,
+  Bell,
 } from "lucide-react";
 import { logout, getRoleLabel, getSession, ROLES, type RoleId } from "../../auth";
 import { useSidebarCollapsed } from "./SidebarContext";
@@ -48,6 +49,7 @@ const adminNavItems: NavItemDef[] = [
   { label: "Fee Management",  icon: Wallet,          path: "/fee-management" },
   { label: "Announcements",   icon: Megaphone,       path: "/announcements" },
   { label: "Study Materials", icon: BookOpen,        path: "/study-materials" },
+  { label: "Notifications",   icon: Bell,            path: "/notifications" },
 ];
 
 const teacherNavItems: NavItemDef[] = [
@@ -57,6 +59,7 @@ const teacherNavItems: NavItemDef[] = [
   { label: "Tests",           icon: ClipboardList,   path: "/teacher/tests" },
   { label: "Announcements",   icon: Megaphone,       path: "/teacher/announcements" },
   { label: "Study Materials", icon: BookOpen,        path: "/teacher/study-materials" },
+  { label: "Notifications",   icon: Bell,            path: "/teacher/notifications" },
 ];
 
 const managementNavItems: NavItemDef[] = [
@@ -70,6 +73,7 @@ const managementNavItems: NavItemDef[] = [
   { label: "Fee Management",  icon: Wallet,          path: "/management/fee-management" },
   { label: "Study Material",  icon: BookOpen,        path: "/management/study-materials" },
   { label: "Announcements",   icon: Megaphone,       path: "/management/announcements" },
+  { label: "Notifications",   icon: Bell,            path: "/management/notifications" },
 ];
 
 const studentNavItems: NavItemDef[] = [
@@ -79,6 +83,7 @@ const studentNavItems: NavItemDef[] = [
   { label: "My Fee",         icon: Wallet,          path: "/student/fee" },
   { label: "Study Material", icon: BookOpen,        path: "/student/study-materials" },
   { label: "Announcements",  icon: Megaphone,       path: "/student/announcements" },
+  { label: "Notifications",  icon: Bell,            path: "/student/notifications" },
 ];
 
 // ─── Role Type ─────────────────────────────────────────────────────────────────
@@ -122,7 +127,7 @@ const ROLE_CONFIG: {
   admin: {
     navItems: adminNavItems,
     mainEnd: 9,
-    secondaryEnd: 11,
+    secondaryEnd: 12,
     menuLabel: "Main Menu",
     accountLabel: "Resources",
     portalLabel: "Institute Portal",
@@ -132,7 +137,7 @@ const ROLE_CONFIG: {
   teacher: {
     navItems: teacherNavItems,
     mainEnd: 6,
-    secondaryEnd: 6,
+    secondaryEnd: 7,
     menuLabel: "My Menu",
     accountLabel: "Account",
     portalLabel: "Teacher Portal",
@@ -142,7 +147,7 @@ const ROLE_CONFIG: {
   management: {
     navItems: managementNavItems,
     mainEnd: 10,
-    secondaryEnd: 10,
+    secondaryEnd: 11,
     menuLabel: "Management",
     accountLabel: "Account",
     portalLabel: "Management Portal",
@@ -152,7 +157,7 @@ const ROLE_CONFIG: {
   student: {
     navItems: studentNavItems,
     mainEnd: 6,
-    secondaryEnd: 6,
+    secondaryEnd: 7,
     menuLabel: "My Portal",
     accountLabel: "Account",
     portalLabel: "Student Portal",

@@ -286,11 +286,16 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
         const res = await fetch("/api/announcements", { headers: { Authorization: `Bearer ${getToken()}` } });
         const data = await res.json();
         if (!res.ok || !Array.isArray(data.data)) return;
-        const mapped = (data.data as any[]).slice(0, 3).map((a) => {
+        const mapped = (data.data as any[]).slice(0, 5).map((a) => {
           const typeKey = a.announcement_type as string;
-          const style = (TYPE_STYLE as any)[
-            typeKey.charAt(0) + typeKey.slice(1).toLowerCase().replace(/_([a-z])/g, (_: string, c: string) => " " + c.toUpperCase())
-          ] ?? { color: "#6b7280", bg: "#f9fafb" };
+          const DB_TO_DISPLAY: Record<string, string> = {
+            GENERAL: "General", HOLIDAY: "Holiday", TEST: "Test",
+            RESULT: "Result", EVENT: "Event", TRIP: "Trip",
+            EXHIBITION: "Exhibition", PTM: "Parent-Teacher Meet",
+            SCHEDULE_CHANGE: "Schedule Change", EMERGENCY: "Emergency",
+          };
+          const displayType = DB_TO_DISPLAY[typeKey] ?? "General";
+          const style = (TYPE_STYLE as any)[displayType] ?? { color: "#6b7280", bg: "#f9fafb" };
           const d = new Date(a.created_at);
           const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
           return {
@@ -299,7 +304,7 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
             preview: a.message,
             createdBy: a.created_by ?? "—",
             date: `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`,
-            tag: typeKey.charAt(0) + typeKey.slice(1).toLowerCase().replace(/_/g, " "),
+            tag: displayType,
             tagColor: style.color,
             tagBg: style.bg,
           };
@@ -320,7 +325,7 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
 
     const loadNotifications = async () => {
       try {
-        const result = await fetchNotificationsApi({ limit: 10 });
+        const result = await fetchNotificationsApi({ limit: 5 });
         if (isActive) {
           setNotifications(result.notifications);
           setUnreadCount(result.unread_count);
@@ -478,7 +483,7 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
         <div className="col-span-3">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <SectionHeader title="Announcements" actionLabel="View All" onAction={() => navigate(config.announcementsPath)} />
-            <div className="space-y-4">
+            <div className="space-y-4 overflow-y-auto" style={{ maxHeight: "320px" }}>
               {announcements.length === 0 ? (
                 <p className="text-gray-300 text-center py-6" style={{ fontSize: "13px" }}>No announcements yet.</p>
               ) : announcements.map((ann) => (
@@ -513,7 +518,7 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
                 </div>
               )}
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1 overflow-y-auto" style={{ maxHeight: "320px" }}>
               {notifications.length === 0 ? (
                 <p className="text-gray-300 text-center py-6" style={{ fontSize: "13px" }}>No notifications yet.</p>
               ) : (

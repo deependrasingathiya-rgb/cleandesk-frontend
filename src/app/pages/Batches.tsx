@@ -14,7 +14,6 @@ import {
 import {
   createFeeStructureApi,
   getFeeStructureForBatchApi,
-  type PlanType,
   type LateFeeType,
   type InstallmentInput,
   type FeeStructureRecord,
@@ -60,10 +59,12 @@ function getSubjectColor(subject: string) {
 
 // ─── Create Fee Structure Modal ───────────────────────────────────────────────
 
+type FeeCollectionType = "LUMP_SUM" | "INSTALLMENTS" | "BOTH";
+
 type FeeFormState = {
   label: string;
   totalAmount: string;
-  planType: PlanType;
+  feeCollectionType: FeeCollectionType;
   finalDueDate: string;
   lateFeeAmount: string;
   lateFeeType: LateFeeType | "";
@@ -74,7 +75,7 @@ type FeeFormState = {
 const emptyFeeForm: FeeFormState = {
   label: "",
   totalAmount: "",
-  planType: "LUMP_SUM",
+  feeCollectionType: "LUMP_SUM",
   finalDueDate: "",
   lateFeeAmount: "",
   lateFeeType: "",
@@ -106,7 +107,7 @@ function CreateFeeStructureModal({
     0
   );
   const sumMismatch =
-    form.planType === "FIXED_INSTALLMENTS" &&
+    form.feeCollectionType !== "LUMP_SUM" &&
     form.installments.length > 0 &&
     Math.abs(installmentSum - totalAmountNum) > 0.01;
 
@@ -144,8 +145,8 @@ function CreateFeeStructureModal({
     });
   }
 
-  function setPlanType(pt: PlanType) {
-    setForm((f) => ({ ...f, planType: pt, installments: [] }));
+  function setFeeCollectionType(pt: FeeCollectionType) {
+    setForm((f) => ({ ...f, feeCollectionType: pt, installments: [] }));
     setErrors({});
   }
 
@@ -165,7 +166,7 @@ function CreateFeeStructureModal({
     if (!hasLateFeeAmount && hasLateFeeType)
       e.lateFeeAmount = "Enter a late fee amount when a late fee type is selected.";
 
-    if (form.planType === "FIXED_INSTALLMENTS") {
+    if (form.feeCollectionType !== "LUMP_SUM") {
       if (form.installments.length === 0)
         e.installments = "At least one installment row is required.";
       if (form.installments.length > 12)
@@ -196,7 +197,8 @@ function CreateFeeStructureModal({
       class_batch_id: batchId,
       label: form.label.trim(),
       total_amount: Number(form.totalAmount),
-      plan_type: form.planType,
+      lump_sum_enabled: form.feeCollectionType === "LUMP_SUM" || form.feeCollectionType === "BOTH",
+      installments_enabled: form.feeCollectionType === "INSTALLMENTS" || form.feeCollectionType === "BOTH",
       final_due_date: form.finalDueDate,
       require_advance: form.requireAdvance,
     };
@@ -206,7 +208,7 @@ function CreateFeeStructureModal({
       payload.late_fee_type = form.lateFeeType as LateFeeType;
     }
 
-    if (form.planType === "FIXED_INSTALLMENTS") {
+    if (form.feeCollectionType !== "LUMP_SUM") {
       payload.installments = form.installments.map((inst, idx) => ({
         installment_number: idx + 1,
         amount: Number(inst.amount),
@@ -254,7 +256,7 @@ function CreateFeeStructureModal({
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-[600px] flex flex-col"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-[720px] flex flex-col"
         style={{ maxHeight: "92vh" }}
       >
         {/* Fixed header */}
@@ -311,25 +313,25 @@ function CreateFeeStructureModal({
             {errors.totalAmount && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.totalAmount}</p>}
           </div>
 
-          {/* Plan Type */}
+          {/* Fee Collection Type */}
           <div>
             <label className="block text-gray-700 mb-2" style={{ fontSize: "13px", fontWeight: 600 }}>
-              Plan Type <span className="text-red-500">*</span>
+              Fee Collection Type <span className="text-red-500">*</span>
             </label>
             <div className="grid grid-cols-3 gap-2">
               {(
                 [
-                  { value: "LUMP_SUM", label: "Lump Sum", desc: "Single payment by deadline" },
-                  { value: "FIXED_INSTALLMENTS", label: "Fixed Installments", desc: "Set installments for all students" },
-                  { value: "CUSTOM_INSTALLMENTS", label: "Custom Installments", desc: "Plans generated per student" },
-                ] as { value: PlanType; label: string; desc: string }[]
+                  { value: "LUMP_SUM", label: "Lump Sum Only", desc: "Single payment by deadline" },
+                  { value: "INSTALLMENTS", label: "Installments Only", desc: "Fixed installment schedule" },
+                  { value: "BOTH", label: "Both Options", desc: "Student chooses at enrollment" },
+                ] as { value: FeeCollectionType; label: string; desc: string }[]
               ).map((opt) => {
-                const isSelected = form.planType === opt.value;
+                const isSelected = form.feeCollectionType === opt.value;
                 return (
                   <button
                     key={opt.value}
                     type="button"
-                    onClick={() => setPlanType(opt.value)}
+                    onClick={() => setFeeCollectionType(opt.value)}
                     className="flex flex-col items-start p-3 rounded-xl border transition-all text-left"
                     style={{
                       borderColor: isSelected ? "#0d9488" : "#f3f4f6",
@@ -440,7 +442,7 @@ function CreateFeeStructureModal({
           </div>
 
           {/* Fixed Installments — dynamic rows */}
-          {form.planType === "FIXED_INSTALLMENTS" && (
+          {form.feeCollectionType !== "LUMP_SUM" && (
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="text-gray-700" style={{ fontSize: "13px", fontWeight: 600 }}>
@@ -574,18 +576,7 @@ function CreateFeeStructureModal({
             </div>
           )}
 
-          {/* Custom Installments — informational note */}
-          {form.planType === "CUSTOM_INSTALLMENTS" && (
-            <div
-              className="flex items-start gap-3 px-4 py-3 rounded-xl"
-              style={{ backgroundColor: "#eff6ff", border: "1px solid #bfdbfe" }}
-            >
-              <AlertCircle size={15} style={{ color: "#2563eb", marginTop: "1px" }} strokeWidth={2} />
-              <p className="text-blue-700" style={{ fontSize: "13px", lineHeight: 1.6 }}>
-                Installment plans for Custom Installments are generated individually per student at enrollment — no rows need to be entered here.
-              </p>
-            </div>
-          )}
+
 
           <p className="text-gray-400" style={{ fontSize: "11.5px" }}>
             <span className="text-red-400">*</span> Required fields

@@ -853,7 +853,7 @@ export function Shell() {
 // src/app/components/layout/Sidebar.tsx
 
 import { NavLink, useLocation } from "react-router";
-import logoSrc from "../../../assets/Logo.png";
+import logoSrc from "../../../assets/icononlylogo.png";
 import {
   LayoutDashboard,
   CalendarDays,
@@ -870,6 +870,7 @@ import {
   TrendingUp,
   LogOut,
   Wallet,
+  Bell,
 } from "lucide-react";
 import { logout, getRoleLabel, getSession, ROLES, type RoleId } from "../../auth";
 import { useSidebarCollapsed } from "./SidebarContext";
@@ -900,6 +901,7 @@ const adminNavItems: NavItemDef[] = [
   { label: "Fee Management",  icon: Wallet,          path: "/fee-management" },
   { label: "Announcements",   icon: Megaphone,       path: "/announcements" },
   { label: "Study Materials", icon: BookOpen,        path: "/study-materials" },
+  { label: "Notifications",   icon: Bell,            path: "/notifications" },
 ];
 
 const teacherNavItems: NavItemDef[] = [
@@ -909,6 +911,7 @@ const teacherNavItems: NavItemDef[] = [
   { label: "Tests",           icon: ClipboardList,   path: "/teacher/tests" },
   { label: "Announcements",   icon: Megaphone,       path: "/teacher/announcements" },
   { label: "Study Materials", icon: BookOpen,        path: "/teacher/study-materials" },
+  { label: "Notifications",   icon: Bell,            path: "/teacher/notifications" },
 ];
 
 const managementNavItems: NavItemDef[] = [
@@ -922,6 +925,7 @@ const managementNavItems: NavItemDef[] = [
   { label: "Fee Management",  icon: Wallet,          path: "/management/fee-management" },
   { label: "Study Material",  icon: BookOpen,        path: "/management/study-materials" },
   { label: "Announcements",   icon: Megaphone,       path: "/management/announcements" },
+  { label: "Notifications",   icon: Bell,            path: "/management/notifications" },
 ];
 
 const studentNavItems: NavItemDef[] = [
@@ -931,6 +935,7 @@ const studentNavItems: NavItemDef[] = [
   { label: "My Fee",         icon: Wallet,          path: "/student/fee" },
   { label: "Study Material", icon: BookOpen,        path: "/student/study-materials" },
   { label: "Announcements",  icon: Megaphone,       path: "/student/announcements" },
+  { label: "Notifications",  icon: Bell,            path: "/student/notifications" },
 ];
 
 // ─── Role Type ─────────────────────────────────────────────────────────────────
@@ -974,7 +979,7 @@ const ROLE_CONFIG: {
   admin: {
     navItems: adminNavItems,
     mainEnd: 9,
-    secondaryEnd: 11,
+    secondaryEnd: 12,
     menuLabel: "Main Menu",
     accountLabel: "Resources",
     portalLabel: "Institute Portal",
@@ -984,7 +989,7 @@ const ROLE_CONFIG: {
   teacher: {
     navItems: teacherNavItems,
     mainEnd: 6,
-    secondaryEnd: 6,
+    secondaryEnd: 7,
     menuLabel: "My Menu",
     accountLabel: "Account",
     portalLabel: "Teacher Portal",
@@ -994,7 +999,7 @@ const ROLE_CONFIG: {
   management: {
     navItems: managementNavItems,
     mainEnd: 10,
-    secondaryEnd: 10,
+    secondaryEnd: 11,
     menuLabel: "Management",
     accountLabel: "Account",
     portalLabel: "Management Portal",
@@ -1004,7 +1009,7 @@ const ROLE_CONFIG: {
   student: {
     navItems: studentNavItems,
     mainEnd: 6,
-    secondaryEnd: 6,
+    secondaryEnd: 7,
     menuLabel: "My Portal",
     accountLabel: "Account",
     portalLabel: "Student Portal",
@@ -9843,7 +9848,6 @@ import {
 import {
   createFeeStructureApi,
   getFeeStructureForBatchApi,
-  type PlanType,
   type LateFeeType,
   type InstallmentInput,
   type FeeStructureRecord,
@@ -9889,10 +9893,12 @@ function getSubjectColor(subject: string) {
 
 // ─── Create Fee Structure Modal ───────────────────────────────────────────────
 
+type FeeCollectionType = "LUMP_SUM" | "INSTALLMENTS" | "BOTH";
+
 type FeeFormState = {
   label: string;
   totalAmount: string;
-  planType: PlanType;
+  feeCollectionType: FeeCollectionType;
   finalDueDate: string;
   lateFeeAmount: string;
   lateFeeType: LateFeeType | "";
@@ -9903,7 +9909,7 @@ type FeeFormState = {
 const emptyFeeForm: FeeFormState = {
   label: "",
   totalAmount: "",
-  planType: "LUMP_SUM",
+  feeCollectionType: "LUMP_SUM",
   finalDueDate: "",
   lateFeeAmount: "",
   lateFeeType: "",
@@ -9935,7 +9941,7 @@ function CreateFeeStructureModal({
     0
   );
   const sumMismatch =
-    form.planType === "FIXED_INSTALLMENTS" &&
+    form.feeCollectionType !== "LUMP_SUM" &&
     form.installments.length > 0 &&
     Math.abs(installmentSum - totalAmountNum) > 0.01;
 
@@ -9973,8 +9979,8 @@ function CreateFeeStructureModal({
     });
   }
 
-  function setPlanType(pt: PlanType) {
-    setForm((f) => ({ ...f, planType: pt, installments: [] }));
+  function setFeeCollectionType(pt: FeeCollectionType) {
+    setForm((f) => ({ ...f, feeCollectionType: pt, installments: [] }));
     setErrors({});
   }
 
@@ -9994,7 +10000,7 @@ function CreateFeeStructureModal({
     if (!hasLateFeeAmount && hasLateFeeType)
       e.lateFeeAmount = "Enter a late fee amount when a late fee type is selected.";
 
-    if (form.planType === "FIXED_INSTALLMENTS") {
+    if (form.feeCollectionType !== "LUMP_SUM") {
       if (form.installments.length === 0)
         e.installments = "At least one installment row is required.";
       if (form.installments.length > 12)
@@ -10025,7 +10031,8 @@ function CreateFeeStructureModal({
       class_batch_id: batchId,
       label: form.label.trim(),
       total_amount: Number(form.totalAmount),
-      plan_type: form.planType,
+      lump_sum_enabled: form.feeCollectionType === "LUMP_SUM" || form.feeCollectionType === "BOTH",
+      installments_enabled: form.feeCollectionType === "INSTALLMENTS" || form.feeCollectionType === "BOTH",
       final_due_date: form.finalDueDate,
       require_advance: form.requireAdvance,
     };
@@ -10035,7 +10042,7 @@ function CreateFeeStructureModal({
       payload.late_fee_type = form.lateFeeType as LateFeeType;
     }
 
-    if (form.planType === "FIXED_INSTALLMENTS") {
+    if (form.feeCollectionType !== "LUMP_SUM") {
       payload.installments = form.installments.map((inst, idx) => ({
         installment_number: idx + 1,
         amount: Number(inst.amount),
@@ -10083,7 +10090,7 @@ function CreateFeeStructureModal({
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-[600px] flex flex-col"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-[720px] flex flex-col"
         style={{ maxHeight: "92vh" }}
       >
         {/* Fixed header */}
@@ -10140,25 +10147,25 @@ function CreateFeeStructureModal({
             {errors.totalAmount && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.totalAmount}</p>}
           </div>
 
-          {/* Plan Type */}
+          {/* Fee Collection Type */}
           <div>
             <label className="block text-gray-700 mb-2" style={{ fontSize: "13px", fontWeight: 600 }}>
-              Plan Type <span className="text-red-500">*</span>
+              Fee Collection Type <span className="text-red-500">*</span>
             </label>
             <div className="grid grid-cols-3 gap-2">
               {(
                 [
-                  { value: "LUMP_SUM", label: "Lump Sum", desc: "Single payment by deadline" },
-                  { value: "FIXED_INSTALLMENTS", label: "Fixed Installments", desc: "Set installments for all students" },
-                  { value: "CUSTOM_INSTALLMENTS", label: "Custom Installments", desc: "Plans generated per student" },
-                ] as { value: PlanType; label: string; desc: string }[]
+                  { value: "LUMP_SUM", label: "Lump Sum Only", desc: "Single payment by deadline" },
+                  { value: "INSTALLMENTS", label: "Installments Only", desc: "Fixed installment schedule" },
+                  { value: "BOTH", label: "Both Options", desc: "Student chooses at enrollment" },
+                ] as { value: FeeCollectionType; label: string; desc: string }[]
               ).map((opt) => {
-                const isSelected = form.planType === opt.value;
+                const isSelected = form.feeCollectionType === opt.value;
                 return (
                   <button
                     key={opt.value}
                     type="button"
-                    onClick={() => setPlanType(opt.value)}
+                    onClick={() => setFeeCollectionType(opt.value)}
                     className="flex flex-col items-start p-3 rounded-xl border transition-all text-left"
                     style={{
                       borderColor: isSelected ? "#0d9488" : "#f3f4f6",
@@ -10269,7 +10276,7 @@ function CreateFeeStructureModal({
           </div>
 
           {/* Fixed Installments — dynamic rows */}
-          {form.planType === "FIXED_INSTALLMENTS" && (
+          {form.feeCollectionType !== "LUMP_SUM" && (
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="text-gray-700" style={{ fontSize: "13px", fontWeight: 600 }}>
@@ -10403,18 +10410,7 @@ function CreateFeeStructureModal({
             </div>
           )}
 
-          {/* Custom Installments — informational note */}
-          {form.planType === "CUSTOM_INSTALLMENTS" && (
-            <div
-              className="flex items-start gap-3 px-4 py-3 rounded-xl"
-              style={{ backgroundColor: "#eff6ff", border: "1px solid #bfdbfe" }}
-            >
-              <AlertCircle size={15} style={{ color: "#2563eb", marginTop: "1px" }} strokeWidth={2} />
-              <p className="text-blue-700" style={{ fontSize: "13px", lineHeight: 1.6 }}>
-                Installment plans for Custom Installments are generated individually per student at enrollment — no rows need to be entered here.
-              </p>
-            </div>
-          )}
+
 
           <p className="text-gray-400" style={{ fontSize: "11.5px" }}>
             <span className="text-red-400">*</span> Required fields
@@ -11606,11 +11602,16 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
         const res = await fetch("/api/announcements", { headers: { Authorization: `Bearer ${getToken()}` } });
         const data = await res.json();
         if (!res.ok || !Array.isArray(data.data)) return;
-        const mapped = (data.data as any[]).slice(0, 3).map((a) => {
+        const mapped = (data.data as any[]).slice(0, 5).map((a) => {
           const typeKey = a.announcement_type as string;
-          const style = (TYPE_STYLE as any)[
-            typeKey.charAt(0) + typeKey.slice(1).toLowerCase().replace(/_([a-z])/g, (_: string, c: string) => " " + c.toUpperCase())
-          ] ?? { color: "#6b7280", bg: "#f9fafb" };
+          const DB_TO_DISPLAY: Record<string, string> = {
+            GENERAL: "General", HOLIDAY: "Holiday", TEST: "Test",
+            RESULT: "Result", EVENT: "Event", TRIP: "Trip",
+            EXHIBITION: "Exhibition", PTM: "Parent-Teacher Meet",
+            SCHEDULE_CHANGE: "Schedule Change", EMERGENCY: "Emergency",
+          };
+          const displayType = DB_TO_DISPLAY[typeKey] ?? "General";
+          const style = (TYPE_STYLE as any)[displayType] ?? { color: "#6b7280", bg: "#f9fafb" };
           const d = new Date(a.created_at);
           const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
           return {
@@ -11619,7 +11620,7 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
             preview: a.message,
             createdBy: a.created_by ?? "—",
             date: `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`,
-            tag: typeKey.charAt(0) + typeKey.slice(1).toLowerCase().replace(/_/g, " "),
+            tag: displayType,
             tagColor: style.color,
             tagBg: style.bg,
           };
@@ -11640,7 +11641,7 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
 
     const loadNotifications = async () => {
       try {
-        const result = await fetchNotificationsApi({ limit: 10 });
+        const result = await fetchNotificationsApi({ limit: 5 });
         if (isActive) {
           setNotifications(result.notifications);
           setUnreadCount(result.unread_count);
@@ -11798,7 +11799,7 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
         <div className="col-span-3">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <SectionHeader title="Announcements" actionLabel="View All" onAction={() => navigate(config.announcementsPath)} />
-            <div className="space-y-4">
+            <div className="space-y-4 overflow-y-auto" style={{ maxHeight: "320px" }}>
               {announcements.length === 0 ? (
                 <p className="text-gray-300 text-center py-6" style={{ fontSize: "13px" }}>No announcements yet.</p>
               ) : announcements.map((ann) => (
@@ -11833,7 +11834,7 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
                 </div>
               )}
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1 overflow-y-auto" style={{ maxHeight: "320px" }}>
               {notifications.length === 0 ? (
                 <p className="text-gray-300 text-center py-6" style={{ fontSize: "13px" }}>No notifications yet.</p>
               ) : (
@@ -12882,6 +12883,365 @@ export function ManagementDashboard() {
         announcementsPath: "/management/announcements",
       }}
     />
+  );
+}
+
+// ===== FILE: src\app\pages\Notifications.tsx =====
+
+// src/app/pages/Notifications.tsx
+
+import { useState, useEffect, useCallback } from "react";
+import {
+  fetchNotificationsApi,
+  markNotificationsReadApi,
+  type NotificationRecord,
+} from "../../Lib/api/notifications";
+import {
+  Bell,
+  CheckSquare,
+  ClipboardList,
+  Users,
+  TrendingUp,
+  Megaphone,
+  BookOpen,
+  DollarSign,
+  UserCheck,
+  CheckCircle2,
+  Check,
+  SlidersHorizontal,
+} from "lucide-react";
+
+// ─── Event type → display config ───────────────────────────────────────────────
+
+type NotifStyle = {
+  icon: React.ElementType;
+  color: string;
+  bg: string;
+  label: string;
+};
+
+const EVENT_STYLE: Record<string, NotifStyle> = {
+  STUDENT_ACCOUNT_CREATED:    { icon: Users,        color: "#0d9488", bg: "#f0fdfa", label: "Enrollment"    },
+  STUDENT_ABSENT:             { icon: CheckSquare,  color: "#dc2626", bg: "#fef2f2", label: "Attendance"    },
+  STUDENT_LATE:               { icon: CheckSquare,  color: "#d97706", bg: "#fffbeb", label: "Attendance"    },
+  STUDENT_EARLY_LEAVE:        { icon: CheckSquare,  color: "#7c3aed", bg: "#f5f3ff", label: "Attendance"    },
+  TEST_CREATED:               { icon: ClipboardList,color: "#2563eb", bg: "#eff6ff", label: "Tests"         },
+  TEST_DATE_UPDATED:          { icon: ClipboardList,color: "#d97706", bg: "#fffbeb", label: "Tests"         },
+  TEST_RESULT_PUBLISHED:      { icon: TrendingUp,   color: "#16a34a", bg: "#f0fdf4", label: "Results"       },
+  STUDY_MATERIAL_UPLOADED:    { icon: BookOpen,     color: "#7c3aed", bg: "#f5f3ff", label: "Materials"     },
+  HOLIDAY_DECLARED:           { icon: Megaphone,    color: "#d97706", bg: "#fffbeb", label: "Holiday"       },
+  GENERAL_ANNOUNCEMENT:       { icon: Megaphone,    color: "#0d9488", bg: "#f0fdfa", label: "Announcement"  },
+  TEST_DAY_ANNOUNCED:         { icon: ClipboardList,color: "#db2777", bg: "#fdf2f8", label: "Announcement"  },
+  PARENT_TEACHER_MEETING:     { icon: Users,        color: "#2563eb", bg: "#eff6ff", label: "Announcement"  },
+  FEE_PAYMENT_RECEIVED:       { icon: DollarSign,   color: "#16a34a", bg: "#f0fdf4", label: "Fee"           },
+  FEE_OVERDUE:                { icon: DollarSign,   color: "#dc2626", bg: "#fef2f2", label: "Fee"           },
+  STUDENT_ENROLLMENT_ACTIVATED:{ icon: UserCheck,   color: "#0d9488", bg: "#f0fdfa", label: "Enrollment"    },
+};
+
+const DEFAULT_STYLE: NotifStyle = {
+  icon: Bell, color: "#6b7280", bg: "#f9fafb", label: "General",
+};
+
+function getStyle(eventType: string): NotifStyle {
+  return EVENT_STYLE[eventType] ?? DEFAULT_STYLE;
+}
+
+// ─── Unique filter categories derived from EVENT_STYLE ────────────────────────
+
+const ALL_FILTERS = [
+  "All",
+  ...Array.from(new Set(Object.values(EVENT_STYLE).map((s) => s.label))).sort(),
+];
+
+// ─── Relative time helper ─────────────────────────────────────────────────────
+
+function relativeTime(isoString: string): string {
+  const diff = Date.now() - new Date(isoString).getTime();
+  const mins  = Math.floor(diff / 60_000);
+  const hours = Math.floor(diff / 3_600_000);
+  const days  = Math.floor(diff / 86_400_000);
+  if (mins  < 1)  return "Just now";
+  if (mins  < 60) return `${mins}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  if (days  < 7)  return `${days}d ago`;
+  return new Date(isoString).toLocaleDateString("en-IN", {
+    day: "numeric", month: "short", year: "numeric",
+  });
+}
+
+// ─── Single notification row ──────────────────────────────────────────────────
+
+function NotifRow({
+  notif,
+  onRead,
+}: {
+  notif: NotificationRecord;
+  onRead: (id: string) => void;
+}) {
+  const style = getStyle(notif.event_type);
+  const Icon  = style.icon;
+
+  function handleClick() {
+    if (!notif.is_read) onRead(notif.id);
+  }
+
+  return (
+    <div
+      onClick={handleClick}
+      className="flex items-start gap-4 px-5 py-4 border-b border-gray-50 cursor-pointer transition-colors hover:bg-gray-50"
+      style={{ backgroundColor: notif.is_read ? "white" : "#f0fdfa22" }}
+    >
+      {/* Icon */}
+      <div
+        className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
+        style={{ backgroundColor: style.bg }}
+      >
+        <Icon size={16} style={{ color: style.color }} strokeWidth={2} />
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-start justify-between gap-3">
+          <p
+            className="text-gray-800 leading-snug"
+            style={{ fontSize: "13.5px", fontWeight: notif.is_read ? 400 : 600 }}
+          >
+            {notif.message}
+          </p>
+          {/* Unread dot */}
+          {!notif.is_read && (
+            <div
+              className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5"
+              style={{ backgroundColor: "#0d9488" }}
+            />
+          )}
+        </div>
+        <div className="flex items-center gap-2 mt-1.5">
+          {/* Category badge */}
+          <span
+            className="px-2 py-0.5 rounded-full"
+            style={{
+              fontSize: "10.5px",
+              fontWeight: 600,
+              color: style.color,
+              backgroundColor: style.bg,
+            }}
+          >
+            {style.label}
+          </span>
+          <span className="text-gray-300" style={{ fontSize: "11px" }}>·</span>
+          <span className="text-gray-400" style={{ fontSize: "11.5px" }}>
+            {relativeTime(notif.created_at)}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
+
+export function Notifications() {
+  const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
+  const [unreadCount,   setUnreadCount]   = useState(0);
+  const [loading,       setLoading]       = useState(true);
+  const [error,         setError]         = useState<string | null>(null);
+  const [filter,        setFilter]        = useState("All");
+  const [showUnreadOnly, setShowUnreadOnly] = useState(false);
+  const [markingAll,    setMarkingAll]    = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await fetchNotificationsApi({ limit: 100 });
+      setNotifications(result.notifications);
+      setUnreadCount(result.unread_count);
+    } catch (err: any) {
+      setError(err.message ?? "Failed to load notifications");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Mark a single notification read — optimistic update
+  async function handleRead(id: string) {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
+    );
+    setUnreadCount((c) => Math.max(0, c - 1));
+    markNotificationsReadApi([id]).catch(() => {
+      // revert on failure
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, is_read: false } : n))
+      );
+      setUnreadCount((c) => c + 1);
+    });
+  }
+
+  // Mark all read
+  async function handleMarkAllRead() {
+    if (markingAll || unreadCount === 0) return;
+    setMarkingAll(true);
+    // Optimistic
+    setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+    setUnreadCount(0);
+    try {
+      await markNotificationsReadApi();
+    } catch {
+      // revert and reload on failure
+      await load();
+    } finally {
+      setMarkingAll(false);
+    }
+  }
+
+  // Filter pipeline
+  const visible = notifications.filter((n) => {
+    if (showUnreadOnly && n.is_read) return false;
+    if (filter !== "All" && getStyle(n.event_type).label !== filter) return false;
+    return true;
+  });
+
+  return (
+    <div className="p-8 max-w-[860px] mx-auto">
+
+      {/* ── Page header ── */}
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <h1
+            className="text-gray-900"
+            style={{ fontSize: "24px", fontWeight: 700, letterSpacing: "-0.02em" }}
+          >
+            Notifications
+          </h1>
+          <p className="text-gray-400 mt-1" style={{ fontSize: "14px" }}>
+            {unreadCount > 0
+              ? `${unreadCount} unread notification${unreadCount > 1 ? "s" : ""}`
+              : "All caught up"}
+          </p>
+        </div>
+
+        {unreadCount > 0 && (
+          <button
+            onClick={handleMarkAllRead}
+            disabled={markingAll}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-teal-300 hover:text-teal-700 transition-all disabled:opacity-50"
+            style={{ fontSize: "13px", fontWeight: 600 }}
+          >
+            <Check size={14} strokeWidth={2.5} />
+            {markingAll ? "Marking…" : "Mark all as read"}
+          </button>
+        )}
+      </div>
+
+      {/* ── Filters bar ── */}
+      <div className="flex items-center gap-3 mb-5 flex-wrap">
+        {/* Unread toggle */}
+        <button
+          onClick={() => setShowUnreadOnly((v) => !v)}
+          className="flex items-center gap-2 px-3.5 py-2 rounded-xl border transition-all"
+          style={{
+            fontSize: "12.5px",
+            fontWeight: 600,
+            backgroundColor: showUnreadOnly ? "#f0fdfa" : "white",
+            borderColor:     showUnreadOnly ? "#0d9488" : "#f3f4f6",
+            color:           showUnreadOnly ? "#0d9488" : "#6b7280",
+          }}
+        >
+          <div
+            className="w-2 h-2 rounded-full"
+            style={{ backgroundColor: showUnreadOnly ? "#0d9488" : "#d1d5db" }}
+          />
+          Unread only
+        </button>
+
+        <div className="w-px h-5 bg-gray-200" />
+
+        {/* Category pills */}
+        <div className="flex gap-2 flex-wrap">
+          {ALL_FILTERS.map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className="px-3.5 py-2 rounded-xl border transition-all"
+              style={{
+                fontSize: "12.5px",
+                fontWeight: 600,
+                backgroundColor: filter === f ? "#0d9488" : "white",
+                borderColor:     filter === f ? "#0d9488" : "#f3f4f6",
+                color:           filter === f ? "white"   : "#6b7280",
+              }}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Notification list ── */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+
+        {/* List header */}
+        <div
+          className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100"
+          style={{ backgroundColor: "#f9fafb" }}
+        >
+          <p className="text-gray-500" style={{ fontSize: "13px", fontWeight: 600 }}>
+            {filter === "All" ? "All Notifications" : filter}
+          </p>
+          <p className="text-gray-400" style={{ fontSize: "12.5px" }}>
+            {visible.length} {visible.length === 1 ? "item" : "items"}
+          </p>
+        </div>
+
+        {/* States */}
+        {loading ? (
+          <div className="py-16 flex flex-col items-center gap-3">
+            <div className="w-6 h-6 border-2 border-teal-400 border-t-transparent rounded-full animate-spin" />
+            <p className="text-gray-400" style={{ fontSize: "13.5px" }}>
+              Loading notifications…
+            </p>
+          </div>
+        ) : error ? (
+          <div className="py-16 text-center">
+            <p className="text-red-400" style={{ fontSize: "14px" }}>{error}</p>
+            <button
+              onClick={load}
+              className="mt-3 text-teal-600 underline"
+              style={{ fontSize: "13px" }}
+            >
+              Retry
+            </button>
+          </div>
+        ) : visible.length === 0 ? (
+          <div className="py-16 flex flex-col items-center gap-3">
+            <div
+              className="w-14 h-14 rounded-2xl flex items-center justify-center"
+              style={{ backgroundColor: "#f0fdfa" }}
+            >
+              <CheckCircle2 size={26} style={{ color: "#0d9488" }} strokeWidth={1.8} />
+            </div>
+            <p className="text-gray-700" style={{ fontSize: "15px", fontWeight: 700 }}>
+              {showUnreadOnly ? "No unread notifications" : "No notifications yet"}
+            </p>
+            <p className="text-gray-400 text-center" style={{ fontSize: "13px", maxWidth: "280px" }}>
+              {showUnreadOnly
+                ? "You're all caught up. Toggle off 'Unread only' to see past notifications."
+                : "Notifications will appear here as activity happens in your institute."}
+            </p>
+          </div>
+        ) : (
+          <div>
+            {visible.map((notif) => (
+              <NotifRow key={notif.id} notif={notif} onRead={handleRead} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -26707,6 +27067,7 @@ import { ManagementDashboard } from "./pages/Management/ManagementDashboard";
 import { StudentDashboard } from "./pages/Student/StudentDashboard";
 import { StudentMarks } from "./pages/Student/StudentMarks";
 import { MyFee } from "./pages/Student/MyFee";
+import { Notifications } from "./pages/Notifications";
 import { Login } from "./pages/Login";
 import { clearToken, getToken, parseToken, isTokenExpired, ROLE_ROUTES } from "./auth";
 
@@ -26774,6 +27135,7 @@ element: createElement(ErrorBoundary, { section: "Attendance", children: createE
       { path: "announcements", Component: Announcements },
       { path: "study-materials", Component: StudyMaterials },
       { path: "fee-management", Component: FeeManagement },
+      { path: "notifications", Component: Notifications },
       { path: "profile", Component: Profile },
     ],
   },
@@ -26796,6 +27158,7 @@ element: createElement(ErrorBoundary, { section: "Attendance", children: createE
       },
       { path: "announcements", Component: Announcements },
       { path: "study-materials", Component: StudyMaterials },
+      { path: "notifications", Component: Notifications },
       { path: "profile", Component: Profile },
     ],
   },
@@ -26817,6 +27180,7 @@ element: createElement(ErrorBoundary, { section: "Attendance", children: createE
       { path: "study-materials", Component: StudyMaterials },
       { path: "announcements", Component: Announcements },
       { path: "fee-management", Component: FeeManagement },
+      { path: "notifications", Component: Notifications },
       { path: "profile", Component: Profile },
     ],
   },
@@ -26839,6 +27203,7 @@ element: createElement(ErrorBoundary, { section: "My Results", children: createE
       { path: "study-materials", Component: StudentStudyMaterialsRoute },
       { path: "announcements", Component: StudentAnnouncementsRoute },
       { path: "fee", Component: MyFee },
+      { path: "notifications", Component: Notifications },
       { path: "profile", Component: Profile },
     ],
   },
@@ -27604,7 +27969,7 @@ import { getToken } from "../../app/auth";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type PlanType = "LUMP_SUM" | "FIXED_INSTALLMENTS" | "CUSTOM_INSTALLMENTS";
+// (PlanType removed as it's replaced by independent toggles)
 
 export type LateFeeType = "FLAT" | "PERCENT";
 
@@ -27618,7 +27983,9 @@ export type CreateFeeStructurePayload = {
   class_batch_id: string;
   label: string;
   total_amount: number;
-  plan_type: PlanType;
+  lump_sum_enabled: boolean;
+  installments_enabled: boolean;
+  lump_sum_discount?: number | null;
   final_due_date: string; // YYYY-MM-DD
   late_fee_amount?: number | null;
   late_fee_type?: LateFeeType | null;
@@ -27631,7 +27998,9 @@ export type FeeStructureRecord = {
   class_batch_id: string;
   label: string;
   total_amount: number;
-  plan_type: PlanType;
+  lump_sum_enabled: boolean;
+  installments_enabled: boolean;
+  lump_sum_discount: number | null;
   final_due_date: string;
   late_fee_amount: number | null;
   late_fee_type: LateFeeType | null;
@@ -29284,6 +29653,14 @@ font-family: 'DM Sans', system-ui, sans-serif}
   }
 }
 
+
+// ===== FILE: vercel.json =====
+
+{
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
 
 // ===== FILE: vite.config.ts =====
 

@@ -5,7 +5,7 @@ import { getToken } from "../../app/auth";
 export type TeacherBatchDetail = {
   id: string;
   name: string;
-  subject: string | null;
+  subjects: string[];
   academic_year_label: string;
   student_count: number;
 };

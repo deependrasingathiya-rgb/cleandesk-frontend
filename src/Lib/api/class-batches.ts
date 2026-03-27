@@ -55,6 +55,7 @@ export type BatchDetailed = {
   id: string;
   name: string;
   created_at: string;
+  academic_year_id: string;
   academic_year_label: string;
   created_by: string;
   student_count: number;
@@ -119,6 +120,40 @@ export async function fetchBatchStudentsApi(
   if (!res.ok) throw new Error(data.error ?? "Failed to fetch batch students");
   return { data: data.data, total: data.total, limit: data.limit, offset: data.offset };
 }
+
+export async function updateClassBatchApi(
+  batchId: string,
+  payload: CreateClassBatchPayload
+): Promise<void> {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+
+  const res = await fetch(`/api/class-batches/${encodeURIComponent(batchId)}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Failed to update batch");
+}
+
+export async function deleteClassBatchApi(batchId: string): Promise<void> {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+
+  const res = await fetch(`/api/class-batches/${encodeURIComponent(batchId)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Failed to delete batch");
+}
+
 
 export async function createClassBatchApi(
   payload: CreateClassBatchPayload

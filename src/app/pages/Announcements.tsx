@@ -1,7 +1,7 @@
 // src/app/pages/Announcements.tsx
 
 import { useState, useEffect } from "react";
-import { AnnouncementModal, TYPE_STYLE, type AnnouncementType } from "../components/shared/AnnouncementModal";
+import { AnnouncementModal, TYPE_STYLE, type AnnouncementType, type BatchOption } from "../components/shared/AnnouncementModal";
 import {
   fetchAnnouncementsApi,
   createAnnouncementApi,
@@ -9,7 +9,7 @@ import {
   deleteAnnouncementApi,
   type AnnouncementRecord,
 } from "../../Lib/api/announcements";
-import { fetchClassBatchesApi, type ClassBatchOption } from "../../Lib/api/teachers";
+import { fetchBatchesDetailedApi } from "../../Lib/api/class-batches";
 import { Plus, Search, X, Megaphone, Pencil, Trash2, AlertTriangle, CheckCircle2, ChevronDown, Users2, Calendar, User } from "lucide-react";
 
 
@@ -44,7 +44,7 @@ type Announcement = {
   batches: string[]; // ["Universal"] or specific batch names
 };
 
-function mapRecord(record: AnnouncementRecord, batches: ClassBatchOption[]): Announcement {
+function mapRecord(record: AnnouncementRecord, batches: BatchOption[]): Announcement {
   
 const displayType: AnnouncementType =
   DB_TYPE_MAP[record.announcement_type] ?? "General";
@@ -129,7 +129,7 @@ function DeleteModal({
 
 export function Announcements({ canManage = true }: { canManage?: boolean }) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [batchOptions, setBatchOptions] = useState<ClassBatchOption[]>([]);
+  const [batchOptions, setBatchOptions] = useState<BatchOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   
@@ -150,10 +150,11 @@ export function Announcements({ canManage = true }: { canManage?: boolean }) {
         setLoading(true);
         const [records, batches] = await Promise.all([
           fetchAnnouncementsApi(),
-          fetchClassBatchesApi(),
+          fetchBatchesDetailedApi(),
         ]);
-        setBatchOptions(batches);
-        setAnnouncements(records.map(r => mapRecord(r, batches)));
+        const batchOpts: BatchOption[] = batches.map((b) => ({ id: b.id, name: b.name }));
+        setBatchOptions(batchOpts);
+        setAnnouncements(records.map(r => mapRecord(r, batchOpts)));
       } catch (err: any) {
         setLoadError(err.message ?? "Failed to load announcements");
       } finally {

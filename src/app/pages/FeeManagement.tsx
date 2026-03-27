@@ -30,8 +30,8 @@ function inr(n: number): string {
 
 function FeeStatusBadge({ status }: { status: string }) {
   const config: Record<string, { color: string; bg: string; label: string }> = {
-    UNPAID:         { color: "#dc2626", bg: "#fef2f2",  label: "Unpaid"         },
-    PARTIALLY_PAID: { color: "#d97706", bg: "#fffbeb",  label: "Partially Paid" },
+    UNPAID:         { color: "#d97706", bg: "#fffbeb",  label: "Unpaid"         },
+    PARTIALLY_PAID: { color: "#b45309", bg: "#fef3c7",  label: "Partially Paid" },
     PAID:           { color: "#16a34a", bg: "#f0fdf4",  label: "Paid"           },
     OVERDUE:        { color: "#9333ea", bg: "#fdf4ff",  label: "Overdue"        },
   };
@@ -180,7 +180,7 @@ function BatchDrillDown({
               return (
                 <tr
                   key={s.student_user_id}
-                  onClick={() => navigate(`/students/${s.student_user_id}`)}
+                  onClick={() => navigate(`/management/students/${s.student_user_id}?from=fee-management&tab=fee&batchId=${encodeURIComponent(batchId)}&batchName=${encodeURIComponent(batchName)}`)}
                   className="border-t border-gray-50 hover:bg-teal-50 transition-colors cursor-pointer group"
                 >
                   {/* Student name */}
@@ -222,7 +222,7 @@ function BatchDrillDown({
 
                   {/* Outstanding */}
                   <td className="px-5 py-3.5">
-                    <span style={{ fontSize: "13px", fontWeight: 600, color: s.outstanding_balance > 0 ? "#dc2626" : "#16a34a" }}>
+                    <span style={{ fontSize: "13px", fontWeight: 600, color: s.outstanding_balance > 0 ? "#d97706" : "#16a34a" }}>
                       {s.outstanding_balance > 0 ? inr(s.outstanding_balance) : "—"}
                     </span>
                   </td>
@@ -289,7 +289,10 @@ export function FeeManagement() {
   const [data, setData]       = useState<FeeOverviewData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
-  const [drillDown, setDrillDown] = useState<{ batchId: string; batchName: string } | null>(null);
+  const feeNavState = (window.history.state?.usr as { drillDown?: { batchId: string; batchName: string } } | undefined);
+  const [drillDown, setDrillDown] = useState<{ batchId: string; batchName: string } | null>(
+    feeNavState?.drillDown ?? null
+  );
 
   useEffect(() => {
     setLoading(true);
@@ -337,10 +340,11 @@ export function FeeManagement() {
   const collectionPct = data.collection_pct ?? 0;
   const pctColor =
     collectionPct >= 80 ? "#16a34a" :
-    collectionPct >= 50 ? "#d97706" : "#dc2626";
+    collectionPct >= 50 ? "#d97706" : "#b45309";
 
   const totalStudents = data.batches.reduce((s, b) => s + b.student_count, 0);
   const totalPaid     = data.batches.reduce((s, b) => s + b.paid_count,    0);
+  const showFinancials = data.show_financials;
 
   return (
     <div className="p-8 max-w-[1200px] mx-auto">
@@ -355,11 +359,11 @@ export function FeeManagement() {
         </p>
       </div>
 
-      {/* ── Stat cards ── */}
-      <div className="grid grid-cols-4 gap-5 mb-6">
+      {/* ── Stat cards + progress — Admin only ── */}
+      {showFinancials && <div className="grid grid-cols-4 gap-5 mb-6">
         <StatCard
           label="Total Expected"
-          value={inr(data.total_expected)}
+          value={inr(data.total_expected ?? 0)}
           sub={`${totalStudents} student${totalStudents !== 1 ? "s" : ""} enrolled`}
           color="#2563eb"
           bg="#eff6ff"
@@ -367,7 +371,7 @@ export function FeeManagement() {
         />
         <StatCard
           label="Total Collected"
-          value={inr(data.total_collected)}
+          value={inr(data.total_collected ?? 0)}
           sub={`${totalPaid} fully paid`}
           color="#16a34a"
           bg="#f0fdf4"
@@ -375,10 +379,10 @@ export function FeeManagement() {
         />
         <StatCard
           label="Outstanding"
-          value={inr(data.outstanding)}
-          sub={data.outstanding > 0 ? "Pending collection" : "All cleared"}
-          color={data.outstanding > 0 ? "#dc2626" : "#16a34a"}
-          bg={data.outstanding > 0 ? "#fef2f2" : "#f0fdf4"}
+          value={inr(data.outstanding ?? 0)}
+          sub={(data.outstanding ?? 0) > 0 ? "Pending collection" : "All cleared"}
+          color={(data.outstanding ?? 0) > 0 ? "#d97706" : "#16a34a"}
+          bg={(data.outstanding ?? 0) > 0 ? "#fffbeb" : "#f0fdf4"}
           icon={AlertTriangle}
         />
         <StatCard
@@ -386,13 +390,12 @@ export function FeeManagement() {
           value={data.collection_pct !== null ? `${collectionPct}%` : "—"}
           sub="Of total expected"
           color={pctColor}
-          bg={collectionPct >= 80 ? "#f0fdf4" : collectionPct >= 50 ? "#fffbeb" : "#fef2f2"}
+          bg={collectionPct >= 80 ? "#f0fdf4" : collectionPct >= 50 ? "#fffbeb" : "#fef3c7"}
           icon={TrendingUp}
         />
-      </div>
+      </div>}
 
-      {/* ── Collection progress bar ── */}
-      {data.collection_pct !== null && (
+      {showFinancials && data.collection_pct !== null && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
           <div className="flex items-center justify-between mb-3">
             <p className="text-gray-700" style={{ fontSize: "13.5px", fontWeight: 700 }}>
@@ -410,10 +413,10 @@ export function FeeManagement() {
           </div>
           <div className="flex justify-between mt-2">
             <span className="text-gray-400" style={{ fontSize: "11.5px" }}>
-              {inr(data.total_collected)} collected
+              {inr(data.total_collected ?? 0)} collected
             </span>
             <span className="text-gray-400" style={{ fontSize: "11.5px" }}>
-              {inr(data.outstanding)} outstanding
+              {inr(data.outstanding ?? 0)} outstanding
             </span>
           </div>
         </div>
@@ -471,7 +474,7 @@ export function FeeManagement() {
                 const batchPctColor =
                   batchPct === null ? "#9ca3af" :
                   batchPct >= 80    ? "#16a34a" :
-                  batchPct >= 50    ? "#d97706" : "#dc2626";
+                  batchPct >= 50    ? "#d97706" : "#b45309";
 
                 return (
                   <tr
@@ -518,7 +521,7 @@ export function FeeManagement() {
                         style={{
                           fontSize: "13px",
                           fontWeight: 600,
-                          color: batch.outstanding > 0 ? "#dc2626" : "#16a34a",
+                          color: batch.outstanding > 0 ? "#d97706" : "#16a34a",
                         }}
                       >
                         {batch.outstanding > 0 ? inr(batch.outstanding) : "—"}
@@ -549,7 +552,7 @@ export function FeeManagement() {
                     <td className="px-5 py-4">
                       <span
                         className="px-2 py-0.5 rounded-full"
-                        style={{ fontSize: "11.5px", fontWeight: 600, color: "#dc2626", backgroundColor: "#fef2f2" }}
+                        style={{ fontSize: "11.5px", fontWeight: 600, color: "#d97706", backgroundColor: "#fffbeb" }}
                       >
                         {batch.unpaid_count}
                       </span>

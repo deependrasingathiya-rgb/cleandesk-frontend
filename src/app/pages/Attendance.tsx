@@ -495,6 +495,7 @@ function BatchSummaryPage({
   onModify,
   onMarkAttendance,
   canManage,
+  isHoliday = false,
 }: {
   batchId: string;
   batchName: string;
@@ -504,6 +505,7 @@ function BatchSummaryPage({
   onModify: () => void;
   onMarkAttendance: () => void;
   canManage: boolean;
+  isHoliday?: boolean;
 }) {
   const [detailRows, setDetailRows] = useState<StudentDetailItem[]>([]);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -571,7 +573,7 @@ function BatchSummaryPage({
 
           {/* Action buttons */}
           {!isPending ? (
-            canManage ? (
+            canManage && !isHoliday ? (
               <div className="flex items-center gap-2">
                 <button
                   onClick={onModify}
@@ -585,7 +587,11 @@ function BatchSummaryPage({
               </div>
             ) : null
           ) : (
-            canManage ? (
+            isHoliday ? (
+              <span className="px-3 py-1.5 rounded-lg text-sm font-semibold" style={{ color: "#41ab5d", backgroundColor: "#f0fdf4", border: "1px solid #bbf7d0" }}>
+                Holiday
+              </span>
+            ) : canManage ? (
               <button
                 onClick={onMarkAttendance}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
@@ -645,23 +651,35 @@ function BatchSummaryPage({
 
       {/* Student table */}
       {isPending ? (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 flex flex-col items-center justify-center">
-          <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style={{ backgroundColor: "#fffbeb" }}>
-            <AlertCircle size={24} color="#d97706" strokeWidth={2} />
+        isHoliday ? (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 flex flex-col items-center justify-center">
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style={{ backgroundColor: "#f0fdf4" }}>
+              <Sun size={24} color="#41ab5d" strokeWidth={2} />
+            </div>
+            <p className="text-gray-700 mb-1" style={{ fontSize: "16px", fontWeight: 700 }}>It's a Holiday! 🎉</p>
+            <p className="text-gray-400 text-center" style={{ fontSize: "13.5px" }}>
+              No attendance is required for {batchName} on {formatDisplayDate(date)}. Enjoy the day off!
+            </p>
           </div>
-          <p className="text-gray-700 mb-1" style={{ fontSize: "16px", fontWeight: 700 }}>Attendance Not Marked Yet</p>
-          <p className="text-gray-400 mb-6 text-center" style={{ fontSize: "13.5px" }}>
-            No attendance record exists for {batchName} on {formatDisplayDate(date)}.
-          </p>
-          <button
-            onClick={onMarkAttendance}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
-            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
-          >
-            <CheckSquare size={15} strokeWidth={2} />
-            Mark Attendance Now
-          </button>
-        </div>
+        ) : (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 flex flex-col items-center justify-center">
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style={{ backgroundColor: "#fffbeb" }}>
+              <AlertCircle size={24} color="#d97706" strokeWidth={2} />
+            </div>
+            <p className="text-gray-700 mb-1" style={{ fontSize: "16px", fontWeight: 700 }}>Attendance Not Marked Yet</p>
+            <p className="text-gray-400 mb-6 text-center" style={{ fontSize: "13.5px" }}>
+              No attendance record exists for {batchName} on {formatDisplayDate(date)}.
+            </p>
+            <button
+              onClick={onMarkAttendance}
+              className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
+              style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+            >
+              <CheckSquare size={15} strokeWidth={2} />
+              Mark Attendance Now
+            </button>
+          </div>
+        )
       ) : (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between" style={{ backgroundColor: "#f9fafb" }}>
@@ -919,6 +937,7 @@ const [weeklyTrend, setWeeklyTrend] = useState<WeeklyTrendDay[]>([]);
         onModify={() => setView({ type: "modify", batch: view.batch })}
         onMarkAttendance={() => setView({ type: "mark", batch: view.batch })}
         canManage={canManage}
+        isHoliday={!!todayHoliday || holidayedBatchIds.has(view.batch)}
       />
     );
   }
@@ -956,7 +975,7 @@ const [weeklyTrend, setWeeklyTrend] = useState<WeeklyTrendDay[]>([]);
             <button
               onClick={() => setShowDeclareModal(true)}
               className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border shadow-sm transition-all"
-              style={{ fontSize: "13px", fontWeight: 600, backgroundColor: "#fffbeb", borderColor: "#fde68a", color: "#d97706" }}
+              style={{ fontSize: "13px", fontWeight: 600, backgroundColor: "#f0fdf4", borderColor: "#bbf7d0", color: "#41ab5d" }}
             >
               <Sun size={14} />
               Declare Holiday
@@ -1017,15 +1036,15 @@ const [weeklyTrend, setWeeklyTrend] = useState<WeeklyTrendDay[]>([]);
             <div
               key={h.id}
               className="flex items-center justify-between px-5 py-4 rounded-2xl border"
-              style={{ backgroundColor: "#fffbeb", borderColor: "#fde68a" }}
+              style={{ backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" }}
             >
               <div className="flex items-start gap-3">
-                <Sun size={18} color="#d97706" className="flex-shrink-0 mt-0.5" />
+                <Sun size={18} color="#41ab5d" className="flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-amber-800 mb-1" style={{ fontSize: "13.5px", fontWeight: 700 }}>
+                  <p className="mb-1" style={{ fontSize: "13.5px", fontWeight: 700, color: "#166534" }}>
                     Holiday: {h.name}
                   </p>
-                  <p className="text-amber-700" style={{ fontSize: "12.5px" }}>
+                  <p style={{ fontSize: "12.5px", color: "#15803d" }}>
                     {h.batch_name
                       ? `Applies to batch: ${h.batch_name}`
                       : "Institute-wide holiday · Attendance marking is disabled for this date"}

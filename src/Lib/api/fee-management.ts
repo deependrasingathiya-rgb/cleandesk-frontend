@@ -24,10 +24,11 @@ export type BatchFeeRow = {
 export type FeeOverviewData = {
   academic_year_id: string;
   academic_year_label: string;
-  total_expected: number;
-  total_collected: number;
-  outstanding: number;
+  total_expected: number | null;
+  total_collected: number | null;
+  outstanding: number | null;
   collection_pct: number | null;
+  show_financials: boolean;
   batches: BatchFeeRow[];
 };
 

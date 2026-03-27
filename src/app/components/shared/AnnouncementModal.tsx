@@ -12,8 +12,7 @@ import {
   File,
 } from "lucide-react";
 import { createAnnouncementApi } from "../../../Lib/api/announcements";
-import { fetchClassBatchesApi, type ClassBatchOption } from "../../../Lib/api/teachers";
-import { uploadStudyMaterialApi } from "../../../Lib/api/study-materials";
+import { fetchBatchesDetailedApi } from "../../../Lib/api/class-batches";import { uploadStudyMaterialApi } from "../../../Lib/api/study-materials";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -239,12 +238,18 @@ function BatchSelector({
 
 // ─── Props ─────────────────────────────────────────────────────────────────────
 
+/** Minimal shape needed — both ClassBatchOption and BatchDetailed satisfy this */
+export type BatchOption = {
+  id: string;
+  name: string;
+};
+
 export type AnnouncementModalProps = {
   onClose: () => void;
   /** Called after successful creation with the created announcement id */
   onSuccess: (announcementId: string) => void;
   /** Pre-load batch options from parent if already fetched, otherwise fetched internally */
-  preloadedBatchOptions?: ClassBatchOption[];
+  preloadedBatchOptions?: BatchOption[];
 };
 
 // ─── Main Modal ────────────────────────────────────────────────────────────────
@@ -257,7 +262,7 @@ export function AnnouncementModal({
   const [form, setForm] = useState<AnnouncementFormState>(emptyForm);
   const [errors, setErrors] = useState<Partial<Record<keyof AnnouncementFormState, string>>>({});
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
-  const [batchOptions, setBatchOptions] = useState<ClassBatchOption[]>(preloadedBatchOptions ?? []);
+  const [batchOptions, setBatchOptions] = useState<BatchOption[]>(preloadedBatchOptions ?? []);
   const [loadingBatches, setLoadingBatches] = useState(!preloadedBatchOptions);
   const [submitting, setSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -266,8 +271,8 @@ export function AnnouncementModal({
 
   useEffect(() => {
     if (preloadedBatchOptions) return;
-    fetchClassBatchesApi()
-      .then(setBatchOptions)
+    fetchBatchesDetailedApi()
+      .then((batches) => setBatchOptions(batches.map((b) => ({ id: b.id, name: b.name }))))
       .catch(() => setApiError("Failed to load batches"))
       .finally(() => setLoadingBatches(false));
   }, [preloadedBatchOptions]);
@@ -305,10 +310,14 @@ export function AnnouncementModal({
 
     try {
       // Resolve batch_id: Universal or empty → null (institute-wide)
-      const resolvedBatchId =
+      const resolvedBatchIds =
         form.batches.includes("Universal") || form.batches.length === 0
-          ? null
-          : (batchOptions.find((b) => b.name === form.batches[0])?.id ?? null);
+          ? []
+          : batchOptions
+              .filter((b) => form.batches.includes(b.name))
+              .map((b) => b.id);
+
+      const resolvedBatchId = resolvedBatchIds.length > 0 ? resolvedBatchIds[0] : null;
 
       // 1. Create the announcement
       const dbType = TYPE_TO_DB[form.type as AnnouncementType];

@@ -1,7 +1,7 @@
 // src/app/pages/StudentProfilePage.tsx
 
 import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router";
+import { useParams, useNavigate, useLocation } from "react-router";
 import {
   fetchStudentsApi,
   type StudentRow,
@@ -1266,6 +1266,11 @@ function FeeTab({
 export function StudentProfilePage() {
   const { studentId } = useParams<{ studentId: string }>();
   const navigate      = useNavigate();
+  const location      = useLocation();
+  const searchParams  = new URLSearchParams(location.search);
+  const fromFee       = searchParams.get("from") === "fee-management";
+  const feeBatchId    = searchParams.get("batchId") ?? null;
+  const feeBatchName  = searchParams.get("batchName") ?? null;
 
   const [studentName, setStudentName]     = useState<string>("Student");
   const [studentMeta, setStudentMeta]     = useState<StudentRow | null>(null);
@@ -1273,7 +1278,8 @@ export function StudentProfilePage() {
   const [loading, setLoading]             = useState(true);
   const [fetchError, setFetchError]       = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<"results" | "fee">("results");
+  const initialTab = searchParams.get("tab") === "fee" ? "fee" : "results";
+const [activeTab, setActiveTab] = useState<"results" | "fee">(initialTab);
 
   const [selectedTestId, setSelectedTestId]     = useState<string | null>(null);
   const [selectedSubject, setSelectedSubject]   = useState<string | null>(null);
@@ -1388,12 +1394,24 @@ export function StudentProfilePage() {
 
       {/* ── Back ── */}
       <button
-        onClick={() => navigate("/students")}
+        onClick={() => {
+          if (fromFee && feeBatchId && feeBatchName) {
+            // Return to fee management with batch drill-down state
+            const feeMgmtPath = location.pathname.startsWith("/management")
+              ? "/management/fee-management"
+              : "/fee-management";
+            navigate(feeMgmtPath, {
+              state: { drillDown: { batchId: feeBatchId, batchName: feeBatchName } },
+            });
+          } else {
+            navigate("/students");
+          }
+        }}
         className="flex items-center gap-2 text-gray-400 hover:text-teal-600 transition-colors mb-6"
         style={{ fontSize: "13.5px", fontWeight: 600 }}
       >
         <ArrowLeft size={15} strokeWidth={2.5} />
-        Back to Students
+        {fromFee && feeBatchName ? `Back to ${feeBatchName}` : "Back to Students"}
       </button>
 
       {/* ── Hero card ── */}

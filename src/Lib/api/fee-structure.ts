@@ -32,6 +32,7 @@ export type FeeStructureRecord = {
   id: string;
   class_batch_id: string;
   label: string;
+  plan_type: string;
   total_amount: number;
   lump_sum_enabled: boolean;
   installments_enabled: boolean;

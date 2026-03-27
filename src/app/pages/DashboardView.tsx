@@ -4,12 +4,12 @@
 
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
-import { AnnouncementModal } from "../components/shared/AnnouncementModal";
+import { AnnouncementModal, type BatchOption } from "../components/shared/AnnouncementModal";
 import {
   fetchAcademicYearsApi,
   fetchClassBatchesByYearApi,
 } from "../../Lib/api/class-batches";
-import { fetchClassBatchesApi } from "../../Lib/api/teachers";
+import { fetchBatchesDetailedApi } from "../../Lib/api/class-batches";
 import {
   fetchDashboardSummary,
   fetchUpcomingTests,
@@ -228,7 +228,7 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
   const [attendanceScopeLabel, setAttendanceScopeLabel] = useState<string>("");
   const [announcements, setAnnouncements]   = useState<{ id: string; title: string; preview: string; createdBy: string; date: string; tag: string; tagColor: string; tagBg: string }[]>([]);
   const [batchOptions, setBatchOptions]     = useState<string[]>(["Universal"]);
-  const [batchObjects, setBatchObjects]     = useState<{ id: string; name: string }[]>([]);
+  const [batchObjects, setBatchObjects]     = useState<BatchOption[]>([]);
   const [notifications, setNotifications]   = useState<NotificationRecord[]>([]);
   const [unreadCount, setUnreadCount]       = useState(0);
 
@@ -315,10 +315,11 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
 
     const loadBatches = async () => {
       try {
-        const batches = await fetchClassBatchesApi();
+        const batches = await fetchBatchesDetailedApi();
         if (isActive) {
-          setBatchObjects(batches);
-          setBatchOptions(["Universal", ...batches.map((b) => b.name)]);
+          const batchOpts: BatchOption[] = batches.map((b) => ({ id: b.id, name: b.name }));
+          setBatchObjects(batchOpts);
+          setBatchOptions(["Universal", ...batchOpts.map((b) => b.name)]);
         }
       } catch { /* fail silently */ }
     };
@@ -350,7 +351,7 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
         { ...STAT_CONFIG[1], value: String(summary.active_batches), change: "Active this academic year" },
         { ...STAT_CONFIG[2], value: String(summary.upcoming_tests), change: "From today onwards" },
         { ...STAT_CONFIG[3], value: summary.attendance_today_pct !== null ? `${summary.attendance_today_pct}%` : "—",
-          change: summary.attendance_total_marked > 0 ? `${summary.attendance_marked_present} present of ${summary.attendance_total_marked} marked` : "No attendance marked yet today" },
+          change: summary.attendance_total_marked > 0 ? `${summary.attendance_marked_present} present of ${summary.attendance_total_marked} total` : "No attendance marked yet today" },
       ]
     : STAT_CONFIG.map((c) => ({ ...c, value: summaryLoading ? "—" : "N/A", change: summaryLoading ? "Loading…" : summaryError ?? "Summary unavailable" }));
 

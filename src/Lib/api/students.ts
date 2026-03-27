@@ -38,11 +38,11 @@ export type StudentStats = {
   new_this_month: number;
 };
 
-export async function fetchStudentStatsApi(): Promise<StudentStats> {
+export async function fetchStudentStatsApi(academicYearId?: string): Promise<StudentStats> {
   const token = getToken();
   if (!token) throw new Error("Not authenticated");
 
-  const res = await fetch("/api/students/stats", {
+  const res = await fetch(`/api/students/stats${academicYearId ? `?academic_year_id=${encodeURIComponent(academicYearId)}` : ""}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 
@@ -51,18 +51,15 @@ export async function fetchStudentStatsApi(): Promise<StudentStats> {
   return data.data as StudentStats;
 }
 
-export async function fetchStudentsApi(options: {
-  limit?: number;
-  offset?: number;
-  search?: string;
-}): Promise<{ students: StudentRow[]; total: number }> {
+export async function fetchStudentsApi(options: { limit?: number; offset?: number; search?: string; academicYearId?: string }): Promise<{ students: StudentRow[]; total: number }> {
   const token = getToken();
   if (!token) throw new Error("Not authenticated");
 
   const params = new URLSearchParams();
-  if (options.limit  != null) params.set("limit",  String(options.limit));
-  if (options.offset != null) params.set("offset", String(options.offset));
-  if (options.search)         params.set("search", options.search);
+  if (options.limit        != null) params.set("limit",            String(options.limit));
+  if (options.offset       != null) params.set("offset",           String(options.offset));
+  if (options.search)               params.set("search",           options.search);
+  if (options.academicYearId)       params.set("academic_year_id", options.academicYearId);
 
   const res = await fetch(`/api/students?${params.toString()}`, {
     headers: { Authorization: `Bearer ${token}` },

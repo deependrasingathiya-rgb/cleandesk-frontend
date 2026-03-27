@@ -64,11 +64,10 @@ const teacherNavItems: NavItemDef[] = [
 
 const managementNavItems: NavItemDef[] = [
   { label: "Dashboard",       icon: LayoutDashboard, path: "/management" },
-  { label: "People",          icon: Users,           path: "/management/people" },
+  { label: "Users",           icon: Users,           path: "/management/people" },
   { label: "Batches",         icon: Users2,          path: "/management/batches" },
   { label: "Students",        icon: UserCheck,       path: "/management/students" },
   { label: "Tests",           icon: ClipboardList,   path: "/management/tests" },
-  { label: "Marks",           icon: Star,            path: "/management/marks" },
   { label: "Attendance",      icon: CheckSquare,     path: "/management/attendance" },
   { label: "Fee Management",  icon: Wallet,          path: "/management/fee-management" },
   { label: "Study Material",  icon: BookOpen,        path: "/management/study-materials" },
@@ -79,7 +78,7 @@ const managementNavItems: NavItemDef[] = [
 const studentNavItems: NavItemDef[] = [
   { label: "Dashboard",      icon: LayoutDashboard, path: "/student" },
   { label: "Attendance",     icon: CheckSquare,     path: "/student/attendance" },
-  { label: "Results",        icon: Star,            path: "/student/results" },
+  { label: "Performance",    icon: Star,            path: "/student/results" },
   { label: "My Fee",         icon: Wallet,          path: "/student/fee" },
   { label: "Study Material", icon: BookOpen,        path: "/student/study-materials" },
   { label: "Announcements",  icon: Megaphone,       path: "/student/announcements" },
@@ -146,8 +145,8 @@ const ROLE_CONFIG: {
   },
   management: {
     navItems: managementNavItems,
-    mainEnd: 10,
-    secondaryEnd: 11,
+    mainEnd: 9,
+    secondaryEnd: 10,
     menuLabel: "Management",
     accountLabel: "Account",
     portalLabel: "Management Portal",

@@ -8,7 +8,7 @@ import {
   type TeacherProfileData,
   type TeacherTestRow,
 } from "../../Lib/api/teacher-profile";
-import { unassignTeacherBatchApi } from "../../Lib/api/teachers";
+import { unassignTeacherBatchSubjectApi } from "../../Lib/api/teachers";
 import {
   ArrowLeft,
   Phone,
@@ -230,10 +230,16 @@ export function TeacherProfilePage() {
   const { teacherId } = useParams<{ teacherId: string }>();
   const navigate      = useNavigate();
 
-  const [profile,      setProfile]      = useState<TeacherProfileData | null>(null);
-  const [loading,      setLoading]      = useState(true);
-  const [error,        setError]        = useState<string | null>(null);
-  const [showAllTests, setShowAllTests] = useState(false);
+  const [profile,        setProfile]        = useState<TeacherProfileData | null>(null);
+  const [loading,        setLoading]        = useState(true);
+  const [error,          setError]          = useState<string | null>(null);
+  const [showAllTests,   setShowAllTests]   = useState(false);
+  // batchId currently in edit mode
+  const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
+  // key = `${batchId}::${subject}` awaiting confirm click
+  const [confirmKey,     setConfirmKey]     = useState<string | null>(null);
+  // key currently being removed (disables button during async call)
+  const [removingKey,    setRemovingKey]    = useState<string | null>(null);
 
   useEffect(() => {
     if (!teacherId) { setError("No teacher ID provided"); setLoading(false); return; }
@@ -245,17 +251,39 @@ export function TeacherProfilePage() {
       .finally(() => setLoading(false));
   }, [teacherId]);
 
-  async function handleUnassignBatch(batchId: string) {
+  async function handleUnassignSubject(batchId: string, subject: string) {
     if (!teacherId || !profile) return;
+    const key = `${batchId}::${subject}`;
+
+    if (confirmKey !== key) {
+      // First click — request confirmation
+      setConfirmKey(key);
+      return;
+    }
+
+    // Second click — confirmed
+    setConfirmKey(null);
+    setRemovingKey(key);
     try {
-      await unassignTeacherBatchApi(teacherId, batchId);
-      setProfile((prev) =>
-        prev
-          ? { ...prev, assigned_batches: prev.assigned_batches.filter((b) => b.id !== batchId) }
-          : prev
-      );
+      await unassignTeacherBatchSubjectApi(teacherId, batchId, subject);
+      setProfile((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          assigned_batches: prev.assigned_batches
+            .map((b) =>
+              b.id !== batchId
+                ? b
+                : { ...b, subjects: b.subjects.filter((s) => s !== subject) }
+            )
+            // Drop the batch row entirely once it has no subjects left
+            .filter((b) => b.id !== batchId || b.subjects.length > 0),
+        };
+      });
     } catch (err: any) {
-      console.error("Unassign batch failed:", err.message);
+      console.error("Unassign subject failed:", err.message);
+    } finally {
+      setRemovingKey(null);
     }
   }
 
@@ -396,38 +424,124 @@ export function TeacherProfilePage() {
             ) : (
               <div className="space-y-2.5">
                 {profile.assigned_batches.map((batch) => {
-                  const sc = getSubjectColor(batch.subject);
+                  const isEditing  = editingBatchId === batch.id;
+                  // Use first subject for icon colour, fallback to neutral
+                  const sc = getSubjectColor(batch.subjects[0] ?? null);
                   return (
-                    <div key={batch.id} className="flex items-start gap-3 p-3.5 rounded-xl border border-gray-100">
-                      <div
-                        className="w-9 h-9 rounded-md flex items-center justify-center flex-shrink-0"
-                        style={{ backgroundColor: sc.bg }}
-                      >
-                        <BookOpen size={15} style={{ color: sc.color }} strokeWidth={2} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-gray-800" style={{ fontSize: "13.5px", fontWeight: 600 }}>{batch.name}</p>
-                        <div className="flex items-center gap-2 mt-1 flex-wrap">
-                          {batch.subject && (
-                            <span className="px-2 py-0.5 rounded-full" style={{ fontSize: "11px", fontWeight: 600, color: sc.color, backgroundColor: sc.bg }}>
-                              {batch.subject}
-                            </span>
-                          )}
-                          <span className="text-gray-400" style={{ fontSize: "11.5px" }}>
-                            {batch.academic_year_label}
-                          </span>
-                          <span className="text-gray-400" style={{ fontSize: "11.5px" }}>
-                            · {batch.student_count} student{batch.student_count !== 1 ? "s" : ""}
-                          </span>
+                    <div key={batch.id} className="rounded-xl border border-gray-100 overflow-hidden">
+
+                      {/* Batch header row */}
+                      <div className="flex items-start gap-3 p-3.5">
+                        <div
+                          className="w-9 h-9 rounded-md flex items-center justify-center flex-shrink-0"
+                          style={{ backgroundColor: sc.bg }}
+                        >
+                          <BookOpen size={15} style={{ color: sc.color }} strokeWidth={2} />
                         </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-gray-800" style={{ fontSize: "13.5px", fontWeight: 600 }}>{batch.name}</p>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            {/* Subjects inline summary — hidden in edit mode */}
+                            {!isEditing && batch.subjects.length > 0 && batch.subjects.map((s) => {
+                              const ssc = getSubjectColor(s);
+                              return (
+                                <span key={s} className="px-2 py-0.5 rounded-full" style={{ fontSize: "11px", fontWeight: 600, color: ssc.color, backgroundColor: ssc.bg }}>
+                                  {s}
+                                </span>
+                              );
+                            })}
+                            {!isEditing && batch.subjects.length === 0 && (
+                              <span className="text-gray-300" style={{ fontSize: "11.5px" }}>No subjects</span>
+                            )}
+                            <span className="text-gray-400" style={{ fontSize: "11.5px" }}>
+                              {batch.academic_year_label}
+                            </span>
+                            <span className="text-gray-400" style={{ fontSize: "11.5px" }}>
+                              · {batch.student_count} student{batch.student_count !== 1 ? "s" : ""}
+                            </span>
+                          </div>
+                        </div>
+                        {/* Edit / Done toggle */}
+                        <button
+                          onClick={() => {
+                            setEditingBatchId(isEditing ? null : batch.id);
+                            setConfirmKey(null);
+                          }}
+                          className="px-2.5 py-1 rounded-md border transition-all flex-shrink-0"
+                          style={{
+                            fontSize: "11px",
+                            fontWeight: 600,
+                            borderColor: isEditing ? "#0d9488" : "#e5e7eb",
+                            color:       isEditing ? "#0d9488" : "#9ca3af",
+                            backgroundColor: isEditing ? "#f0fdfa" : "transparent",
+                          }}
+                        >
+                          {isEditing ? "Done" : "Edit"}
+                        </button>
                       </div>
-                      <button
-                        onClick={() => handleUnassignBatch(batch.id)}
-                        className="w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-red-50 transition-all flex-shrink-0"
-                        title="Remove from batch"
-                      >
-                        <X size={13} strokeWidth={2.5} />
-                      </button>
+
+                      {/* Subject removal list — only in edit mode */}
+                      {isEditing && (
+                        <div className="px-3 pb-3 space-y-1.5" style={{ borderTop: "1px solid #f3f4f6" }}>
+                          <p className="text-gray-400 pt-2" style={{ fontSize: "10.5px", fontWeight: 600, letterSpacing: "0.04em" }}>
+                            REMOVE SUBJECTS
+                          </p>
+                          {batch.subjects.length === 0 ? (
+                            <p style={{ fontSize: "12px", color: "#9ca3af" }}>No subjects assigned to this batch.</p>
+                          ) : (
+                            batch.subjects.map((subject) => {
+                              const key              = `${batch.id}::${subject}`;
+                              const isPendingConfirm = confirmKey === key;
+                              const isBeingRemoved   = removingKey === key;
+                              return (
+                                <div
+                                  key={subject}
+                                  className="flex items-center justify-between rounded-lg px-3 py-2 transition-all"
+                                  style={{
+                                    backgroundColor: isPendingConfirm ? "#fef2f2" : "#f9fafb",
+                                    border: `1px solid ${isPendingConfirm ? "#fecaca" : "#f3f4f6"}`,
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      fontSize: "12.5px",
+                                      fontWeight: 500,
+                                      color: isPendingConfirm ? "#dc2626" : "#374151",
+                                    }}
+                                  >
+                                    {isPendingConfirm ? `Remove "${subject}"?` : subject}
+                                  </span>
+                                  <div className="flex items-center gap-1.5">
+                                    {isPendingConfirm && (
+                                      <button
+                                        onClick={() => setConfirmKey(null)}
+                                        className="px-2 py-0.5 rounded text-gray-400 hover:text-gray-600 transition-colors"
+                                        style={{ fontSize: "11px" }}
+                                      >
+                                        Cancel
+                                      </button>
+                                    )}
+                                    <button
+                                      disabled={isBeingRemoved}
+                                      onClick={() => handleUnassignSubject(batch.id, subject)}
+                                      className="w-6 h-6 rounded flex items-center justify-center transition-all disabled:opacity-40"
+                                      style={{
+                                        backgroundColor: isPendingConfirm ? "#dc2626" : "transparent",
+                                        color:           isPendingConfirm ? "white"    : "#d1d5db",
+                                      }}
+                                      title={isPendingConfirm ? "Confirm remove" : "Remove subject"}
+                                    >
+                                      {isBeingRemoved
+                                        ? <span style={{ fontSize: "9px" }}>…</span>
+                                        : <X size={12} strokeWidth={2.5} />}
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}

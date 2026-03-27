@@ -1145,14 +1145,16 @@ export function Students() {
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [academicYears, setAcademicYears] = useState<{ id: string; label: string; is_active: boolean }[]>([]);
+  const [selectedYearId, setSelectedYearId] = useState<string>("");
 
-  const loadData = async () => {
+  const loadData = async (yearId: string) => {
     setLoading(true);
     setLoadError(null);
     try {
       const [listRes, statsRes] = await Promise.all([
-        fetchStudentsApi({ limit: 100 }),
-        fetchStudentStatsApi(),
+        fetchStudentsApi({ limit: 100, academicYearId: yearId || undefined }),
+        fetchStudentStatsApi(yearId || undefined),
       ]);
       setStudents(listRes.students.map(mapRowToStudent));
       setStats(statsRes);
@@ -1163,7 +1165,17 @@ export function Students() {
     }
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    fetchAcademicYearsApi()
+      .then((years) => {
+        setAcademicYears(years);
+        const activeYear = years.find((y) => y.is_active);
+        const defaultId = activeYear?.id ?? "";
+        setSelectedYearId(defaultId);
+        loadData(defaultId);
+      })
+      .catch(() => loadData(""));
+  }, []);
 
   const filtered = students.filter(
     (s) =>
@@ -1172,8 +1184,7 @@ export function Students() {
   );
 
   function handleEnrollSubmit(_studentName: string, _loginIdentifier: string, _tempPassword: string) {
-    // Refetch the full list so the new student appears with real data
-    loadData();
+    loadData(selectedYearId);
   }
 
   function handleDeactivate(id: string) {
@@ -1234,6 +1245,45 @@ export function Students() {
           {loadError}
         </div>
       )}
+
+      {/* Academic Year Filter */}
+      <div className="flex items-center gap-3 mb-6">
+        <p className="text-gray-400 flex-shrink-0" style={{ fontSize: "13px", fontWeight: 500 }}>Academic Year:</p>
+        <div className="flex items-center gap-2 flex-wrap">
+          {academicYears.map((year) => (
+            <button
+              key={year.id}
+              onClick={() => {
+                setSelectedYearId(year.id);
+                loadData(year.id);
+              }}
+              className="px-4 py-1.5 rounded-xl border transition-all"
+              style={{
+                fontSize: "13px",
+                fontWeight: 500,
+                backgroundColor: selectedYearId === year.id ? "#0d9488" : "white",
+                color: selectedYearId === year.id ? "white" : "#6b7280",
+                borderColor: selectedYearId === year.id ? "#0d9488" : "#f3f4f6",
+              }}
+            >
+              {year.label}
+              {year.is_active && (
+                <span
+                  className="ml-1.5 px-1.5 py-0.5 rounded-full"
+                  style={{
+                    fontSize: "10px",
+                    fontWeight: 700,
+                    backgroundColor: selectedYearId === year.id ? "rgba(255,255,255,0.25)" : "#f0fdfa",
+                    color: selectedYearId === year.id ? "white" : "#0d9488",
+                  }}
+                >
+                  Active
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Quick stats */}
       <div className="grid grid-cols-3 gap-4 mb-6">

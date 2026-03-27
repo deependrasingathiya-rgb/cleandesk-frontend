@@ -49,9 +49,9 @@ export async function uploadStudyMaterialApi(input: {
   formData.append("file",        input.file);
   formData.append("linked_type", input.linked_type);
   formData.append("linked_id",   input.linked_id);
-  if (input.class_batch_id) {
-    formData.append("class_batch_id", input.class_batch_id);
-  }
+  if (input.class_batch_id !== null && input.class_batch_id !== undefined) {
+  formData.append("class_batch_id", input.class_batch_id);
+}
 
   const res = await fetch("/api/study-materials/upload", {
     method:  "POST",

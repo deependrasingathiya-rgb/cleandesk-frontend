@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import {
   fetchAcademicYearsApi,
   createClassBatchApi,
+  updateClassBatchApi,
+  deleteClassBatchApi,
   fetchBatchesPageSummaryApi,
   fetchBatchesDetailedApi,
   fetchBatchStudentsApi,
@@ -36,6 +38,7 @@ import {
   CheckCircle2,
   Trash2,
   Loader2,
+  MoreVertical,
 } from "lucide-react";
 
 // ─── Subject Color Map ─────────────────────────────────────────────────────────
@@ -618,7 +621,142 @@ function CreateFeeStructureModal({
 }
 
 
+// ─── Edit Batch Modal ─────────────────────────────────────────────────────────
 
+function EditBatchModal({
+  batch,
+  onClose,
+  onUpdated,
+}: {
+  batch: BatchDetailed;
+  onClose: () => void;
+  onUpdated: () => void;
+}) {
+  const [name, setName]                     = useState(batch.name);
+  const [selectedYearId, setSelectedYearId] = useState(batch.academic_year_id);
+  const [academicYears, setAcademicYears]   = useState<AcademicYearOption[]>([]);
+  const [yearsLoading, setYearsLoading]     = useState(true);
+  const [submitting, setSubmitting]         = useState(false);
+  const [error, setError]                   = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchAcademicYearsApi()
+      .then((years) => {
+        setAcademicYears(years);
+      })
+      .catch(() => setError("Could not load academic years."))
+      .finally(() => setYearsLoading(false));
+  }, []);
+
+  const isDirty =
+    name.trim() !== batch.name || selectedYearId !== batch.academic_year_id;
+  const canSubmit = name.trim().length > 0 && selectedYearId !== "" && isDirty && !submitting;
+
+  async function handleSubmit() {
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await updateClassBatchApi(batch.id, {
+        name: name.trim(),
+        academic_year_id: selectedYearId,
+      });
+      onUpdated();
+      onClose();
+    } catch (e: any) {
+      setError(e.message ?? "Failed to update batch");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ backgroundColor: "rgba(0,0,0,0.35)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-7" style={{ border: "1px solid #f3f4f6" }}>
+        <div className="flex items-start justify-between mb-6">
+          <div>
+            <h2 className="text-gray-900" style={{ fontSize: "18px", fontWeight: 700, letterSpacing: "-0.01em" }}>
+              Edit Batch
+            </h2>
+            <p className="text-gray-400 mt-1" style={{ fontSize: "13px" }}>
+              Update the name or academic year for this batch.
+            </p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-md flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="space-y-4 mb-6">
+          <div>
+            <label className="block text-gray-600 mb-1.5" style={{ fontSize: "13px", fontWeight: 600 }}>
+              Batch Name
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Science – Batch A"
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-50 transition-all"
+              style={{ fontSize: "13.5px" }}
+            />
+          </div>
+
+          <div>
+            <label className="block text-gray-600 mb-1.5" style={{ fontSize: "13px", fontWeight: 600 }}>
+              Academic Year
+            </label>
+            {yearsLoading ? (
+              <div className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-400" style={{ fontSize: "13.5px" }}>
+                Loading years…
+              </div>
+            ) : (
+              <select
+                value={selectedYearId}
+                onChange={(e) => setSelectedYearId(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 bg-white transition-all"
+                style={{ fontSize: "13.5px" }}
+              >
+                {academicYears.map((y) => (
+                  <option key={y.id} value={y.id}>
+                    {y.label}{y.is_active ? " (Active)" : ""}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {error && (
+            <p className="text-red-500" style={{ fontSize: "12.5px" }}>{error}</p>
+          )}
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            disabled={submitting}
+            className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-40"
+            style={{ fontSize: "13.5px", fontWeight: 600 }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!canSubmit}
+            className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+          >
+            {submitting ? "Saving…" : "Save Changes"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 // ─── Create Batch Modal ────────────────────────────────────────────────────────
 
 function CreateBatchModal({
@@ -845,6 +983,11 @@ function BatchDetailPanel({
   const [feeStructure, setFeeStructure]         = useState<FeeStructureRecord | null | undefined>(undefined);
   const [loadingFee, setLoadingFee]             = useState(true);
   const [showFeeModal, setShowFeeModal]         = useState(false);
+  const [showEditModal, setShowEditModal]       = useState(false);
+  const [showMenu, setShowMenu]                 = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting]                 = useState(false);
+  const [deleteError, setDeleteError]           = useState<string | null>(null);
 
   const PREVIEW_LIMIT = 5;
 
@@ -1222,15 +1365,109 @@ function BatchDetailPanel({
             </div>
 
             {/* Panel Footer */}
-            <div className="px-6 py-4 border-t border-gray-100">
+            <div className="px-6 py-4 border-t border-gray-100 relative">
               <button
+                onClick={() => setShowMenu((v) => !v)}
                 className="w-full py-2.5 rounded-xl border border-gray-200 text-gray-700 flex items-center justify-center gap-2 hover:border-teal-300 hover:text-teal-700 hover:bg-teal-50 transition-all"
                 style={{ fontSize: "13.5px", fontWeight: 600 }}
               >
-                <Edit2 size={14} strokeWidth={2.5} />
-                Edit Batch
+                <MoreVertical size={14} strokeWidth={2.5} />
+                Actions
               </button>
+
+              {showMenu && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
+                  <div
+                    className="absolute bottom-16 left-6 right-6 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden z-20"
+                  >
+                    <button
+                      onClick={() => { setShowMenu(false); setShowEditModal(true); }}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50 transition-colors text-left"
+                      style={{ fontSize: "13.5px", fontWeight: 600 }}
+                    >
+                      <Edit2 size={14} strokeWidth={2.5} className="text-gray-400" />
+                      Edit Batch
+                    </button>
+                    <div className="h-px bg-gray-100" />
+                    <button
+                      onClick={() => { setShowMenu(false); setShowDeleteConfirm(true); }}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 transition-colors text-left"
+                      style={{ fontSize: "13.5px", fontWeight: 600 }}
+                    >
+                      <Trash2 size={14} strokeWidth={2.5} />
+                      Delete Batch
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
+
+{/* Delete Confirm Modal */}
+            {showDeleteConfirm && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center"
+                style={{ backgroundColor: "rgba(0,0,0,0.35)" }}
+              >
+                <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-7" style={{ border: "1px solid #f3f4f6" }}>
+                  <div className="flex items-center justify-center w-12 h-12 rounded-full mb-4 mx-auto" style={{ backgroundColor: "#fef2f2" }}>
+                    <Trash2 size={20} style={{ color: "#dc2626" }} strokeWidth={2} />
+                  </div>
+                  <h2 className="text-gray-900 text-center mb-1" style={{ fontSize: "17px", fontWeight: 700 }}>
+                    Delete Batch?
+                  </h2>
+                  <p className="text-gray-400 text-center mb-5" style={{ fontSize: "13px" }}>
+                    <strong className="text-gray-600">{batch.name}</strong> will be permanently deactivated. This cannot be undone.
+                  </p>
+                  {deleteError && (
+                    <p className="text-red-500 text-center mb-3" style={{ fontSize: "12.5px" }}>{deleteError}</p>
+                  )}
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => { setShowDeleteConfirm(false); setDeleteError(null); }}
+                      disabled={deleting}
+                      className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-40"
+                      style={{ fontSize: "13.5px", fontWeight: 600 }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={async () => {
+                        setDeleting(true);
+                        setDeleteError(null);
+                        try {
+                          await deleteClassBatchApi(batch.id);
+                          setShowDeleteConfirm(false);
+                          onClose();
+                        } catch (e: any) {
+                          setDeleteError(e.message ?? "Failed to delete batch");
+                        } finally {
+                          setDeleting(false);
+                        }
+                      }}
+                      disabled={deleting}
+                      className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                      style={{ backgroundColor: "#dc2626", fontSize: "13.5px", fontWeight: 600 }}
+                    >
+                      {deleting ? "Deleting…" : "Delete"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            
+           {/* Edit Batch Modal */}
+            {showEditModal && (
+              <EditBatchModal
+                batch={batch}
+                onClose={() => setShowEditModal(false)}
+                onUpdated={() => {
+                  setShowEditModal(false);
+                  onClose();
+                }}
+              />
+            )}
 
             {/* Fee Structure Modal */}
             {showFeeModal && (
@@ -1452,7 +1689,10 @@ export function Batches() {
       {detailBatch && (
         <BatchDetailPanel
           batch={detailBatch}
-          onClose={() => setDetailBatch(null)}
+          onClose={() => {
+            setDetailBatch(null);
+            loadData();
+          }}
         />
       )}
     </div>

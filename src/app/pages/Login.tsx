@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 
 import { saveToken, parseToken, ROLE_ROUTES } from "../auth";
+import { apiFetch } from "../api";
 import loginIllustration from "../../assets/login-illustration.png";
 import loginDoodle from "../../assets/login-page-background-doogle.png";
 
@@ -28,9 +29,8 @@ export function Login() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/login", {
+      const res = await apiFetch("/api/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           login_identifier: loginIdentifier.trim(),
           password,
@@ -293,7 +293,7 @@ export function Login() {
                 Forgot password?
               </a>
             </div>
-            
+
             {/* Error message */}
             {error && (
               <div

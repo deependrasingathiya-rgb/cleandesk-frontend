@@ -109,11 +109,13 @@ function redirectToLogin(): void {
  * Returns the new access token string, or null if refresh failed.
  * Called automatically by apiFetch on 401 responses.
  */
+const API_BASE = import.meta.env.VITE_API_URL ?? "";
+
 export async function refreshAccessToken(): Promise<string | null> {
   try {
-    const res = await fetch("/api/refresh", {
+    const res = await fetch(`${API_BASE}/api/refresh`, {
       method: "POST",
-      credentials: "include", // sends the HttpOnly cookie
+      credentials: "include",
     });
 
     if (!res.ok) return null;
@@ -135,7 +137,7 @@ export async function logout(options?: { redirectToLogin?: boolean }): Promise<v
 
   try {
     if (token) {
-      await fetch("/api/logout", {
+      await fetch(`${API_BASE}/api/logout`, {
         method: "POST",
         credentials: "include",
         headers: {

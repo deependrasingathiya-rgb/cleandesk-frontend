@@ -13,11 +13,17 @@ function drainQueue(token: string | null) {
   refreshQueue = [];
 }
 
+const API_BASE = import.meta.env.VITE_API_URL ?? "";
+
 export async function apiFetch(
   input: RequestInfo,
   init: RequestInit = {}
 ): Promise<Response> {
   const token = getToken();
+
+  if (typeof input === "string" && input.startsWith("/")) {
+    input = `${API_BASE}${input}`;
+  }
 
   const headers = new Headers(init.headers ?? {});
   if (token) headers.set("Authorization", `Bearer ${token}`);

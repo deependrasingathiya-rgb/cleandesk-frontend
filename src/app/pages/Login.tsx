@@ -31,6 +31,9 @@ export function Login() {
     try {
       const res = await apiFetch("/api/login", {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           login_identifier: loginIdentifier.trim(),
           password,

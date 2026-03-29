@@ -1,6 +1,5 @@
 import { handleUnauthorizedSession } from "./auth";
-
-const BASE_URL = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
+import { buildApiUrl } from "./api-url";
 
 function hasAuthorizationHeader(headers?: HeadersInit): boolean {
   if (!headers) return false;
@@ -78,7 +77,7 @@ async function withUnauthorizedHandling(
 }
 
 export async function apiFetch(path: string, options?: RequestInit) {
-  const url = `${BASE_URL}${path.replace(/^\/api/, "")}`;
+  const url = buildApiUrl(path);
   const optionsWithCredentials: RequestInit = { credentials: "include", ...options };
   return withUnauthorizedHandling(fetch(url, optionsWithCredentials), optionsWithCredentials);
 }
@@ -87,9 +86,7 @@ export async function apiFetch(path: string, options?: RequestInit) {
 const _fetch = window.fetch.bind(window);
 window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   if (typeof input === "string" && input.startsWith("/api/")) {
-    const url = BASE_URL
-      ? `${BASE_URL}${input.replace(/^\/api/, "")}`
-      : input;
+    const url = buildApiUrl(input);
 
     // Always include credentials so the HttpOnly refresh token cookie is sent
     const initWithCredentials: RequestInit = { credentials: "include", ...init };

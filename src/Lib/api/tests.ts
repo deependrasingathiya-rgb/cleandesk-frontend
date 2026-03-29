@@ -127,7 +127,26 @@ export async function bulkSubmitMarksApi(
     throw new Error(json.error ?? "Failed to submit marks");
   }
 }
+export type TestStudyMaterial = {
+  id: string;
+  file_url: string;
+  linked_type: string;
+  linked_id: string;
+  created_at: string;
+  uploader_name: string | null;
+  batch_name: string | null;
+};
 
+export async function fetchTestStudyMaterialsApi(testId: string): Promise<TestStudyMaterial[]> {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+  const res = await fetch(`/api/study-materials?linked_test_id=${testId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error ?? "Failed to fetch study materials");
+  return json.data as TestStudyMaterial[];
+}
 
 export async function createTestApi(payload: CreateTestPayload): Promise<{ created: number; data: { id: string }[] }> {
   const token = getToken();

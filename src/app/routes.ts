@@ -30,6 +30,8 @@ import { StudentMarks } from "./pages/Student/StudentMarks";
 import { MyFee } from "./pages/Student/MyFee";
 import { Notifications } from "./pages/Notifications";
 import { Login } from "./pages/Login";
+import { ForgotPassword } from "./pages/ForgotPassword";
+import { ResetPassword } from "./pages/ResetPassword";
 import { clearToken, getToken, parseToken, isTokenExpired, ROLE_ROUTES } from "./auth";
 
 function requireRole(roleId: number) {
@@ -69,6 +71,14 @@ export const router = createBrowserRouter([
   {
     path: "/login",
     Component: Login,
+  },
+  {
+    path: "/forgot-password",
+    Component: ForgotPassword,
+  },
+  {
+    path: "/reset-password",
+    Component: ResetPassword,
   },
 
   // ── Admin (role_id: 1) ───────────────────────────────────────────────────────

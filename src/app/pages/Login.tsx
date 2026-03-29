@@ -286,6 +286,14 @@ export function Login() {
               </div>
             </div>
 
+
+{/* Forgot password */}
+            <div className="flex justify-end" style={{ marginTop: "-8px" }}>
+              <a href="/forgot-password" style={{ fontSize: "13px", color: "#0d9488", fontWeight: 500 }}>
+                Forgot password?
+              </a>
+            </div>
+            
             {/* Error message */}
             {error && (
               <div

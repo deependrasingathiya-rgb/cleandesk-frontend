@@ -1,16 +1,15 @@
+//src/Lib/api/study-materials.ts
 import { getToken } from "../../app/auth";
 
 export type StudyMaterialRecord = {
   id: string;
-  linked_type: string;
-  linked_id: string;
   file_url: string;
+  linked_announcement_id: string | null;
+  linked_test_id: string | null;
   created_at: string;
   created_by: string;
   is_active: boolean;
   uploader_name: string | null;
-  batch_name: string | null;
-  batch_id: string | null;
 };
 
 function authHeaders(): HeadersInit {
@@ -38,20 +37,42 @@ export async function fetchStudyMaterialsApi(options?: {
 
 export async function uploadStudyMaterialApi(input: {
   file: File;
-  linked_type: "TEST" | "ANNOUNCEMENT";
-  linked_id: string;
+  linked_type?: "ANNOUNCEMENT" | "TEST";
+  linked_id?: string;
   class_batch_id?: string | null;
+  // legacy fields kept for backwards compatibility
+  linked_announcement_id?: string | null;
+  linked_test_id?: string | null;
 }): Promise<StudyMaterialRecord> {
   const token = getToken();
   if (!token) throw new Error("Not authenticated");
 
+  // Resolve to canonical fields — new callers use linked_type+linked_id,
+  // legacy callers use linked_announcement_id / linked_test_id directly.
+  const resolvedAnnouncementId =
+    (input.linked_type === "ANNOUNCEMENT" ? input.linked_id : null) ??
+    input.linked_announcement_id ??
+    null;
+  const resolvedTestId =
+    (input.linked_type === "TEST" ? input.linked_id : null) ??
+    input.linked_test_id ??
+    null;
+
+  if (!resolvedAnnouncementId && !resolvedTestId) {
+    throw new Error("Provide a valid linked_type + linked_id or linked_announcement_id / linked_test_id");
+  }
+
   const formData = new FormData();
-  formData.append("file",        input.file);
-  formData.append("linked_type", input.linked_type);
-  formData.append("linked_id",   input.linked_id);
-  if (input.class_batch_id !== null && input.class_batch_id !== undefined) {
-  formData.append("class_batch_id", input.class_batch_id);
-}
+  formData.append("file", input.file);
+  if (resolvedAnnouncementId) {
+    formData.append("linked_announcement_id", resolvedAnnouncementId);
+  }
+  if (resolvedTestId) {
+    formData.append("linked_test_id", resolvedTestId);
+  }
+  if (input.class_batch_id) {
+    formData.append("class_batch_id", input.class_batch_id);
+  }
 
   const res = await fetch("/api/study-materials/upload", {
     method:  "POST",

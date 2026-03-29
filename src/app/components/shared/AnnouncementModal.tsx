@@ -12,7 +12,8 @@ import {
   File,
 } from "lucide-react";
 import { createAnnouncementApi } from "../../../Lib/api/announcements";
-import { fetchBatchesDetailedApi } from "../../../Lib/api/class-batches";import { uploadStudyMaterialApi } from "../../../Lib/api/study-materials";
+import { fetchBatchesDetailedApi } from "../../../Lib/api/class-batches";
+import { uploadStudyMaterialApi } from "../../../Lib/api/study-materials";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -321,42 +322,23 @@ export function AnnouncementModal({
 
       // 1. Create the announcement
       const dbType = TYPE_TO_DB[form.type as AnnouncementType];
-      let announcementId = "";
 
-      // createAnnouncementApi returns void currently — we need the id for file uploads.
-      // Call the API and read the response directly.
-      const { getToken } = await import("../../../app/auth");
-      const token = getToken();
-      const announcementRes = await fetch("/api/announcements", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          announcement_type:  dbType,
-          announcement_title: form.title.trim() || form.type,
-          message:            form.body.trim(),
-          class_batch_id:     resolvedBatchId,
-          school_attribute:   null,
-        }),
+      const created = await createAnnouncementApi({
+        announcement_type:  dbType,
+        announcement_title: form.title.trim() || form.type,
+        message:            form.body.trim(),
+        class_batch_id:     resolvedBatchId,
+        school_attribute:   null,
       });
 
-      const announcementJson = await announcementRes.json();
-      if (!announcementRes.ok) {
-        throw new Error(announcementJson.error ?? "Failed to create announcement");
-      }
+      const announcementId = created.id;
 
-      announcementId = announcementJson.data?.id;
-
-      // 2. Upload each attachment linked to this announcement
-      if (announcementId && attachedFiles.length > 0) {
+      // 2. Upload each attachment sequentially linked to this announcement
+      if (attachedFiles.length > 0) {
         for (const attached of attachedFiles) {
           await uploadStudyMaterialApi({
-            file:           attached.file,
-            linked_type:    "ANNOUNCEMENT",
-            linked_id:      announcementId,
-            class_batch_id: resolvedBatchId,
+            file:                    attached.file,
+            linked_announcement_id:  announcementId,
           });
         }
       }

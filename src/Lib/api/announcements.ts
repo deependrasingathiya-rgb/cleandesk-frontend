@@ -10,6 +10,12 @@ export type AnnouncementPayload = {
   school_attribute?: string | null;
 };
 
+export type AnnouncementAttachment = {
+  id: string;
+  file_url: string;
+  created_at: string;
+};
+
 export type AnnouncementRecord = {
   id: string;
   announcement_type: string;
@@ -20,12 +26,13 @@ export type AnnouncementRecord = {
   created_by: string;
   created_at: string;
   is_active: boolean;
+  attachments: AnnouncementAttachment[];
 };
 
 
 export async function createAnnouncementApi(
   payload: AnnouncementPayload
-): Promise<void> {
+): Promise<AnnouncementRecord> {
   const token = getToken();
   if (!token) throw new Error("Not authenticated");
 
@@ -43,6 +50,8 @@ export async function createAnnouncementApi(
   if (!res.ok) {
     throw new Error(data.error ?? "Failed to create announcement");
   }
+
+  return data.data as AnnouncementRecord;
 }
 export async function fetchAnnouncementsApi(): Promise<AnnouncementRecord[]> {
   const token = getToken();

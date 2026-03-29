@@ -4,17 +4,16 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import {
   fetchUnassignedTeacherUsersApi,
-  fetchClassBatchesApi,
   assignTeacherApi,
   unassignTeacherBatchApi,
   unassignTeacherBatchSubjectApi,
   fetchTeachersApi,
   type TeacherUserOption,
-  type ClassBatchOption,
   type TeacherListItem,
   type TeacherBatch,
 } from "../../Lib/api/teachers";
 import { fetchSubjectCatalogApi } from "../../Lib/api/subjects";
+import { fetchBatchesDetailedApi } from "../../Lib/api/class-batches";
 import {
   Search,
   Plus,
@@ -69,10 +68,10 @@ function AssignTeacherModal({
   onAssigned,
 }: {
   onClose: () => void;
-  onAssigned: (teacherUser: TeacherUserOption, batches: ClassBatchOption[], batchSubjects: Record<string, Set<string>>) => void;
+  onAssigned: (teacherUser: TeacherUserOption, batches: { id: string; name: string }[], batchSubjects: Record<string, Set<string>>) => void;
 }) {
   const [teacherUsers, setTeacherUsers] = useState<TeacherUserOption[]>([]);
-  const [batches, setBatches]           = useState<ClassBatchOption[]>([]);
+  const [batches, setBatches]           = useState<{ id: string; name: string }[]>([]);
   const [subjects, setSubjects]         = useState<string[]>([]);
   const [loadingData, setLoadingData]   = useState(true);
   const [loadError, setLoadError]       = useState<string | null>(null);
@@ -85,12 +84,12 @@ function AssignTeacherModal({
   useEffect(() => {
     Promise.all([
       fetchUnassignedTeacherUsersApi(),
-      fetchClassBatchesApi(),
+      fetchBatchesDetailedApi(),
       fetchSubjectCatalogApi(),
     ])
       .then(([users, batchList, subjectList]) => {
         setTeacherUsers(users);
-        setBatches(batchList);
+        setBatches(batchList.map((b) => ({ id: b.id, name: b.name })));
         setSubjects(subjectList);
       })
       .catch((e) => setLoadError(e.message ?? "Failed to load data"))
@@ -715,7 +714,7 @@ export function Teachers() {
 
   function handleAssigned(
     teacherUser: TeacherUserOption,
-    assignedBatches: ClassBatchOption[],
+    assignedBatches: { id: string; name: string }[],
     batchSubjects: Record<string, Set<string>>
   ) {
     const newTeacher: Teacher = {

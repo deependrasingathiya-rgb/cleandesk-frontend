@@ -10,7 +10,7 @@ import {
   type AnnouncementRecord,
 } from "../../Lib/api/announcements";
 import { fetchBatchesDetailedApi } from "../../Lib/api/class-batches";
-import { Plus, Search, X, Megaphone, Pencil, Trash2, AlertTriangle, CheckCircle2, ChevronDown, Users2, Calendar, User } from "lucide-react";
+import { Plus, Search, X, Megaphone, Pencil, Trash2, AlertTriangle, CheckCircle2, ChevronDown, Users2, Calendar, User, Paperclip, Download } from "lucide-react";
 
 
 
@@ -34,6 +34,12 @@ const DB_TYPE_MAP: Record<string, AnnouncementType> = {
 };
 
 
+type AnnouncementAttachmentDisplay = {
+  id: string;
+  file_url: string;
+  name: string;
+};
+
 type Announcement = {
   id: string;
   type: AnnouncementType;
@@ -41,7 +47,8 @@ type Announcement = {
   body: string;
   createdBy: string;
   date: string;
-  batches: string[]; // ["Universal"] or specific batch names
+  batches: string[];
+  attachments: AnnouncementAttachmentDisplay[];
 };
 
 function mapRecord(record: AnnouncementRecord, batches: BatchOption[]): Announcement {
@@ -56,14 +63,23 @@ const displayType: AnnouncementType =
   const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const dateStr = `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 
+  const attachments: AnnouncementAttachmentDisplay[] = (record.attachments ?? []).map((a) => ({
+    id:       a.id,
+    file_url: a.file_url,
+    name:     decodeURIComponent(a.file_url.split("/").pop() ?? a.id)
+                .replace(/\.[^.]+$/, "")
+                .replace(/-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/, ""),
+  }));
+
   return {
     id: record.id,
     type: displayType,
     title: record.announcement_title,
     body: record.message,
-    createdBy: record.created_by, // will be replaced with name join if needed
+    createdBy: record.created_by,
     date: dateStr,
     batches: [batchName],
+    attachments,
   };
 }
 
@@ -140,8 +156,9 @@ export function Announcements({ canManage = true }: { canManage?: boolean }) {
 
   // Modal state
   const [createOpen, setCreateOpen] = useState(false);
-  const [editTarget, setEditTarget] = useState<Announcement | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Announcement | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   // ── Load data on mount ──
   useEffect(() => {
@@ -175,41 +192,13 @@ export function Announcements({ canManage = true }: { canManage?: boolean }) {
 
   // ── CRUD ──
 
-  async function handleCreateSuccess() {
-    const [records, batches] = await Promise.all([
-      fetchAnnouncementsApi(),
-      Promise.resolve(batchOptions),
-    ]);
-    setAnnouncements(records.map((r) => mapRecord(r, batches)));
+  async function handleCreateSuccess(_announcementId: string) {
+    const records = await fetchAnnouncementsApi();
+    setAnnouncements(records.map((r) => mapRecord(r, batchOptions)));
     setCreateOpen(false);
   }
 
-  async function handleEdit(form: FormState) {
-    if (!editTarget) return;
-    setSubmitting(true);
-    setApiError(null);
-    try {
-      await updateAnnouncementApi(editTarget.id, {
-        announcement_title: form.title || form.type,
-        message: form.body,
-      });
-      // Refresh from server to stay consistent
-      const [records, batches] = await Promise.all([
-        fetchAnnouncementsApi(),
-        Promise.resolve(batchOptions),
-      ]);
-      const updated = records.map(r => mapRecord(r, batches));
-      setAnnouncements(updated);
-      // Keep detail panel in sync
-      const freshSelected = updated.find(a => a.id === editTarget.id) ?? null;
-      setSelected(freshSelected);
-      setEditTarget(null);
-    } catch (err: any) {
-      setApiError(err.message ?? "Failed to update announcement.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
+  
 
   async function handleDelete(id: string) {
     try {
@@ -388,8 +377,29 @@ if (loading) {
                   {/* Edit */}
                   {canManage && (
                     <button
-                      onClick={() => setEditTarget(selected)}
-                      className="w-8 h-8 rounded-md flex items-center justify-center border border-gray-200 text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-all"
+                      onClick={async () => {
+                        const newTitle = window.prompt("Edit title:", selected.title);
+                        const newBody  = window.prompt("Edit message:", selected.body);
+                        if (newTitle === null && newBody === null) return;
+                        setSubmitting(true);
+                        setApiError(null);
+                        try {
+                          await updateAnnouncementApi(selected.id, {
+                            announcement_title: newTitle ?? selected.title,
+                            message: newBody ?? selected.body,
+                          });
+                          const records = await fetchAnnouncementsApi();
+                          const updated = records.map(r => mapRecord(r, batchOptions));
+                          setAnnouncements(updated);
+                          setSelected(updated.find(a => a.id === selected.id) ?? null);
+                        } catch (err: any) {
+                          setApiError(err.message ?? "Failed to update announcement.");
+                        } finally {
+                          setSubmitting(false);
+                        }
+                      }}
+                      disabled={submitting}
+                      className="w-8 h-8 rounded-md flex items-center justify-center border border-gray-200 text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-all disabled:opacity-40"
                       title="Edit announcement"
                     >
                       <Pencil size={13} strokeWidth={2} />
@@ -463,6 +473,43 @@ if (loading) {
                     ))}
                   </div>
                 </div>
+
+                {selected.attachments.length > 0 && (
+                  <div className="pt-3 mt-1 border-t border-gray-50">
+                    <div className="flex items-center gap-1.5 text-gray-400 mb-2">
+                      <Paperclip size={12} />
+                      <span style={{ fontSize: "12.5px" }}>
+                        Attachments ({selected.attachments.length})
+                      </span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {selected.attachments.map((att) => (
+  <a
+    key={att.id}
+    href={att.file_url}
+    target="_blank"
+    rel="noopener noreferrer"
+    className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-gray-100 hover:border-teal-200 hover:bg-teal-50 transition-all group"
+    style={{ textDecoration: "none" }}
+  >
+    <div
+      className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0"
+      style={{ backgroundColor: "#f0fdfa" }}
+    >
+      <Paperclip size={11} color="#0d9488" strokeWidth={2} />
+    </div>
+    <span
+      className="flex-1 text-gray-700 truncate group-hover:text-teal-700 transition-colors"
+      style={{ fontSize: "12px", fontWeight: 500 }}
+    >
+      {att.name}
+    </span>
+    <Download size={11} className="text-gray-300 group-hover:text-teal-500 flex-shrink-0" />
+  </a>
+))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -478,23 +525,7 @@ if (loading) {
         />
       )}
 
-      {/* Edit modal */}
-      {editTarget && (
-        <AnnouncementModal
-          initial={{
-            type: editTarget.type,
-            title: editTarget.title,
-            body: editTarget.body,
-            batches: editTarget.batches,
-          }}
-          mode="edit"
-          onClose={() => { setEditTarget(null); setApiError(null); }}
-          onSubmit={handleEdit}
-          submitting={submitting}
-          apiError={apiError}
-          batchOptions={["Universal", ...batchOptions.map(b => b.name)]}
-        />
-      )}
+      
 
       {/* Delete confirm */}
       {deleteTarget && (

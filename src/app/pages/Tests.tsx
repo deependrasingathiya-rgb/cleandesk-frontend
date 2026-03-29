@@ -9,11 +9,13 @@ import {
   deleteTestApi,
   updateTestApi,
   bulkSubmitMarksApi,
+  fetchTestStudyMaterialsApi,
   type TestRow,
   type TestDetailRow,
   type BatchStudentRow,
+  type TestStudyMaterial,
 } from "../../Lib/api/tests";
-import { fetchClassBatchesApi } from "../../Lib/api/teachers";
+import { fetchBatchesDetailedApi } from "../../Lib/api/class-batches";
 import { fetchSubjectCatalogApi, addSubjectApi } from "../../Lib/api/subjects";
 import {
   Search,
@@ -94,6 +96,7 @@ type Test = {
   totalMarks: number;
   createdBy: string;
   attachments: AttachedFile[];
+  liveMaterials: TestStudyMaterial[];
   marks: StudentMark[] | null;
   hasMarks: boolean;
 };
@@ -154,6 +157,7 @@ function mapRowToTest(row: TestRow): Test {
     totalMarks: Number(row.total_marks),
     createdBy: row.created_by_name ?? "—",
     attachments: [],
+    liveMaterials: [],
     marks: null,
     hasMarks: row.has_marks,
   };
@@ -179,7 +183,118 @@ function getFileColor(type: AttachedFile["type"]) {
   if (type === "video") return { color: "#7c3aed", bg: "#f5f3ff" };
   return { color: "#6b7280", bg: "#f9fafb" };
 }
+// ─── Live material helpers ─────────────────────────────────────────────────────
 
+function detectMaterialType(url: string): "pdf" | "image" | "video" | "other" {
+  const ext = url.split("?")[0].split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "pdf") return "pdf";
+  if (["jpg", "jpeg", "png", "gif", "webp", "svg"].includes(ext)) return "image";
+  if (["mp4", "mov", "avi", "mkv", "webm"].includes(ext)) return "video";
+  return "other";
+}
+
+function getMaterialLabel(url: string): string {
+  const raw = url.split("?")[0].split("/").pop() ?? "file";
+  // Strip UUID suffix that R2 appends: filename-<uuid>.ext
+  return decodeURIComponent(
+    raw.replace(/-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(\.[^.]+)?$/, "$1")
+       .replace(/\.[^.]+$/, "")
+  ) || raw;
+}
+
+// DROP-IN REPLACEMENT for the LiveMaterialCard function in Tests.tsx
+// Find the entire LiveMaterialCard function and replace with this.
+
+function LiveMaterialCard({ material }: { material: TestStudyMaterial }) {
+  const [expanded, setExpanded] = useState(false);
+  const type = detectMaterialType(material.file_url);
+  const label = getMaterialLabel(material.file_url);
+  const FileIcon = getFileIcon(type);
+  const fc = getFileColor(type);
+  const uploadedAt = new Date(material.created_at).toLocaleDateString("en-IN", {
+    day: "numeric", month: "short", year: "numeric",
+  });
+
+  return (
+    <div className="rounded-xl border border-gray-100 overflow-hidden">
+      <div
+        className="flex items-center gap-3 px-4 py-3 bg-white hover:bg-gray-50 transition-colors cursor-pointer"
+        onClick={() => type !== "other" && setExpanded((e) => !e)}
+      >
+        <div
+          className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0"
+          style={{ backgroundColor: fc.bg }}
+        >
+          <FileIcon size={14} style={{ color: fc.color }} strokeWidth={2} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-gray-700 truncate" style={{ fontSize: "13px", fontWeight: 500 }}>{label}</p>
+          <p className="text-gray-400" style={{ fontSize: "11px" }}>
+            {material.uploader_name ?? "—"} · {uploadedAt}
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {type !== "other" && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setExpanded((x) => !x); }}
+              className="px-2.5 py-1 rounded-md border border-gray-100 text-gray-400 hover:text-teal-600 hover:border-teal-200 hover:bg-teal-50 transition-all"
+              style={{ fontSize: "11.5px", fontWeight: 600 }}
+            >
+              {expanded ? "Hide" : "Preview"}
+            </button>
+          )}
+          <a
+            href={material.file_url}
+            download
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="px-2.5 py-1 rounded-md border border-teal-100 text-teal-600 hover:bg-teal-50 transition-all"
+            style={{ fontSize: "11.5px", fontWeight: 600, textDecoration: "none" }}
+          >
+            ↓
+          </a>
+          <a
+            href={material.file_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="px-2.5 py-1 rounded-md border border-gray-100 text-gray-400 hover:text-teal-600 hover:border-teal-200 hover:bg-teal-50 transition-all"
+            style={{ fontSize: "11.5px", fontWeight: 600, textDecoration: "none" }}
+          >
+            ↗
+          </a>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="border-t border-gray-100 bg-gray-50" style={{ maxHeight: "420px", overflow: "auto" }}>
+          {type === "image" && (
+            <img
+              src={material.file_url}
+              alt={label}
+              style={{ maxWidth: "100%", maxHeight: "400px", objectFit: "contain", display: "block", margin: "0 auto", padding: "12px" }}
+            />
+          )}
+          {type === "pdf" && (
+            <iframe
+              src={`${material.file_url}#toolbar=1&navpanes=0&scrollbar=1`}
+              title={label}
+              style={{ width: "100%", height: "400px", border: "none", display: "block" }}
+            />
+          )}
+          {type === "video" && (
+            <video
+              src={material.file_url}
+              controls
+              style={{ width: "100%", maxHeight: "380px", display: "block", backgroundColor: "#000" }}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 function detectFileType(filename: string): AttachedFile["type"] {
   const ext = filename.split(".").pop()?.toLowerCase() ?? "";
   if (["pdf"].includes(ext)) return "pdf";
@@ -421,8 +536,8 @@ function TestFormView({
   const [showAddSubject, setShowAddSubject] = useState(false);
 
   useEffect(() => {
-    fetchClassBatchesApi()
-      .then((list) => setBatchOptions(list))
+    fetchBatchesDetailedApi()
+      .then((list) => setBatchOptions(list.map((b) => ({ id: b.id, name: b.name }))))
       .catch(() => setApiError("Failed to load batches."))
       .finally(() => setLoadingBatches(false));
 
@@ -1261,29 +1376,27 @@ function TestDetail({
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Paperclip size={15} className="text-teal-500" />
-            <h2 className="text-gray-800" style={{ fontSize: "15px", fontWeight: 700 }}>Study Material</h2>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Paperclip size={15} className="text-teal-500" />
+              <h2 className="text-gray-800" style={{ fontSize: "15px", fontWeight: 700 }}>Study Material</h2>
+            </div>
+            {test.liveMaterials.length > 0 && (
+              <span
+                className="px-2 py-0.5 rounded-full"
+                style={{ fontSize: "11px", fontWeight: 600, backgroundColor: "#f0fdfa", color: "#0d9488" }}
+              >
+                {test.liveMaterials.length} file{test.liveMaterials.length !== 1 ? "s" : ""}
+              </span>
+            )}
           </div>
-          {test.attachments.length === 0 ? (
+          {test.liveMaterials.length === 0 ? (
             <p className="text-gray-300" style={{ fontSize: "13.5px" }}>No attachments added.</p>
           ) : (
             <div className="space-y-2">
-              {test.attachments.map((f, i) => {
-                const FileIcon = getFileIcon(f.type);
-                const fc = getFileColor(f.type);
-                return (
-                  <div key={i} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer">
-                    <div className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0" style={{ backgroundColor: fc.bg }}>
-                      <FileIcon size={14} style={{ color: fc.color }} strokeWidth={2} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-gray-700 truncate" style={{ fontSize: "13px", fontWeight: 500 }}>{f.name}</p>
-                      <p className="text-gray-400" style={{ fontSize: "11.5px" }}>{f.size}</p>
-                    </div>
-                  </div>
-                );
-              })}
+              {test.liveMaterials.map((m) => (
+                <LiveMaterialCard key={m.id} material={m} />
+              ))}
             </div>
           )}
         </div>
@@ -1501,8 +1614,11 @@ export function Tests({ canManage = true }: { canManage?: boolean }) {
 useEffect(() => {
     if (view.type === "detail") {
       loadTestDetail(view.testId);
+      loadTestMaterials(view.testId);
     }
-  }, [view]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view.type === "detail" ? (view as { testId: string }).testId : ""]);
+
   // When opening detail view, fetch fresh detail (includes marks)
   const loadTestDetail = async (testId: string) => {
     try {
@@ -1523,6 +1639,17 @@ useEffect(() => {
       ));
     } catch {
       // Non-fatal — list still works
+    }
+  };
+
+  const loadTestMaterials = async (testId: string) => {
+    try {
+      const materials = await fetchTestStudyMaterialsApi(testId);
+      setTests((prev) => prev.map((t) =>
+        t.id === testId ? { ...t, liveMaterials: materials } : t
+      ));
+    } catch {
+      // Non-fatal
     }
   };
 
@@ -1575,7 +1702,9 @@ useEffect(() => {
     setTests((prev) =>
       prev.map((t) => t.id === testId ? { ...t, marks, hasMarks: true } : t)
     );
-    setTimeout(() => setView({ type: "detail", testId }), 100);
+    setTimeout(() => {
+      setView({ type: "detail", testId });
+    }, 100);
   }
 
   // ── Routing ──
@@ -1639,7 +1768,7 @@ useEffect(() => {
         onDelete={() => handleDelete(test.id)}
         onEnterMarks={() => setView({ type: "marks", testId: test.id, mode: "enter" })}
         onModifyMarks={() => setView({ type: "marks", testId: test.id, mode: "modify" })}
-        onUploadMaterial={() => { /* wire to study materials flow */ }}
+        onUploadMaterial={() => loadTestMaterials(test.id)}
         canManage={canManage}
       />
     );

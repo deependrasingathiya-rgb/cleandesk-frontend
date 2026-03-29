@@ -183,108 +183,79 @@ or initiating processes. They communicate interactivity and should have clear, a
 
 // ===== FILE: src\app\api.ts =====
 
-import { handleUnauthorizedSession } from "./auth";
-
-const BASE_URL = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
-
-function hasAuthorizationHeader(headers?: HeadersInit): boolean {
-  if (!headers) return false;
-
-  if (headers instanceof Headers) {
-    return headers.has("Authorization");
-  }
-
-  if (Array.isArray(headers)) {
-    return headers.some(([key]) => key.toLowerCase() === "authorization");
-  }
-
-  return Object.keys(headers).some((key) => key.toLowerCase() === "authorization");
-}
+import {
+  getToken,
+  saveToken,
+  refreshAccessToken,
+  handleUnauthorizedSession,
+} from "./auth";
 
 let isRefreshing = false;
-let refreshSubscribers: Array<(token: string | null) => void> = [];
+let refreshQueue: Array<(token: string | null) => void> = [];
 
-function onRefreshComplete(token: string | null) {
-  refreshSubscribers.forEach((cb) => cb(token));
-  refreshSubscribers = [];
+function drainQueue(token: string | null) {
+  refreshQueue.forEach((resolve) => resolve(token));
+  refreshQueue = [];
 }
 
-async function withUnauthorizedHandling(
-  request: Promise<Response>,
-  options?: RequestInit
+export async function apiFetch(
+  input: RequestInfo,
+  init: RequestInit = {}
 ): Promise<Response> {
-  const response = await request;
+  const token = getToken();
 
-  if (response.status === 401 && hasAuthorizationHeader(options?.headers)) {
-    // Attempt a single silent token refresh before giving up
-    if (!isRefreshing) {
-      isRefreshing = true;
-      const { refreshAccessToken } = await import("./auth");
-      const newToken = await refreshAccessToken();
-      isRefreshing = false;
-      onRefreshComplete(newToken);
+  const headers = new Headers(init.headers ?? {});
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (!headers.has("Content-Type") && !(init.body instanceof FormData)) {
+    headers.set("Content-Type", "application/json");
+  }
 
-      if (!newToken) {
-        // Refresh failed — session is truly dead
-        const { handleUnauthorizedSession } = await import("./auth");
-        handleUnauthorizedSession();
-        return response;
-      }
+  let response = await fetch(input, {
+    ...init,
+    headers,
+    credentials: "include",
+  });
 
-      // Retry the original request with the new token
-      const retryHeaders = new Headers(options?.headers);
-      retryHeaders.set("Authorization", `Bearer ${newToken}`);
-      return _fetch(
-        typeof response.url === "string" ? response.url : "",
-        { ...options, headers: retryHeaders }
-      );
-    } else {
-      // Another request is already refreshing — queue this one
-      return new Promise((resolve) => {
-        refreshSubscribers.push(async (token) => {
-          if (!token) {
-            resolve(response);
-            return;
-          }
-          const retryHeaders = new Headers(options?.headers);
-          retryHeaders.set("Authorization", `Bearer ${token}`);
-          resolve(
-            _fetch(
-              typeof response.url === "string" ? response.url : "",
-              { ...options, headers: retryHeaders }
-            )
-          );
-        });
-      });
+  if (response.status !== 401) return response;
+
+  // ── 401 received — attempt token refresh ──────────────────────────────────
+
+  if (isRefreshing) {
+    // Another refresh is in flight — queue this request
+    const newToken = await new Promise<string | null>((resolve) => {
+      refreshQueue.push(resolve);
+    });
+
+    if (!newToken) {
+      handleUnauthorizedSession();
+      return response;
     }
+
+    const retryHeaders = new Headers(headers);
+    retryHeaders.set("Authorization", `Bearer ${newToken}`);
+    return fetch(input, { ...init, headers: retryHeaders, credentials: "include" });
   }
 
-  return response;
-}
+  isRefreshing = true;
 
-export async function apiFetch(path: string, options?: RequestInit) {
-  const url = `${BASE_URL}${path.replace(/^\/api/, "")}`;
-  const optionsWithCredentials: RequestInit = { credentials: "include", ...options };
-  return withUnauthorizedHandling(fetch(url, optionsWithCredentials), optionsWithCredentials);
-}
+  const newToken = await refreshAccessToken();
 
-// ── Intercept ALL fetch("/api/...") calls globally ──────────────────────────
-const _fetch = window.fetch.bind(window);
-window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
-  if (typeof input === "string" && input.startsWith("/api/")) {
-    const url = BASE_URL
-      ? `${BASE_URL}${input.replace(/^\/api/, "")}`
-      : input;
+  isRefreshing = false;
 
-    // Always include credentials so the HttpOnly refresh token cookie is sent
-    const initWithCredentials: RequestInit = { credentials: "include", ...init };
-
-    return withUnauthorizedHandling(_fetch(url, initWithCredentials), initWithCredentials);
+  if (!newToken) {
+    drainQueue(null);
+    handleUnauthorizedSession();
+    return response;
   }
 
-  return _fetch(input, init);
-};
+  saveToken(newToken);
+  drainQueue(newToken);
 
+  // Retry the original request with the new token
+  const retryHeaders = new Headers(headers);
+  retryHeaders.set("Authorization", `Bearer ${newToken}`);
+  return fetch(input, { ...init, headers: retryHeaders, credentials: "include" });
+}
 
 // ===== FILE: src\app\App.tsx =====
 
@@ -916,11 +887,10 @@ const teacherNavItems: NavItemDef[] = [
 
 const managementNavItems: NavItemDef[] = [
   { label: "Dashboard",       icon: LayoutDashboard, path: "/management" },
-  { label: "People",          icon: Users,           path: "/management/people" },
+  { label: "Users",           icon: Users,           path: "/management/people" },
   { label: "Batches",         icon: Users2,          path: "/management/batches" },
   { label: "Students",        icon: UserCheck,       path: "/management/students" },
   { label: "Tests",           icon: ClipboardList,   path: "/management/tests" },
-  { label: "Marks",           icon: Star,            path: "/management/marks" },
   { label: "Attendance",      icon: CheckSquare,     path: "/management/attendance" },
   { label: "Fee Management",  icon: Wallet,          path: "/management/fee-management" },
   { label: "Study Material",  icon: BookOpen,        path: "/management/study-materials" },
@@ -931,7 +901,7 @@ const managementNavItems: NavItemDef[] = [
 const studentNavItems: NavItemDef[] = [
   { label: "Dashboard",      icon: LayoutDashboard, path: "/student" },
   { label: "Attendance",     icon: CheckSquare,     path: "/student/attendance" },
-  { label: "Results",        icon: Star,            path: "/student/results" },
+  { label: "Performance",    icon: Star,            path: "/student/results" },
   { label: "My Fee",         icon: Wallet,          path: "/student/fee" },
   { label: "Study Material", icon: BookOpen,        path: "/student/study-materials" },
   { label: "Announcements",  icon: Megaphone,       path: "/student/announcements" },
@@ -998,8 +968,8 @@ const ROLE_CONFIG: {
   },
   management: {
     navItems: managementNavItems,
-    mainEnd: 10,
-    secondaryEnd: 11,
+    mainEnd: 9,
+    secondaryEnd: 10,
     menuLabel: "Management",
     accountLabel: "Account",
     portalLabel: "Management Portal",
@@ -1386,7 +1356,7 @@ import {
   File,
 } from "lucide-react";
 import { createAnnouncementApi } from "../../../Lib/api/announcements";
-import { fetchClassBatchesApi, type ClassBatchOption } from "../../../Lib/api/teachers";
+import { fetchBatchesDetailedApi } from "../../../Lib/api/class-batches";
 import { uploadStudyMaterialApi } from "../../../Lib/api/study-materials";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
@@ -1613,12 +1583,18 @@ function BatchSelector({
 
 // ─── Props ─────────────────────────────────────────────────────────────────────
 
+/** Minimal shape needed — both ClassBatchOption and BatchDetailed satisfy this */
+export type BatchOption = {
+  id: string;
+  name: string;
+};
+
 export type AnnouncementModalProps = {
   onClose: () => void;
   /** Called after successful creation with the created announcement id */
   onSuccess: (announcementId: string) => void;
   /** Pre-load batch options from parent if already fetched, otherwise fetched internally */
-  preloadedBatchOptions?: ClassBatchOption[];
+  preloadedBatchOptions?: BatchOption[];
 };
 
 // ─── Main Modal ────────────────────────────────────────────────────────────────
@@ -1631,7 +1607,7 @@ export function AnnouncementModal({
   const [form, setForm] = useState<AnnouncementFormState>(emptyForm);
   const [errors, setErrors] = useState<Partial<Record<keyof AnnouncementFormState, string>>>({});
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
-  const [batchOptions, setBatchOptions] = useState<ClassBatchOption[]>(preloadedBatchOptions ?? []);
+  const [batchOptions, setBatchOptions] = useState<BatchOption[]>(preloadedBatchOptions ?? []);
   const [loadingBatches, setLoadingBatches] = useState(!preloadedBatchOptions);
   const [submitting, setSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -1640,8 +1616,8 @@ export function AnnouncementModal({
 
   useEffect(() => {
     if (preloadedBatchOptions) return;
-    fetchClassBatchesApi()
-      .then(setBatchOptions)
+    fetchBatchesDetailedApi()
+      .then((batches) => setBatchOptions(batches.map((b) => ({ id: b.id, name: b.name }))))
       .catch(() => setApiError("Failed to load batches"))
       .finally(() => setLoadingBatches(false));
   }, [preloadedBatchOptions]);
@@ -1679,49 +1655,34 @@ export function AnnouncementModal({
 
     try {
       // Resolve batch_id: Universal or empty → null (institute-wide)
-      const resolvedBatchId =
+      const resolvedBatchIds =
         form.batches.includes("Universal") || form.batches.length === 0
-          ? null
-          : (batchOptions.find((b) => b.name === form.batches[0])?.id ?? null);
+          ? []
+          : batchOptions
+              .filter((b) => form.batches.includes(b.name))
+              .map((b) => b.id);
+
+      const resolvedBatchId = resolvedBatchIds.length > 0 ? resolvedBatchIds[0] : null;
 
       // 1. Create the announcement
       const dbType = TYPE_TO_DB[form.type as AnnouncementType];
-      let announcementId = "";
 
-      // createAnnouncementApi returns void currently — we need the id for file uploads.
-      // Call the API and read the response directly.
-      const { getToken } = await import("../../../app/auth");
-      const token = getToken();
-      const announcementRes = await fetch("/api/announcements", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          announcement_type:  dbType,
-          announcement_title: form.title.trim() || form.type,
-          message:            form.body.trim(),
-          class_batch_id:     resolvedBatchId,
-          school_attribute:   null,
-        }),
+      const created = await createAnnouncementApi({
+        announcement_type:  dbType,
+        announcement_title: form.title.trim() || form.type,
+        message:            form.body.trim(),
+        class_batch_id:     resolvedBatchId,
+        school_attribute:   null,
       });
 
-      const announcementJson = await announcementRes.json();
-      if (!announcementRes.ok) {
-        throw new Error(announcementJson.error ?? "Failed to create announcement");
-      }
+      const announcementId = created.id;
 
-      announcementId = announcementJson.data?.id;
-
-      // 2. Upload each attachment linked to this announcement
-      if (announcementId && attachedFiles.length > 0) {
+      // 2. Upload each attachment sequentially linked to this announcement
+      if (attachedFiles.length > 0) {
         for (const attached of attachedFiles) {
           await uploadStudyMaterialApi({
-            file:           attached.file,
-            linked_type:    "ANNOUNCEMENT",
-            linked_id:      announcementId,
-            class_batch_id: resolvedBatchId,
+            file:                    attached.file,
+            linked_announcement_id:  announcementId,
           });
         }
       }
@@ -7968,7 +7929,7 @@ export function AcademicYears() {
 // src/app/pages/Announcements.tsx
 
 import { useState, useEffect } from "react";
-import { AnnouncementModal, TYPE_STYLE, type AnnouncementType } from "../components/shared/AnnouncementModal";
+import { AnnouncementModal, TYPE_STYLE, type AnnouncementType, type BatchOption } from "../components/shared/AnnouncementModal";
 import {
   fetchAnnouncementsApi,
   createAnnouncementApi,
@@ -7976,8 +7937,8 @@ import {
   deleteAnnouncementApi,
   type AnnouncementRecord,
 } from "../../Lib/api/announcements";
-import { fetchClassBatchesApi, type ClassBatchOption } from "../../Lib/api/teachers";
-import { Plus, Search, X, Megaphone, Pencil, Trash2, AlertTriangle, CheckCircle2, ChevronDown, Users2, Calendar, User } from "lucide-react";
+import { fetchBatchesDetailedApi } from "../../Lib/api/class-batches";
+import { Plus, Search, X, Megaphone, Pencil, Trash2, AlertTriangle, CheckCircle2, ChevronDown, Users2, Calendar, User, Paperclip, Download } from "lucide-react";
 
 
 
@@ -8001,6 +7962,12 @@ const DB_TYPE_MAP: Record<string, AnnouncementType> = {
 };
 
 
+type AnnouncementAttachmentDisplay = {
+  id: string;
+  file_url: string;
+  name: string;
+};
+
 type Announcement = {
   id: string;
   type: AnnouncementType;
@@ -8008,10 +7975,11 @@ type Announcement = {
   body: string;
   createdBy: string;
   date: string;
-  batches: string[]; // ["Universal"] or specific batch names
+  batches: string[];
+  attachments: AnnouncementAttachmentDisplay[];
 };
 
-function mapRecord(record: AnnouncementRecord, batches: ClassBatchOption[]): Announcement {
+function mapRecord(record: AnnouncementRecord, batches: BatchOption[]): Announcement {
   
 const displayType: AnnouncementType =
   DB_TYPE_MAP[record.announcement_type] ?? "General";
@@ -8023,14 +7991,23 @@ const displayType: AnnouncementType =
   const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const dateStr = `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 
+  const attachments: AnnouncementAttachmentDisplay[] = (record.attachments ?? []).map((a) => ({
+    id:       a.id,
+    file_url: a.file_url,
+    name:     decodeURIComponent(a.file_url.split("/").pop() ?? a.id)
+                .replace(/\.[^.]+$/, "")
+                .replace(/-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/, ""),
+  }));
+
   return {
     id: record.id,
     type: displayType,
     title: record.announcement_title,
     body: record.message,
-    createdBy: record.created_by, // will be replaced with name join if needed
+    createdBy: record.created_by,
     date: dateStr,
     batches: [batchName],
+    attachments,
   };
 }
 
@@ -8096,7 +8073,7 @@ function DeleteModal({
 
 export function Announcements({ canManage = true }: { canManage?: boolean }) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [batchOptions, setBatchOptions] = useState<ClassBatchOption[]>([]);
+  const [batchOptions, setBatchOptions] = useState<BatchOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   
@@ -8107,8 +8084,9 @@ export function Announcements({ canManage = true }: { canManage?: boolean }) {
 
   // Modal state
   const [createOpen, setCreateOpen] = useState(false);
-  const [editTarget, setEditTarget] = useState<Announcement | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Announcement | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   // ── Load data on mount ──
   useEffect(() => {
@@ -8117,10 +8095,11 @@ export function Announcements({ canManage = true }: { canManage?: boolean }) {
         setLoading(true);
         const [records, batches] = await Promise.all([
           fetchAnnouncementsApi(),
-          fetchClassBatchesApi(),
+          fetchBatchesDetailedApi(),
         ]);
-        setBatchOptions(batches);
-        setAnnouncements(records.map(r => mapRecord(r, batches)));
+        const batchOpts: BatchOption[] = batches.map((b) => ({ id: b.id, name: b.name }));
+        setBatchOptions(batchOpts);
+        setAnnouncements(records.map(r => mapRecord(r, batchOpts)));
       } catch (err: any) {
         setLoadError(err.message ?? "Failed to load announcements");
       } finally {
@@ -8141,41 +8120,13 @@ export function Announcements({ canManage = true }: { canManage?: boolean }) {
 
   // ── CRUD ──
 
-  async function handleCreateSuccess() {
-    const [records, batches] = await Promise.all([
-      fetchAnnouncementsApi(),
-      Promise.resolve(batchOptions),
-    ]);
-    setAnnouncements(records.map((r) => mapRecord(r, batches)));
+  async function handleCreateSuccess(_announcementId: string) {
+    const records = await fetchAnnouncementsApi();
+    setAnnouncements(records.map((r) => mapRecord(r, batchOptions)));
     setCreateOpen(false);
   }
 
-  async function handleEdit(form: FormState) {
-    if (!editTarget) return;
-    setSubmitting(true);
-    setApiError(null);
-    try {
-      await updateAnnouncementApi(editTarget.id, {
-        announcement_title: form.title || form.type,
-        message: form.body,
-      });
-      // Refresh from server to stay consistent
-      const [records, batches] = await Promise.all([
-        fetchAnnouncementsApi(),
-        Promise.resolve(batchOptions),
-      ]);
-      const updated = records.map(r => mapRecord(r, batches));
-      setAnnouncements(updated);
-      // Keep detail panel in sync
-      const freshSelected = updated.find(a => a.id === editTarget.id) ?? null;
-      setSelected(freshSelected);
-      setEditTarget(null);
-    } catch (err: any) {
-      setApiError(err.message ?? "Failed to update announcement.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
+  
 
   async function handleDelete(id: string) {
     try {
@@ -8354,8 +8305,29 @@ if (loading) {
                   {/* Edit */}
                   {canManage && (
                     <button
-                      onClick={() => setEditTarget(selected)}
-                      className="w-8 h-8 rounded-md flex items-center justify-center border border-gray-200 text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-all"
+                      onClick={async () => {
+                        const newTitle = window.prompt("Edit title:", selected.title);
+                        const newBody  = window.prompt("Edit message:", selected.body);
+                        if (newTitle === null && newBody === null) return;
+                        setSubmitting(true);
+                        setApiError(null);
+                        try {
+                          await updateAnnouncementApi(selected.id, {
+                            announcement_title: newTitle ?? selected.title,
+                            message: newBody ?? selected.body,
+                          });
+                          const records = await fetchAnnouncementsApi();
+                          const updated = records.map(r => mapRecord(r, batchOptions));
+                          setAnnouncements(updated);
+                          setSelected(updated.find(a => a.id === selected.id) ?? null);
+                        } catch (err: any) {
+                          setApiError(err.message ?? "Failed to update announcement.");
+                        } finally {
+                          setSubmitting(false);
+                        }
+                      }}
+                      disabled={submitting}
+                      className="w-8 h-8 rounded-md flex items-center justify-center border border-gray-200 text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-all disabled:opacity-40"
                       title="Edit announcement"
                     >
                       <Pencil size={13} strokeWidth={2} />
@@ -8429,6 +8401,43 @@ if (loading) {
                     ))}
                   </div>
                 </div>
+
+                {selected.attachments.length > 0 && (
+                  <div className="pt-3 mt-1 border-t border-gray-50">
+                    <div className="flex items-center gap-1.5 text-gray-400 mb-2">
+                      <Paperclip size={12} />
+                      <span style={{ fontSize: "12.5px" }}>
+                        Attachments ({selected.attachments.length})
+                      </span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {selected.attachments.map((att) => (
+  <a
+    key={att.id}
+    href={att.file_url}
+    target="_blank"
+    rel="noopener noreferrer"
+    className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-gray-100 hover:border-teal-200 hover:bg-teal-50 transition-all group"
+    style={{ textDecoration: "none" }}
+  >
+    <div
+      className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0"
+      style={{ backgroundColor: "#f0fdfa" }}
+    >
+      <Paperclip size={11} color="#0d9488" strokeWidth={2} />
+    </div>
+    <span
+      className="flex-1 text-gray-700 truncate group-hover:text-teal-700 transition-colors"
+      style={{ fontSize: "12px", fontWeight: 500 }}
+    >
+      {att.name}
+    </span>
+    <Download size={11} className="text-gray-300 group-hover:text-teal-500 flex-shrink-0" />
+  </a>
+))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -8444,23 +8453,7 @@ if (loading) {
         />
       )}
 
-      {/* Edit modal */}
-      {editTarget && (
-        <AnnouncementModal
-          initial={{
-            type: editTarget.type,
-            title: editTarget.title,
-            body: editTarget.body,
-            batches: editTarget.batches,
-          }}
-          mode="edit"
-          onClose={() => { setEditTarget(null); setApiError(null); }}
-          onSubmit={handleEdit}
-          submitting={submitting}
-          apiError={apiError}
-          batchOptions={["Universal", ...batchOptions.map(b => b.name)]}
-        />
-      )}
+      
 
       {/* Delete confirm */}
       {deleteTarget && (
@@ -8973,6 +8966,7 @@ function BatchSummaryPage({
   onModify,
   onMarkAttendance,
   canManage,
+  isHoliday = false,
 }: {
   batchId: string;
   batchName: string;
@@ -8982,6 +8976,7 @@ function BatchSummaryPage({
   onModify: () => void;
   onMarkAttendance: () => void;
   canManage: boolean;
+  isHoliday?: boolean;
 }) {
   const [detailRows, setDetailRows] = useState<StudentDetailItem[]>([]);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -9049,7 +9044,7 @@ function BatchSummaryPage({
 
           {/* Action buttons */}
           {!isPending ? (
-            canManage ? (
+            canManage && !isHoliday ? (
               <div className="flex items-center gap-2">
                 <button
                   onClick={onModify}
@@ -9063,7 +9058,11 @@ function BatchSummaryPage({
               </div>
             ) : null
           ) : (
-            canManage ? (
+            isHoliday ? (
+              <span className="px-3 py-1.5 rounded-lg text-sm font-semibold" style={{ color: "#41ab5d", backgroundColor: "#f0fdf4", border: "1px solid #bbf7d0" }}>
+                Holiday
+              </span>
+            ) : canManage ? (
               <button
                 onClick={onMarkAttendance}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
@@ -9123,23 +9122,35 @@ function BatchSummaryPage({
 
       {/* Student table */}
       {isPending ? (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 flex flex-col items-center justify-center">
-          <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style={{ backgroundColor: "#fffbeb" }}>
-            <AlertCircle size={24} color="#d97706" strokeWidth={2} />
+        isHoliday ? (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 flex flex-col items-center justify-center">
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style={{ backgroundColor: "#f0fdf4" }}>
+              <Sun size={24} color="#41ab5d" strokeWidth={2} />
+            </div>
+            <p className="text-gray-700 mb-1" style={{ fontSize: "16px", fontWeight: 700 }}>It's a Holiday! 🎉</p>
+            <p className="text-gray-400 text-center" style={{ fontSize: "13.5px" }}>
+              No attendance is required for {batchName} on {formatDisplayDate(date)}. Enjoy the day off!
+            </p>
           </div>
-          <p className="text-gray-700 mb-1" style={{ fontSize: "16px", fontWeight: 700 }}>Attendance Not Marked Yet</p>
-          <p className="text-gray-400 mb-6 text-center" style={{ fontSize: "13.5px" }}>
-            No attendance record exists for {batchName} on {formatDisplayDate(date)}.
-          </p>
-          <button
-            onClick={onMarkAttendance}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
-            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
-          >
-            <CheckSquare size={15} strokeWidth={2} />
-            Mark Attendance Now
-          </button>
-        </div>
+        ) : (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 flex flex-col items-center justify-center">
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style={{ backgroundColor: "#fffbeb" }}>
+              <AlertCircle size={24} color="#d97706" strokeWidth={2} />
+            </div>
+            <p className="text-gray-700 mb-1" style={{ fontSize: "16px", fontWeight: 700 }}>Attendance Not Marked Yet</p>
+            <p className="text-gray-400 mb-6 text-center" style={{ fontSize: "13.5px" }}>
+              No attendance record exists for {batchName} on {formatDisplayDate(date)}.
+            </p>
+            <button
+              onClick={onMarkAttendance}
+              className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
+              style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+            >
+              <CheckSquare size={15} strokeWidth={2} />
+              Mark Attendance Now
+            </button>
+          </div>
+        )
       ) : (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between" style={{ backgroundColor: "#f9fafb" }}>
@@ -9397,6 +9408,7 @@ const [weeklyTrend, setWeeklyTrend] = useState<WeeklyTrendDay[]>([]);
         onModify={() => setView({ type: "modify", batch: view.batch })}
         onMarkAttendance={() => setView({ type: "mark", batch: view.batch })}
         canManage={canManage}
+        isHoliday={!!todayHoliday || holidayedBatchIds.has(view.batch)}
       />
     );
   }
@@ -9434,7 +9446,7 @@ const [weeklyTrend, setWeeklyTrend] = useState<WeeklyTrendDay[]>([]);
             <button
               onClick={() => setShowDeclareModal(true)}
               className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border shadow-sm transition-all"
-              style={{ fontSize: "13px", fontWeight: 600, backgroundColor: "#fffbeb", borderColor: "#fde68a", color: "#d97706" }}
+              style={{ fontSize: "13px", fontWeight: 600, backgroundColor: "#f0fdf4", borderColor: "#bbf7d0", color: "#41ab5d" }}
             >
               <Sun size={14} />
               Declare Holiday
@@ -9495,15 +9507,15 @@ const [weeklyTrend, setWeeklyTrend] = useState<WeeklyTrendDay[]>([]);
             <div
               key={h.id}
               className="flex items-center justify-between px-5 py-4 rounded-2xl border"
-              style={{ backgroundColor: "#fffbeb", borderColor: "#fde68a" }}
+              style={{ backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" }}
             >
               <div className="flex items-start gap-3">
-                <Sun size={18} color="#d97706" className="flex-shrink-0 mt-0.5" />
+                <Sun size={18} color="#41ab5d" className="flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-amber-800 mb-1" style={{ fontSize: "13.5px", fontWeight: 700 }}>
+                  <p className="mb-1" style={{ fontSize: "13.5px", fontWeight: 700, color: "#166534" }}>
                     Holiday: {h.name}
                   </p>
-                  <p className="text-amber-700" style={{ fontSize: "12.5px" }}>
+                  <p style={{ fontSize: "12.5px", color: "#15803d" }}>
                     {h.batch_name
                       ? `Applies to batch: ${h.batch_name}`
                       : "Institute-wide holiday · Attendance marking is disabled for this date"}
@@ -9838,6 +9850,8 @@ import { useState, useEffect } from "react";
 import {
   fetchAcademicYearsApi,
   createClassBatchApi,
+  updateClassBatchApi,
+  deleteClassBatchApi,
   fetchBatchesPageSummaryApi,
   fetchBatchesDetailedApi,
   fetchBatchStudentsApi,
@@ -9870,6 +9884,7 @@ import {
   CheckCircle2,
   Trash2,
   Loader2,
+  MoreVertical,
 } from "lucide-react";
 
 // ─── Subject Color Map ─────────────────────────────────────────────────────────
@@ -10452,7 +10467,142 @@ function CreateFeeStructureModal({
 }
 
 
+// ─── Edit Batch Modal ─────────────────────────────────────────────────────────
 
+function EditBatchModal({
+  batch,
+  onClose,
+  onUpdated,
+}: {
+  batch: BatchDetailed;
+  onClose: () => void;
+  onUpdated: () => void;
+}) {
+  const [name, setName]                     = useState(batch.name);
+  const [selectedYearId, setSelectedYearId] = useState(batch.academic_year_id);
+  const [academicYears, setAcademicYears]   = useState<AcademicYearOption[]>([]);
+  const [yearsLoading, setYearsLoading]     = useState(true);
+  const [submitting, setSubmitting]         = useState(false);
+  const [error, setError]                   = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchAcademicYearsApi()
+      .then((years) => {
+        setAcademicYears(years);
+      })
+      .catch(() => setError("Could not load academic years."))
+      .finally(() => setYearsLoading(false));
+  }, []);
+
+  const isDirty =
+    name.trim() !== batch.name || selectedYearId !== batch.academic_year_id;
+  const canSubmit = name.trim().length > 0 && selectedYearId !== "" && isDirty && !submitting;
+
+  async function handleSubmit() {
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await updateClassBatchApi(batch.id, {
+        name: name.trim(),
+        academic_year_id: selectedYearId,
+      });
+      onUpdated();
+      onClose();
+    } catch (e: any) {
+      setError(e.message ?? "Failed to update batch");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ backgroundColor: "rgba(0,0,0,0.35)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-7" style={{ border: "1px solid #f3f4f6" }}>
+        <div className="flex items-start justify-between mb-6">
+          <div>
+            <h2 className="text-gray-900" style={{ fontSize: "18px", fontWeight: 700, letterSpacing: "-0.01em" }}>
+              Edit Batch
+            </h2>
+            <p className="text-gray-400 mt-1" style={{ fontSize: "13px" }}>
+              Update the name or academic year for this batch.
+            </p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-md flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="space-y-4 mb-6">
+          <div>
+            <label className="block text-gray-600 mb-1.5" style={{ fontSize: "13px", fontWeight: 600 }}>
+              Batch Name
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Science – Batch A"
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-50 transition-all"
+              style={{ fontSize: "13.5px" }}
+            />
+          </div>
+
+          <div>
+            <label className="block text-gray-600 mb-1.5" style={{ fontSize: "13px", fontWeight: 600 }}>
+              Academic Year
+            </label>
+            {yearsLoading ? (
+              <div className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-400" style={{ fontSize: "13.5px" }}>
+                Loading years…
+              </div>
+            ) : (
+              <select
+                value={selectedYearId}
+                onChange={(e) => setSelectedYearId(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 bg-white transition-all"
+                style={{ fontSize: "13.5px" }}
+              >
+                {academicYears.map((y) => (
+                  <option key={y.id} value={y.id}>
+                    {y.label}{y.is_active ? " (Active)" : ""}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {error && (
+            <p className="text-red-500" style={{ fontSize: "12.5px" }}>{error}</p>
+          )}
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            disabled={submitting}
+            className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-40"
+            style={{ fontSize: "13.5px", fontWeight: 600 }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!canSubmit}
+            className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+          >
+            {submitting ? "Saving…" : "Save Changes"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 // ─── Create Batch Modal ────────────────────────────────────────────────────────
 
 function CreateBatchModal({
@@ -10679,6 +10829,11 @@ function BatchDetailPanel({
   const [feeStructure, setFeeStructure]         = useState<FeeStructureRecord | null | undefined>(undefined);
   const [loadingFee, setLoadingFee]             = useState(true);
   const [showFeeModal, setShowFeeModal]         = useState(false);
+  const [showEditModal, setShowEditModal]       = useState(false);
+  const [showMenu, setShowMenu]                 = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting]                 = useState(false);
+  const [deleteError, setDeleteError]           = useState<string | null>(null);
 
   const PREVIEW_LIMIT = 5;
 
@@ -11056,15 +11211,109 @@ function BatchDetailPanel({
             </div>
 
             {/* Panel Footer */}
-            <div className="px-6 py-4 border-t border-gray-100">
+            <div className="px-6 py-4 border-t border-gray-100 relative">
               <button
+                onClick={() => setShowMenu((v) => !v)}
                 className="w-full py-2.5 rounded-xl border border-gray-200 text-gray-700 flex items-center justify-center gap-2 hover:border-teal-300 hover:text-teal-700 hover:bg-teal-50 transition-all"
                 style={{ fontSize: "13.5px", fontWeight: 600 }}
               >
-                <Edit2 size={14} strokeWidth={2.5} />
-                Edit Batch
+                <MoreVertical size={14} strokeWidth={2.5} />
+                Actions
               </button>
+
+              {showMenu && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
+                  <div
+                    className="absolute bottom-16 left-6 right-6 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden z-20"
+                  >
+                    <button
+                      onClick={() => { setShowMenu(false); setShowEditModal(true); }}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50 transition-colors text-left"
+                      style={{ fontSize: "13.5px", fontWeight: 600 }}
+                    >
+                      <Edit2 size={14} strokeWidth={2.5} className="text-gray-400" />
+                      Edit Batch
+                    </button>
+                    <div className="h-px bg-gray-100" />
+                    <button
+                      onClick={() => { setShowMenu(false); setShowDeleteConfirm(true); }}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 transition-colors text-left"
+                      style={{ fontSize: "13.5px", fontWeight: 600 }}
+                    >
+                      <Trash2 size={14} strokeWidth={2.5} />
+                      Delete Batch
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
+
+{/* Delete Confirm Modal */}
+            {showDeleteConfirm && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center"
+                style={{ backgroundColor: "rgba(0,0,0,0.35)" }}
+              >
+                <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-7" style={{ border: "1px solid #f3f4f6" }}>
+                  <div className="flex items-center justify-center w-12 h-12 rounded-full mb-4 mx-auto" style={{ backgroundColor: "#fef2f2" }}>
+                    <Trash2 size={20} style={{ color: "#dc2626" }} strokeWidth={2} />
+                  </div>
+                  <h2 className="text-gray-900 text-center mb-1" style={{ fontSize: "17px", fontWeight: 700 }}>
+                    Delete Batch?
+                  </h2>
+                  <p className="text-gray-400 text-center mb-5" style={{ fontSize: "13px" }}>
+                    <strong className="text-gray-600">{batch.name}</strong> will be permanently deactivated. This cannot be undone.
+                  </p>
+                  {deleteError && (
+                    <p className="text-red-500 text-center mb-3" style={{ fontSize: "12.5px" }}>{deleteError}</p>
+                  )}
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => { setShowDeleteConfirm(false); setDeleteError(null); }}
+                      disabled={deleting}
+                      className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-40"
+                      style={{ fontSize: "13.5px", fontWeight: 600 }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={async () => {
+                        setDeleting(true);
+                        setDeleteError(null);
+                        try {
+                          await deleteClassBatchApi(batch.id);
+                          setShowDeleteConfirm(false);
+                          onClose();
+                        } catch (e: any) {
+                          setDeleteError(e.message ?? "Failed to delete batch");
+                        } finally {
+                          setDeleting(false);
+                        }
+                      }}
+                      disabled={deleting}
+                      className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                      style={{ backgroundColor: "#dc2626", fontSize: "13.5px", fontWeight: 600 }}
+                    >
+                      {deleting ? "Deleting…" : "Delete"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            
+           {/* Edit Batch Modal */}
+            {showEditModal && (
+              <EditBatchModal
+                batch={batch}
+                onClose={() => setShowEditModal(false)}
+                onUpdated={() => {
+                  setShowEditModal(false);
+                  onClose();
+                }}
+              />
+            )}
 
             {/* Fee Structure Modal */}
             {showFeeModal && (
@@ -11286,7 +11535,10 @@ export function Batches() {
       {detailBatch && (
         <BatchDetailPanel
           batch={detailBatch}
-          onClose={() => setDetailBatch(null)}
+          onClose={() => {
+            setDetailBatch(null);
+            loadData();
+          }}
         />
       )}
     </div>
@@ -11320,12 +11572,12 @@ export function Dashboard() {
 
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
-import { AnnouncementModal } from "../components/shared/AnnouncementModal";
+import { AnnouncementModal, type BatchOption } from "../components/shared/AnnouncementModal";
 import {
   fetchAcademicYearsApi,
   fetchClassBatchesByYearApi,
 } from "../../Lib/api/class-batches";
-import { fetchClassBatchesApi } from "../../Lib/api/teachers";
+import { fetchBatchesDetailedApi } from "../../Lib/api/class-batches";
 import {
   fetchDashboardSummary,
   fetchUpcomingTests,
@@ -11544,7 +11796,7 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
   const [attendanceScopeLabel, setAttendanceScopeLabel] = useState<string>("");
   const [announcements, setAnnouncements]   = useState<{ id: string; title: string; preview: string; createdBy: string; date: string; tag: string; tagColor: string; tagBg: string }[]>([]);
   const [batchOptions, setBatchOptions]     = useState<string[]>(["Universal"]);
-  const [batchObjects, setBatchObjects]     = useState<{ id: string; name: string }[]>([]);
+  const [batchObjects, setBatchObjects]     = useState<BatchOption[]>([]);
   const [notifications, setNotifications]   = useState<NotificationRecord[]>([]);
   const [unreadCount, setUnreadCount]       = useState(0);
 
@@ -11631,10 +11883,11 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
 
     const loadBatches = async () => {
       try {
-        const batches = await fetchClassBatchesApi();
+        const batches = await fetchBatchesDetailedApi();
         if (isActive) {
-          setBatchObjects(batches);
-          setBatchOptions(["Universal", ...batches.map((b) => b.name)]);
+          const batchOpts: BatchOption[] = batches.map((b) => ({ id: b.id, name: b.name }));
+          setBatchObjects(batchOpts);
+          setBatchOptions(["Universal", ...batchOpts.map((b) => b.name)]);
         }
       } catch { /* fail silently */ }
     };
@@ -11666,7 +11919,7 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
         { ...STAT_CONFIG[1], value: String(summary.active_batches), change: "Active this academic year" },
         { ...STAT_CONFIG[2], value: String(summary.upcoming_tests), change: "From today onwards" },
         { ...STAT_CONFIG[3], value: summary.attendance_today_pct !== null ? `${summary.attendance_today_pct}%` : "—",
-          change: summary.attendance_total_marked > 0 ? `${summary.attendance_marked_present} present of ${summary.attendance_total_marked} marked` : "No attendance marked yet today" },
+          change: summary.attendance_total_marked > 0 ? `${summary.attendance_marked_present} present of ${summary.attendance_total_marked} total` : "No attendance marked yet today" },
       ]
     : STAT_CONFIG.map((c) => ({ ...c, value: summaryLoading ? "—" : "N/A", change: summaryLoading ? "Loading…" : summaryError ?? "Summary unavailable" }));
 
@@ -11928,8 +12181,8 @@ function inr(n: number): string {
 
 function FeeStatusBadge({ status }: { status: string }) {
   const config: Record<string, { color: string; bg: string; label: string }> = {
-    UNPAID:         { color: "#dc2626", bg: "#fef2f2",  label: "Unpaid"         },
-    PARTIALLY_PAID: { color: "#d97706", bg: "#fffbeb",  label: "Partially Paid" },
+    UNPAID:         { color: "#d97706", bg: "#fffbeb",  label: "Unpaid"         },
+    PARTIALLY_PAID: { color: "#b45309", bg: "#fef3c7",  label: "Partially Paid" },
     PAID:           { color: "#16a34a", bg: "#f0fdf4",  label: "Paid"           },
     OVERDUE:        { color: "#9333ea", bg: "#fdf4ff",  label: "Overdue"        },
   };
@@ -12078,7 +12331,7 @@ function BatchDrillDown({
               return (
                 <tr
                   key={s.student_user_id}
-                  onClick={() => navigate(`/students/${s.student_user_id}`)}
+                  onClick={() => navigate(`/management/students/${s.student_user_id}?from=fee-management&tab=fee&batchId=${encodeURIComponent(batchId)}&batchName=${encodeURIComponent(batchName)}`)}
                   className="border-t border-gray-50 hover:bg-teal-50 transition-colors cursor-pointer group"
                 >
                   {/* Student name */}
@@ -12120,7 +12373,7 @@ function BatchDrillDown({
 
                   {/* Outstanding */}
                   <td className="px-5 py-3.5">
-                    <span style={{ fontSize: "13px", fontWeight: 600, color: s.outstanding_balance > 0 ? "#dc2626" : "#16a34a" }}>
+                    <span style={{ fontSize: "13px", fontWeight: 600, color: s.outstanding_balance > 0 ? "#d97706" : "#16a34a" }}>
                       {s.outstanding_balance > 0 ? inr(s.outstanding_balance) : "—"}
                     </span>
                   </td>
@@ -12187,7 +12440,10 @@ export function FeeManagement() {
   const [data, setData]       = useState<FeeOverviewData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
-  const [drillDown, setDrillDown] = useState<{ batchId: string; batchName: string } | null>(null);
+  const feeNavState = (window.history.state?.usr as { drillDown?: { batchId: string; batchName: string } } | undefined);
+  const [drillDown, setDrillDown] = useState<{ batchId: string; batchName: string } | null>(
+    feeNavState?.drillDown ?? null
+  );
 
   useEffect(() => {
     setLoading(true);
@@ -12235,10 +12491,11 @@ export function FeeManagement() {
   const collectionPct = data.collection_pct ?? 0;
   const pctColor =
     collectionPct >= 80 ? "#16a34a" :
-    collectionPct >= 50 ? "#d97706" : "#dc2626";
+    collectionPct >= 50 ? "#d97706" : "#b45309";
 
   const totalStudents = data.batches.reduce((s, b) => s + b.student_count, 0);
   const totalPaid     = data.batches.reduce((s, b) => s + b.paid_count,    0);
+  const showFinancials = data.show_financials;
 
   return (
     <div className="p-8 max-w-[1200px] mx-auto">
@@ -12253,11 +12510,11 @@ export function FeeManagement() {
         </p>
       </div>
 
-      {/* ── Stat cards ── */}
-      <div className="grid grid-cols-4 gap-5 mb-6">
+      {/* ── Stat cards + progress — Admin only ── */}
+      {showFinancials && <div className="grid grid-cols-4 gap-5 mb-6">
         <StatCard
           label="Total Expected"
-          value={inr(data.total_expected)}
+          value={inr(data.total_expected ?? 0)}
           sub={`${totalStudents} student${totalStudents !== 1 ? "s" : ""} enrolled`}
           color="#2563eb"
           bg="#eff6ff"
@@ -12265,7 +12522,7 @@ export function FeeManagement() {
         />
         <StatCard
           label="Total Collected"
-          value={inr(data.total_collected)}
+          value={inr(data.total_collected ?? 0)}
           sub={`${totalPaid} fully paid`}
           color="#16a34a"
           bg="#f0fdf4"
@@ -12273,10 +12530,10 @@ export function FeeManagement() {
         />
         <StatCard
           label="Outstanding"
-          value={inr(data.outstanding)}
-          sub={data.outstanding > 0 ? "Pending collection" : "All cleared"}
-          color={data.outstanding > 0 ? "#dc2626" : "#16a34a"}
-          bg={data.outstanding > 0 ? "#fef2f2" : "#f0fdf4"}
+          value={inr(data.outstanding ?? 0)}
+          sub={(data.outstanding ?? 0) > 0 ? "Pending collection" : "All cleared"}
+          color={(data.outstanding ?? 0) > 0 ? "#d97706" : "#16a34a"}
+          bg={(data.outstanding ?? 0) > 0 ? "#fffbeb" : "#f0fdf4"}
           icon={AlertTriangle}
         />
         <StatCard
@@ -12284,13 +12541,12 @@ export function FeeManagement() {
           value={data.collection_pct !== null ? `${collectionPct}%` : "—"}
           sub="Of total expected"
           color={pctColor}
-          bg={collectionPct >= 80 ? "#f0fdf4" : collectionPct >= 50 ? "#fffbeb" : "#fef2f2"}
+          bg={collectionPct >= 80 ? "#f0fdf4" : collectionPct >= 50 ? "#fffbeb" : "#fef3c7"}
           icon={TrendingUp}
         />
-      </div>
+      </div>}
 
-      {/* ── Collection progress bar ── */}
-      {data.collection_pct !== null && (
+      {showFinancials && data.collection_pct !== null && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
           <div className="flex items-center justify-between mb-3">
             <p className="text-gray-700" style={{ fontSize: "13.5px", fontWeight: 700 }}>
@@ -12308,10 +12564,10 @@ export function FeeManagement() {
           </div>
           <div className="flex justify-between mt-2">
             <span className="text-gray-400" style={{ fontSize: "11.5px" }}>
-              {inr(data.total_collected)} collected
+              {inr(data.total_collected ?? 0)} collected
             </span>
             <span className="text-gray-400" style={{ fontSize: "11.5px" }}>
-              {inr(data.outstanding)} outstanding
+              {inr(data.outstanding ?? 0)} outstanding
             </span>
           </div>
         </div>
@@ -12369,7 +12625,7 @@ export function FeeManagement() {
                 const batchPctColor =
                   batchPct === null ? "#9ca3af" :
                   batchPct >= 80    ? "#16a34a" :
-                  batchPct >= 50    ? "#d97706" : "#dc2626";
+                  batchPct >= 50    ? "#d97706" : "#b45309";
 
                 return (
                   <tr
@@ -12416,7 +12672,7 @@ export function FeeManagement() {
                         style={{
                           fontSize: "13px",
                           fontWeight: 600,
-                          color: batch.outstanding > 0 ? "#dc2626" : "#16a34a",
+                          color: batch.outstanding > 0 ? "#d97706" : "#16a34a",
                         }}
                       >
                         {batch.outstanding > 0 ? inr(batch.outstanding) : "—"}
@@ -12447,7 +12703,7 @@ export function FeeManagement() {
                     <td className="px-5 py-4">
                       <span
                         className="px-2 py-0.5 rounded-full"
-                        style={{ fontSize: "11.5px", fontWeight: 600, color: "#dc2626", backgroundColor: "#fef2f2" }}
+                        style={{ fontSize: "11.5px", fontWeight: 600, color: "#d97706", backgroundColor: "#fffbeb" }}
                       >
                         {batch.unpaid_count}
                       </span>
@@ -17575,7 +17831,7 @@ export function StudentMarks() {
 // src/app/pages/StudentProfilePage.tsx
 
 import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router";
+import { useParams, useNavigate, useLocation } from "react-router";
 import {
   fetchStudentsApi,
   type StudentRow,
@@ -18840,6 +19096,11 @@ function FeeTab({
 export function StudentProfilePage() {
   const { studentId } = useParams<{ studentId: string }>();
   const navigate      = useNavigate();
+  const location      = useLocation();
+  const searchParams  = new URLSearchParams(location.search);
+  const fromFee       = searchParams.get("from") === "fee-management";
+  const feeBatchId    = searchParams.get("batchId") ?? null;
+  const feeBatchName  = searchParams.get("batchName") ?? null;
 
   const [studentName, setStudentName]     = useState<string>("Student");
   const [studentMeta, setStudentMeta]     = useState<StudentRow | null>(null);
@@ -18847,7 +19108,8 @@ export function StudentProfilePage() {
   const [loading, setLoading]             = useState(true);
   const [fetchError, setFetchError]       = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<"results" | "fee">("results");
+  const initialTab = searchParams.get("tab") === "fee" ? "fee" : "results";
+const [activeTab, setActiveTab] = useState<"results" | "fee">(initialTab);
 
   const [selectedTestId, setSelectedTestId]     = useState<string | null>(null);
   const [selectedSubject, setSelectedSubject]   = useState<string | null>(null);
@@ -18962,12 +19224,24 @@ export function StudentProfilePage() {
 
       {/* ── Back ── */}
       <button
-        onClick={() => navigate("/students")}
+        onClick={() => {
+          if (fromFee && feeBatchId && feeBatchName) {
+            // Return to fee management with batch drill-down state
+            const feeMgmtPath = location.pathname.startsWith("/management")
+              ? "/management/fee-management"
+              : "/fee-management";
+            navigate(feeMgmtPath, {
+              state: { drillDown: { batchId: feeBatchId, batchName: feeBatchName } },
+            });
+          } else {
+            navigate("/students");
+          }
+        }}
         className="flex items-center gap-2 text-gray-400 hover:text-teal-600 transition-colors mb-6"
         style={{ fontSize: "13.5px", fontWeight: 600 }}
       >
         <ArrowLeft size={15} strokeWidth={2.5} />
-        Back to Students
+        {fromFee && feeBatchName ? `Back to ${feeBatchName}` : "Back to Students"}
       </button>
 
       {/* ── Hero card ── */}
@@ -20454,14 +20728,16 @@ export function Students() {
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [academicYears, setAcademicYears] = useState<{ id: string; label: string; is_active: boolean }[]>([]);
+  const [selectedYearId, setSelectedYearId] = useState<string>("");
 
-  const loadData = async () => {
+  const loadData = async (yearId: string) => {
     setLoading(true);
     setLoadError(null);
     try {
       const [listRes, statsRes] = await Promise.all([
-        fetchStudentsApi({ limit: 100 }),
-        fetchStudentStatsApi(),
+        fetchStudentsApi({ limit: 100, academicYearId: yearId || undefined }),
+        fetchStudentStatsApi(yearId || undefined),
       ]);
       setStudents(listRes.students.map(mapRowToStudent));
       setStats(statsRes);
@@ -20472,7 +20748,17 @@ export function Students() {
     }
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    fetchAcademicYearsApi()
+      .then((years) => {
+        setAcademicYears(years);
+        const activeYear = years.find((y) => y.is_active);
+        const defaultId = activeYear?.id ?? "";
+        setSelectedYearId(defaultId);
+        loadData(defaultId);
+      })
+      .catch(() => loadData(""));
+  }, []);
 
   const filtered = students.filter(
     (s) =>
@@ -20481,8 +20767,7 @@ export function Students() {
   );
 
   function handleEnrollSubmit(_studentName: string, _loginIdentifier: string, _tempPassword: string) {
-    // Refetch the full list so the new student appears with real data
-    loadData();
+    loadData(selectedYearId);
   }
 
   function handleDeactivate(id: string) {
@@ -20543,6 +20828,45 @@ export function Students() {
           {loadError}
         </div>
       )}
+
+      {/* Academic Year Filter */}
+      <div className="flex items-center gap-3 mb-6">
+        <p className="text-gray-400 flex-shrink-0" style={{ fontSize: "13px", fontWeight: 500 }}>Academic Year:</p>
+        <div className="flex items-center gap-2 flex-wrap">
+          {academicYears.map((year) => (
+            <button
+              key={year.id}
+              onClick={() => {
+                setSelectedYearId(year.id);
+                loadData(year.id);
+              }}
+              className="px-4 py-1.5 rounded-xl border transition-all"
+              style={{
+                fontSize: "13px",
+                fontWeight: 500,
+                backgroundColor: selectedYearId === year.id ? "#0d9488" : "white",
+                color: selectedYearId === year.id ? "white" : "#6b7280",
+                borderColor: selectedYearId === year.id ? "#0d9488" : "#f3f4f6",
+              }}
+            >
+              {year.label}
+              {year.is_active && (
+                <span
+                  className="ml-1.5 px-1.5 py-0.5 rounded-full"
+                  style={{
+                    fontSize: "10px",
+                    fontWeight: 700,
+                    backgroundColor: selectedYearId === year.id ? "rgba(255,255,255,0.25)" : "#f0fdfa",
+                    color: selectedYearId === year.id ? "white" : "#0d9488",
+                  }}
+                >
+                  Active
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Quick stats */}
       <div className="grid grid-cols-3 gap-4 mb-6">
@@ -22981,7 +23305,7 @@ import {
   type TeacherProfileData,
   type TeacherTestRow,
 } from "../../Lib/api/teacher-profile";
-import { unassignTeacherBatchApi } from "../../Lib/api/teachers";
+import { unassignTeacherBatchSubjectApi } from "../../Lib/api/teachers";
 import {
   ArrowLeft,
   Phone,
@@ -23203,10 +23527,16 @@ export function TeacherProfilePage() {
   const { teacherId } = useParams<{ teacherId: string }>();
   const navigate      = useNavigate();
 
-  const [profile,      setProfile]      = useState<TeacherProfileData | null>(null);
-  const [loading,      setLoading]      = useState(true);
-  const [error,        setError]        = useState<string | null>(null);
-  const [showAllTests, setShowAllTests] = useState(false);
+  const [profile,        setProfile]        = useState<TeacherProfileData | null>(null);
+  const [loading,        setLoading]        = useState(true);
+  const [error,          setError]          = useState<string | null>(null);
+  const [showAllTests,   setShowAllTests]   = useState(false);
+  // batchId currently in edit mode
+  const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
+  // key = `${batchId}::${subject}` awaiting confirm click
+  const [confirmKey,     setConfirmKey]     = useState<string | null>(null);
+  // key currently being removed (disables button during async call)
+  const [removingKey,    setRemovingKey]    = useState<string | null>(null);
 
   useEffect(() => {
     if (!teacherId) { setError("No teacher ID provided"); setLoading(false); return; }
@@ -23218,17 +23548,39 @@ export function TeacherProfilePage() {
       .finally(() => setLoading(false));
   }, [teacherId]);
 
-  async function handleUnassignBatch(batchId: string) {
+  async function handleUnassignSubject(batchId: string, subject: string) {
     if (!teacherId || !profile) return;
+    const key = `${batchId}::${subject}`;
+
+    if (confirmKey !== key) {
+      // First click — request confirmation
+      setConfirmKey(key);
+      return;
+    }
+
+    // Second click — confirmed
+    setConfirmKey(null);
+    setRemovingKey(key);
     try {
-      await unassignTeacherBatchApi(teacherId, batchId);
-      setProfile((prev) =>
-        prev
-          ? { ...prev, assigned_batches: prev.assigned_batches.filter((b) => b.id !== batchId) }
-          : prev
-      );
+      await unassignTeacherBatchSubjectApi(teacherId, batchId, subject);
+      setProfile((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          assigned_batches: prev.assigned_batches
+            .map((b) =>
+              b.id !== batchId
+                ? b
+                : { ...b, subjects: b.subjects.filter((s) => s !== subject) }
+            )
+            // Drop the batch row entirely once it has no subjects left
+            .filter((b) => b.id !== batchId || b.subjects.length > 0),
+        };
+      });
     } catch (err: any) {
-      console.error("Unassign batch failed:", err.message);
+      console.error("Unassign subject failed:", err.message);
+    } finally {
+      setRemovingKey(null);
     }
   }
 
@@ -23369,38 +23721,124 @@ export function TeacherProfilePage() {
             ) : (
               <div className="space-y-2.5">
                 {profile.assigned_batches.map((batch) => {
-                  const sc = getSubjectColor(batch.subject);
+                  const isEditing  = editingBatchId === batch.id;
+                  // Use first subject for icon colour, fallback to neutral
+                  const sc = getSubjectColor(batch.subjects[0] ?? null);
                   return (
-                    <div key={batch.id} className="flex items-start gap-3 p-3.5 rounded-xl border border-gray-100">
-                      <div
-                        className="w-9 h-9 rounded-md flex items-center justify-center flex-shrink-0"
-                        style={{ backgroundColor: sc.bg }}
-                      >
-                        <BookOpen size={15} style={{ color: sc.color }} strokeWidth={2} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-gray-800" style={{ fontSize: "13.5px", fontWeight: 600 }}>{batch.name}</p>
-                        <div className="flex items-center gap-2 mt-1 flex-wrap">
-                          {batch.subject && (
-                            <span className="px-2 py-0.5 rounded-full" style={{ fontSize: "11px", fontWeight: 600, color: sc.color, backgroundColor: sc.bg }}>
-                              {batch.subject}
-                            </span>
-                          )}
-                          <span className="text-gray-400" style={{ fontSize: "11.5px" }}>
-                            {batch.academic_year_label}
-                          </span>
-                          <span className="text-gray-400" style={{ fontSize: "11.5px" }}>
-                            · {batch.student_count} student{batch.student_count !== 1 ? "s" : ""}
-                          </span>
+                    <div key={batch.id} className="rounded-xl border border-gray-100 overflow-hidden">
+
+                      {/* Batch header row */}
+                      <div className="flex items-start gap-3 p-3.5">
+                        <div
+                          className="w-9 h-9 rounded-md flex items-center justify-center flex-shrink-0"
+                          style={{ backgroundColor: sc.bg }}
+                        >
+                          <BookOpen size={15} style={{ color: sc.color }} strokeWidth={2} />
                         </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-gray-800" style={{ fontSize: "13.5px", fontWeight: 600 }}>{batch.name}</p>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            {/* Subjects inline summary — hidden in edit mode */}
+                            {!isEditing && batch.subjects.length > 0 && batch.subjects.map((s) => {
+                              const ssc = getSubjectColor(s);
+                              return (
+                                <span key={s} className="px-2 py-0.5 rounded-full" style={{ fontSize: "11px", fontWeight: 600, color: ssc.color, backgroundColor: ssc.bg }}>
+                                  {s}
+                                </span>
+                              );
+                            })}
+                            {!isEditing && batch.subjects.length === 0 && (
+                              <span className="text-gray-300" style={{ fontSize: "11.5px" }}>No subjects</span>
+                            )}
+                            <span className="text-gray-400" style={{ fontSize: "11.5px" }}>
+                              {batch.academic_year_label}
+                            </span>
+                            <span className="text-gray-400" style={{ fontSize: "11.5px" }}>
+                              · {batch.student_count} student{batch.student_count !== 1 ? "s" : ""}
+                            </span>
+                          </div>
+                        </div>
+                        {/* Edit / Done toggle */}
+                        <button
+                          onClick={() => {
+                            setEditingBatchId(isEditing ? null : batch.id);
+                            setConfirmKey(null);
+                          }}
+                          className="px-2.5 py-1 rounded-md border transition-all flex-shrink-0"
+                          style={{
+                            fontSize: "11px",
+                            fontWeight: 600,
+                            borderColor: isEditing ? "#0d9488" : "#e5e7eb",
+                            color:       isEditing ? "#0d9488" : "#9ca3af",
+                            backgroundColor: isEditing ? "#f0fdfa" : "transparent",
+                          }}
+                        >
+                          {isEditing ? "Done" : "Edit"}
+                        </button>
                       </div>
-                      <button
-                        onClick={() => handleUnassignBatch(batch.id)}
-                        className="w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-red-50 transition-all flex-shrink-0"
-                        title="Remove from batch"
-                      >
-                        <X size={13} strokeWidth={2.5} />
-                      </button>
+
+                      {/* Subject removal list — only in edit mode */}
+                      {isEditing && (
+                        <div className="px-3 pb-3 space-y-1.5" style={{ borderTop: "1px solid #f3f4f6" }}>
+                          <p className="text-gray-400 pt-2" style={{ fontSize: "10.5px", fontWeight: 600, letterSpacing: "0.04em" }}>
+                            REMOVE SUBJECTS
+                          </p>
+                          {batch.subjects.length === 0 ? (
+                            <p style={{ fontSize: "12px", color: "#9ca3af" }}>No subjects assigned to this batch.</p>
+                          ) : (
+                            batch.subjects.map((subject) => {
+                              const key              = `${batch.id}::${subject}`;
+                              const isPendingConfirm = confirmKey === key;
+                              const isBeingRemoved   = removingKey === key;
+                              return (
+                                <div
+                                  key={subject}
+                                  className="flex items-center justify-between rounded-lg px-3 py-2 transition-all"
+                                  style={{
+                                    backgroundColor: isPendingConfirm ? "#fef2f2" : "#f9fafb",
+                                    border: `1px solid ${isPendingConfirm ? "#fecaca" : "#f3f4f6"}`,
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      fontSize: "12.5px",
+                                      fontWeight: 500,
+                                      color: isPendingConfirm ? "#dc2626" : "#374151",
+                                    }}
+                                  >
+                                    {isPendingConfirm ? `Remove "${subject}"?` : subject}
+                                  </span>
+                                  <div className="flex items-center gap-1.5">
+                                    {isPendingConfirm && (
+                                      <button
+                                        onClick={() => setConfirmKey(null)}
+                                        className="px-2 py-0.5 rounded text-gray-400 hover:text-gray-600 transition-colors"
+                                        style={{ fontSize: "11px" }}
+                                      >
+                                        Cancel
+                                      </button>
+                                    )}
+                                    <button
+                                      disabled={isBeingRemoved}
+                                      onClick={() => handleUnassignSubject(batch.id, subject)}
+                                      className="w-6 h-6 rounded flex items-center justify-center transition-all disabled:opacity-40"
+                                      style={{
+                                        backgroundColor: isPendingConfirm ? "#dc2626" : "transparent",
+                                        color:           isPendingConfirm ? "white"    : "#d1d5db",
+                                      }}
+                                      title={isPendingConfirm ? "Confirm remove" : "Remove subject"}
+                                    >
+                                      {isBeingRemoved
+                                        ? <span style={{ fontSize: "9px" }}>…</span>
+                                        : <X size={12} strokeWidth={2.5} />}
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -23516,16 +23954,16 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import {
   fetchUnassignedTeacherUsersApi,
-  fetchClassBatchesApi,
   assignTeacherApi,
   unassignTeacherBatchApi,
+  unassignTeacherBatchSubjectApi,
   fetchTeachersApi,
   type TeacherUserOption,
-  type ClassBatchOption,
   type TeacherListItem,
   type TeacherBatch,
 } from "../../Lib/api/teachers";
 import { fetchSubjectCatalogApi } from "../../Lib/api/subjects";
+import { fetchBatchesDetailedApi } from "../../Lib/api/class-batches";
 import {
   Search,
   Plus,
@@ -23580,28 +24018,28 @@ function AssignTeacherModal({
   onAssigned,
 }: {
   onClose: () => void;
-  onAssigned: (teacherUser: TeacherUserOption, batches: ClassBatchOption[]) => void;
+  onAssigned: (teacherUser: TeacherUserOption, batches: { id: string; name: string }[], batchSubjects: Record<string, Set<string>>) => void;
 }) {
   const [teacherUsers, setTeacherUsers] = useState<TeacherUserOption[]>([]);
-  const [batches, setBatches]           = useState<ClassBatchOption[]>([]);
+  const [batches, setBatches]           = useState<{ id: string; name: string }[]>([]);
   const [subjects, setSubjects]         = useState<string[]>([]);
   const [loadingData, setLoadingData]   = useState(true);
   const [loadError, setLoadError]       = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState("");
-  // Map of batchId → subject (empty string = not yet chosen)
-  const [batchSubjects, setBatchSubjects] = useState<Record<string, string>>({});
+  // Map of batchId → set of selected subjects
+  const [batchSubjects, setBatchSubjects] = useState<Record<string, Set<string>>>({});
   const [submitting, setSubmitting]     = useState(false);
   const [error, setError]               = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
       fetchUnassignedTeacherUsersApi(),
-      fetchClassBatchesApi(),
+      fetchBatchesDetailedApi(),
       fetchSubjectCatalogApi(),
     ])
       .then(([users, batchList, subjectList]) => {
         setTeacherUsers(users);
-        setBatches(batchList);
+        setBatches(batchList.map((b) => ({ id: b.id, name: b.name })));
         setSubjects(subjectList);
       })
       .catch((e) => setLoadError(e.message ?? "Failed to load data"))
@@ -23610,11 +24048,11 @@ function AssignTeacherModal({
 
   const selectedBatchIds = Object.keys(batchSubjects);
 
-  // All selected batches must have a subject chosen before submitting
+  // All selected batches must have at least one subject chosen before submitting
   const canSubmit = Boolean(
     selectedUserId &&
     selectedBatchIds.length > 0 &&
-    selectedBatchIds.every((id) => batchSubjects[id]?.trim()) &&
+    selectedBatchIds.every((id) => batchSubjects[id]?.size > 0) &&
     !submitting
   );
 
@@ -23625,12 +24063,20 @@ function AssignTeacherModal({
         delete next[batchId];
         return next;
       }
-      return { ...prev, [batchId]: "" };
+      return { ...prev, [batchId]: new Set<string>() };
     });
   }
 
-  function setSubjectForBatch(batchId: string, subject: string) {
-    setBatchSubjects((prev) => ({ ...prev, [batchId]: subject }));
+  function toggleSubjectForBatch(batchId: string, subject: string) {
+    setBatchSubjects((prev) => {
+      const current = new Set(prev[batchId] ?? []);
+      if (current.has(subject)) {
+        current.delete(subject);
+      } else {
+        current.add(subject);
+      }
+      return { ...prev, [batchId]: current };
+    });
   }
 
   async function handleSubmit() {
@@ -23642,12 +24088,12 @@ function AssignTeacherModal({
         teacher_user_id: selectedUserId,
         batch_assignments: selectedBatchIds.map((batchId) => ({
           batch_id: batchId,
-          subject:  batchSubjects[batchId] || null,
+          subjects: Array.from(batchSubjects[batchId] ?? []),
         })),
       });
       const teacherUser     = teacherUsers.find((u) => u.id === selectedUserId)!;
       const assignedBatches = batches.filter((b) => selectedBatchIds.includes(b.id));
-      onAssigned(teacherUser, assignedBatches);
+      onAssigned(teacherUser, assignedBatches, batchSubjects);
       onClose();
     } catch (e: any) {
       setError(e.message ?? "Failed to assign teacher");
@@ -23759,24 +24205,37 @@ function AssignTeacherModal({
             </span>
           </button>
 
-          {/* Subject selector — only shown when batch is checked */}
+          {/* Subject multi-select — only shown when batch is checked */}
           {checked && (
-            <div className="px-4 pb-3">
-              <select
-                value={batchSubjects[b.id] ?? ""}
-                onChange={(e) => setSubjectForBatch(b.id, e.target.value)}
-                onClick={(e) => e.stopPropagation()}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-700 focus:outline-none focus:border-teal-400 transition-all bg-white"
-                style={{ fontSize: "13px" }}
-              >
-                <option value="">— Select subject —</option>
-                {subjects.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-              {!batchSubjects[b.id] && (
-                <p className="text-amber-500 mt-1" style={{ fontSize: "11.5px" }}>
-                  Subject required before submitting.
+            <div className="px-4 pb-3" onClick={(e) => e.stopPropagation()}>
+              <p className="text-gray-400 mb-1.5" style={{ fontSize: "11px", fontWeight: 600, letterSpacing: "0.04em" }}>
+                SELECT SUBJECTS (at least one)
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {subjects.map((s) => {
+                  const selected = batchSubjects[b.id]?.has(s) ?? false;
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => toggleSubjectForBatch(b.id, s)}
+                      className="px-2.5 py-1 rounded-lg border transition-all"
+                      style={{
+                        fontSize: "12px",
+                        fontWeight: selected ? 600 : 400,
+                        backgroundColor: selected ? "#0d9488" : "white",
+                        borderColor: selected ? "#0d9488" : "#d1d5db",
+                        color: selected ? "white" : "#374151",
+                      }}
+                    >
+                      {s}
+                    </button>
+                  );
+                })}
+              </div>
+              {(batchSubjects[b.id]?.size ?? 0) === 0 && (
+                <p className="text-amber-500 mt-1.5" style={{ fontSize: "11.5px" }}>
+                  Select at least one subject before submitting.
                 </p>
               )}
             </div>
@@ -23798,9 +24257,10 @@ function AssignTeacherModal({
       <span style={{ fontWeight: 700 }}>{selectedUserObj.full_name}</span> will be assigned to{" "}
       <span style={{ fontWeight: 700 }}>{selectedBatchIds.length}</span>{" "}
       batch{selectedBatchIds.length !== 1 ? "es" : ""}:{" "}
-      {batches.filter((b) => b.id in batchSubjects).map((b) =>
-        batchSubjects[b.id] ? `${b.name} (${batchSubjects[b.id]})` : b.name
-      ).join(", ")}
+      {batches.filter((b) => b.id in batchSubjects).map((b) => {
+        const subs = Array.from(batchSubjects[b.id] ?? []);
+        return subs.length > 0 ? `${b.name} (${subs.join(", ")})` : b.name;
+      }).join(", ")}
     </p>
   </div>
 )}
@@ -23835,18 +24295,196 @@ function AssignTeacherModal({
   );
 }
 
+
+// ─── Assigned Batches Section (inside Profile Panel) ──────────────────────────
+
+function AssignedBatchesSection({
+  teacher,
+  onUnassignSubject,
+}: {
+  teacher: Teacher;
+  onUnassignSubject: (batchId: string, subject: string) => Promise<void>;
+}) {
+  // batchId → true means edit mode is open for that batch
+  const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
+  // subject key being confirmed for deletion: `${batchId}::${subject}`
+  const [confirmKey, setConfirmKey] = useState<string | null>(null);
+  const [removing, setRemoving]     = useState<string | null>(null);
+
+  async function handleRemoveSubject(batchId: string, subject: string) {
+    const key = `${batchId}::${subject}`;
+    if (confirmKey !== key) {
+      // First click — ask for confirmation
+      setConfirmKey(key);
+      return;
+    }
+    // Second click — confirmed, proceed
+    setRemoving(key);
+    setConfirmKey(null);
+    try {
+      await onUnassignSubject(batchId, subject);
+    } finally {
+      setRemoving(null);
+    }
+  }
+
+  return (
+    <div className="px-6 py-5 border-b border-gray-50">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-gray-400 uppercase" style={{ fontSize: "10px", fontWeight: 600, letterSpacing: "0.08em" }}>
+          Assigned Batches
+        </p>
+        <span className="text-gray-400" style={{ fontSize: "12px" }}>
+          {teacher.assignedBatches.length} batch{teacher.assignedBatches.length !== 1 ? "es" : ""}
+        </span>
+      </div>
+
+      {teacher.assignedBatches.length === 0 ? (
+        <div className="py-8 text-center rounded-xl" style={{ backgroundColor: "#f9fafb" }}>
+          <BookOpen size={24} className="text-gray-200 mx-auto mb-2" strokeWidth={1.5} />
+          <p className="text-gray-400" style={{ fontSize: "13px" }}>No batches assigned</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {teacher.assignedBatches.map((batch) => {
+            const isEditing = editingBatchId === batch.id;
+            return (
+              <div
+                key={batch.id}
+                className="rounded-xl border border-gray-100 overflow-hidden"
+              >
+                {/* Batch header row */}
+                <div className="flex items-center gap-3 p-3">
+                  <div
+                    className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0"
+                    style={{ backgroundColor: "#eff6ff" }}
+                  >
+                    <BookOpen size={14} style={{ color: "#2563eb" }} strokeWidth={2} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
+                      {batch.name}
+                    </p>
+                    {/* Subjects inline summary when not editing */}
+                    {!isEditing && batch.subjects.length > 0 && (
+                      <p style={{ fontSize: "11.5px", color: "#6b7280", marginTop: "1px" }}>
+                        {batch.subjects.join(" · ")}
+                      </p>
+                    )}
+                    {!isEditing && batch.subjects.length === 0 && (
+                      <p style={{ fontSize: "11.5px", color: "#d1d5db", marginTop: "1px" }}>
+                        No subjects
+                      </p>
+                    )}
+                  </div>
+                  {/* Edit / Done toggle */}
+                  <button
+                    onClick={() => {
+                      setEditingBatchId(isEditing ? null : batch.id);
+                      setConfirmKey(null);
+                    }}
+                    className="px-2.5 py-1 rounded-md border transition-all flex-shrink-0"
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      borderColor: isEditing ? "#0d9488" : "#e5e7eb",
+                      color: isEditing ? "#0d9488" : "#9ca3af",
+                      backgroundColor: isEditing ? "#f0fdfa" : "transparent",
+                    }}
+                  >
+                    {isEditing ? "Done" : "Edit"}
+                  </button>
+                </div>
+
+                {/* Subject list — only shown in edit mode */}
+                {isEditing && (
+                  <div
+                    className="px-3 pb-3 space-y-1.5"
+                    style={{ borderTop: "1px solid #f3f4f6" }}
+                  >
+                    <p
+                      className="text-gray-400 pt-2"
+                      style={{ fontSize: "10.5px", fontWeight: 600, letterSpacing: "0.04em" }}
+                    >
+                      REMOVE SUBJECTS
+                    </p>
+                    {batch.subjects.length === 0 ? (
+                      <p style={{ fontSize: "12px", color: "#9ca3af" }}>No subjects assigned to this batch.</p>
+                    ) : (
+                      batch.subjects.map((subject) => {
+                        const key = `${batch.id}::${subject}`;
+                        const isPendingConfirm = confirmKey === key;
+                        const isBeingRemoved   = removing === key;
+                        return (
+                          <div
+                            key={subject}
+                            className="flex items-center justify-between rounded-lg px-3 py-2 transition-all"
+                            style={{
+                              backgroundColor: isPendingConfirm ? "#fef2f2" : "#f9fafb",
+                              border: `1px solid ${isPendingConfirm ? "#fecaca" : "#f3f4f6"}`,
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: "12.5px",
+                                fontWeight: 500,
+                                color: isPendingConfirm ? "#dc2626" : "#374151",
+                              }}
+                            >
+                              {isPendingConfirm ? `Remove "${subject}"?` : subject}
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                              {isPendingConfirm && (
+                                <button
+                                  onClick={() => setConfirmKey(null)}
+                                  className="px-2 py-0.5 rounded text-gray-400 hover:text-gray-600 transition-colors"
+                                  style={{ fontSize: "11px" }}
+                                >
+                                  Cancel
+                                </button>
+                              )}
+                              <button
+                                disabled={isBeingRemoved}
+                                onClick={() => handleRemoveSubject(batch.id, subject)}
+                                className="w-6 h-6 rounded flex items-center justify-center transition-all disabled:opacity-40"
+                                style={{
+                                  backgroundColor: isPendingConfirm ? "#dc2626" : "transparent",
+                                  color: isPendingConfirm ? "white" : "#d1d5db",
+                                }}
+                                title={isPendingConfirm ? "Confirm remove" : "Remove subject"}
+                              >
+                                {isBeingRemoved
+                                  ? <span style={{ fontSize: "9px" }}>…</span>
+                                  : <X size={12} strokeWidth={2.5} />}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Teacher Profile Panel ─────────────────────────────────────────────────────
 
 function TeacherProfilePanel({
   teacher,
   onClose,
   onViewFull,
-  onUnassignBatch,
+  onUnassignSubject,
 }: {
   teacher: Teacher;
   onClose: () => void;
   onViewFull: () => void;
-  onUnassignBatch: (batchId: string) => Promise<void>;
+  onUnassignSubject: (batchId: string, subject: string) => Promise<void>;
 }) {
   const initials = teacher.name.split(" ").filter((w) => /^[A-Z]/.test(w)).map((w) => w[0]).join("").slice(0, 2);
 
@@ -23953,51 +24591,10 @@ function TeacherProfilePanel({
           </div>
 
           {/* Assigned Batches */}
-          <div className="px-6 py-5 border-b border-gray-50">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-gray-400 uppercase" style={{ fontSize: "10px", fontWeight: 600, letterSpacing: "0.08em" }}>
-                Assigned Batches
-              </p>
-              <span className="text-gray-400" style={{ fontSize: "12px" }}>
-                {teacher.assignedBatches.length} batch{teacher.assignedBatches.length !== 1 ? "es" : ""}
-              </span>
-            </div>
-            {teacher.assignedBatches.length === 0 ? (
-              <div className="py-8 text-center rounded-xl" style={{ backgroundColor: "#f9fafb" }}>
-                <BookOpen size={24} className="text-gray-200 mx-auto mb-2" strokeWidth={1.5} />
-                <p className="text-gray-400" style={{ fontSize: "13px" }}>No batches assigned</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {teacher.assignedBatches.map((batch) => (
-                  <div
-                    key={batch.id}
-                    className="flex items-center gap-3 p-3 rounded-xl border border-gray-100"
-                  >
-                    <div
-                      className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0"
-                      style={{ backgroundColor: "#eff6ff" }}
-                    >
-                      <BookOpen size={14} style={{ color: "#2563eb" }} strokeWidth={2} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>{batch.name}</p>
-                      {batch.subject && (
-                        <p style={{ fontSize: "11.5px", color: "#6b7280", marginTop: "1px" }}>{batch.subject}</p>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => onUnassignBatch(batch.id)}
-                      className="w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all flex-shrink-0"
-                      title="Remove from batch"
-                    >
-                      <X size={13} strokeWidth={2.5} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <AssignedBatchesSection
+            teacher={teacher}
+            onUnassignSubject={onUnassignSubject}
+          />
 
           {/* Tests — placeholder */}
           <div className="px-6 py-5">
@@ -24065,7 +24662,11 @@ export function Teachers() {
        t.loginIdentifier.toLowerCase().includes(search.toLowerCase()))
   );
 
-  function handleAssigned(teacherUser: TeacherUserOption, assignedBatches: ClassBatchOption[]) {
+  function handleAssigned(
+    teacherUser: TeacherUserOption,
+    assignedBatches: { id: string; name: string }[],
+    batchSubjects: Record<string, Set<string>>
+  ) {
     const newTeacher: Teacher = {
       id: teacherUser.id,
       name: teacherUser.full_name,
@@ -24074,7 +24675,11 @@ export function Teachers() {
       email: null,
       active: true,
       createdDate: new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
-      assignedBatches: assignedBatches.map((b) => ({ id: b.id, name: b.name, subject: null })),
+      assignedBatches: assignedBatches.map((b) => ({
+        id: b.id,
+        name: b.name,
+        subjects: Array.from(batchSubjects[b.id] ?? []),
+      })),
     };
     setTeachers((prev) => [newTeacher, ...prev]);
   }
@@ -24270,13 +24875,24 @@ export function Teachers() {
             setSelectedTeacher(null);
             navigate(`/teachers/${selectedTeacher.id}`);
           }}
-          onUnassignBatch={async (batchId) => {
-            await unassignTeacherBatchApi(selectedTeacher.id, batchId);
-            setTeachers((prev) => prev.map((t) =>
-              t.id === selectedTeacher.id
-                ? { ...t, assignedBatches: t.assignedBatches.filter((b) => b.id !== batchId) }
-                : t
-            ));
+          onUnassignSubject={async (batchId, subject) => {
+            await unassignTeacherBatchSubjectApi(selectedTeacher.id, batchId, subject);
+            setTeachers((prev) =>
+              prev.map((t) => {
+                if (t.id !== selectedTeacher.id) return t;
+                return {
+                  ...t,
+                  assignedBatches: t.assignedBatches
+                    .map((b) =>
+                      b.id !== batchId
+                        ? b
+                        : { ...b, subjects: b.subjects.filter((s) => s !== subject) }
+                    )
+                    // Remove the batch row entirely if it has no subjects left
+                    .filter((b) => b.id !== batchId || b.subjects.length > 0),
+                };
+              })
+            );
           }}
         />
       )}
@@ -24298,11 +24914,13 @@ import {
   deleteTestApi,
   updateTestApi,
   bulkSubmitMarksApi,
+  fetchTestStudyMaterialsApi,
   type TestRow,
   type TestDetailRow,
   type BatchStudentRow,
+  type TestStudyMaterial,
 } from "../../Lib/api/tests";
-import { fetchClassBatchesApi } from "../../Lib/api/teachers";
+import { fetchBatchesDetailedApi } from "../../Lib/api/class-batches";
 import { fetchSubjectCatalogApi, addSubjectApi } from "../../Lib/api/subjects";
 import {
   Search,
@@ -24383,6 +25001,7 @@ type Test = {
   totalMarks: number;
   createdBy: string;
   attachments: AttachedFile[];
+  liveMaterials: TestStudyMaterial[];
   marks: StudentMark[] | null;
   hasMarks: boolean;
 };
@@ -24443,6 +25062,7 @@ function mapRowToTest(row: TestRow): Test {
     totalMarks: Number(row.total_marks),
     createdBy: row.created_by_name ?? "—",
     attachments: [],
+    liveMaterials: [],
     marks: null,
     hasMarks: row.has_marks,
   };
@@ -24468,7 +25088,118 @@ function getFileColor(type: AttachedFile["type"]) {
   if (type === "video") return { color: "#7c3aed", bg: "#f5f3ff" };
   return { color: "#6b7280", bg: "#f9fafb" };
 }
+// ─── Live material helpers ─────────────────────────────────────────────────────
 
+function detectMaterialType(url: string): "pdf" | "image" | "video" | "other" {
+  const ext = url.split("?")[0].split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "pdf") return "pdf";
+  if (["jpg", "jpeg", "png", "gif", "webp", "svg"].includes(ext)) return "image";
+  if (["mp4", "mov", "avi", "mkv", "webm"].includes(ext)) return "video";
+  return "other";
+}
+
+function getMaterialLabel(url: string): string {
+  const raw = url.split("?")[0].split("/").pop() ?? "file";
+  // Strip UUID suffix that R2 appends: filename-<uuid>.ext
+  return decodeURIComponent(
+    raw.replace(/-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(\.[^.]+)?$/, "$1")
+       .replace(/\.[^.]+$/, "")
+  ) || raw;
+}
+
+// DROP-IN REPLACEMENT for the LiveMaterialCard function in Tests.tsx
+// Find the entire LiveMaterialCard function and replace with this.
+
+function LiveMaterialCard({ material }: { material: TestStudyMaterial }) {
+  const [expanded, setExpanded] = useState(false);
+  const type = detectMaterialType(material.file_url);
+  const label = getMaterialLabel(material.file_url);
+  const FileIcon = getFileIcon(type);
+  const fc = getFileColor(type);
+  const uploadedAt = new Date(material.created_at).toLocaleDateString("en-IN", {
+    day: "numeric", month: "short", year: "numeric",
+  });
+
+  return (
+    <div className="rounded-xl border border-gray-100 overflow-hidden">
+      <div
+        className="flex items-center gap-3 px-4 py-3 bg-white hover:bg-gray-50 transition-colors cursor-pointer"
+        onClick={() => type !== "other" && setExpanded((e) => !e)}
+      >
+        <div
+          className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0"
+          style={{ backgroundColor: fc.bg }}
+        >
+          <FileIcon size={14} style={{ color: fc.color }} strokeWidth={2} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-gray-700 truncate" style={{ fontSize: "13px", fontWeight: 500 }}>{label}</p>
+          <p className="text-gray-400" style={{ fontSize: "11px" }}>
+            {material.uploader_name ?? "—"} · {uploadedAt}
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {type !== "other" && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setExpanded((x) => !x); }}
+              className="px-2.5 py-1 rounded-md border border-gray-100 text-gray-400 hover:text-teal-600 hover:border-teal-200 hover:bg-teal-50 transition-all"
+              style={{ fontSize: "11.5px", fontWeight: 600 }}
+            >
+              {expanded ? "Hide" : "Preview"}
+            </button>
+          )}
+          <a
+            href={material.file_url}
+            download
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="px-2.5 py-1 rounded-md border border-teal-100 text-teal-600 hover:bg-teal-50 transition-all"
+            style={{ fontSize: "11.5px", fontWeight: 600, textDecoration: "none" }}
+          >
+            ↓
+          </a>
+          <a
+            href={material.file_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="px-2.5 py-1 rounded-md border border-gray-100 text-gray-400 hover:text-teal-600 hover:border-teal-200 hover:bg-teal-50 transition-all"
+            style={{ fontSize: "11.5px", fontWeight: 600, textDecoration: "none" }}
+          >
+            ↗
+          </a>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="border-t border-gray-100 bg-gray-50" style={{ maxHeight: "420px", overflow: "auto" }}>
+          {type === "image" && (
+            <img
+              src={material.file_url}
+              alt={label}
+              style={{ maxWidth: "100%", maxHeight: "400px", objectFit: "contain", display: "block", margin: "0 auto", padding: "12px" }}
+            />
+          )}
+          {type === "pdf" && (
+            <iframe
+              src={`${material.file_url}#toolbar=1&navpanes=0&scrollbar=1`}
+              title={label}
+              style={{ width: "100%", height: "400px", border: "none", display: "block" }}
+            />
+          )}
+          {type === "video" && (
+            <video
+              src={material.file_url}
+              controls
+              style={{ width: "100%", maxHeight: "380px", display: "block", backgroundColor: "#000" }}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 function detectFileType(filename: string): AttachedFile["type"] {
   const ext = filename.split(".").pop()?.toLowerCase() ?? "";
   if (["pdf"].includes(ext)) return "pdf";
@@ -24710,8 +25441,8 @@ function TestFormView({
   const [showAddSubject, setShowAddSubject] = useState(false);
 
   useEffect(() => {
-    fetchClassBatchesApi()
-      .then((list) => setBatchOptions(list))
+    fetchBatchesDetailedApi()
+      .then((list) => setBatchOptions(list.map((b) => ({ id: b.id, name: b.name }))))
       .catch(() => setApiError("Failed to load batches."))
       .finally(() => setLoadingBatches(false));
 
@@ -25550,29 +26281,27 @@ function TestDetail({
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Paperclip size={15} className="text-teal-500" />
-            <h2 className="text-gray-800" style={{ fontSize: "15px", fontWeight: 700 }}>Study Material</h2>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Paperclip size={15} className="text-teal-500" />
+              <h2 className="text-gray-800" style={{ fontSize: "15px", fontWeight: 700 }}>Study Material</h2>
+            </div>
+            {test.liveMaterials.length > 0 && (
+              <span
+                className="px-2 py-0.5 rounded-full"
+                style={{ fontSize: "11px", fontWeight: 600, backgroundColor: "#f0fdfa", color: "#0d9488" }}
+              >
+                {test.liveMaterials.length} file{test.liveMaterials.length !== 1 ? "s" : ""}
+              </span>
+            )}
           </div>
-          {test.attachments.length === 0 ? (
+          {test.liveMaterials.length === 0 ? (
             <p className="text-gray-300" style={{ fontSize: "13.5px" }}>No attachments added.</p>
           ) : (
             <div className="space-y-2">
-              {test.attachments.map((f, i) => {
-                const FileIcon = getFileIcon(f.type);
-                const fc = getFileColor(f.type);
-                return (
-                  <div key={i} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer">
-                    <div className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0" style={{ backgroundColor: fc.bg }}>
-                      <FileIcon size={14} style={{ color: fc.color }} strokeWidth={2} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-gray-700 truncate" style={{ fontSize: "13px", fontWeight: 500 }}>{f.name}</p>
-                      <p className="text-gray-400" style={{ fontSize: "11.5px" }}>{f.size}</p>
-                    </div>
-                  </div>
-                );
-              })}
+              {test.liveMaterials.map((m) => (
+                <LiveMaterialCard key={m.id} material={m} />
+              ))}
             </div>
           )}
         </div>
@@ -25790,8 +26519,11 @@ export function Tests({ canManage = true }: { canManage?: boolean }) {
 useEffect(() => {
     if (view.type === "detail") {
       loadTestDetail(view.testId);
+      loadTestMaterials(view.testId);
     }
-  }, [view]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view.type === "detail" ? (view as { testId: string }).testId : ""]);
+
   // When opening detail view, fetch fresh detail (includes marks)
   const loadTestDetail = async (testId: string) => {
     try {
@@ -25812,6 +26544,17 @@ useEffect(() => {
       ));
     } catch {
       // Non-fatal — list still works
+    }
+  };
+
+  const loadTestMaterials = async (testId: string) => {
+    try {
+      const materials = await fetchTestStudyMaterialsApi(testId);
+      setTests((prev) => prev.map((t) =>
+        t.id === testId ? { ...t, liveMaterials: materials } : t
+      ));
+    } catch {
+      // Non-fatal
     }
   };
 
@@ -25864,7 +26607,9 @@ useEffect(() => {
     setTests((prev) =>
       prev.map((t) => t.id === testId ? { ...t, marks, hasMarks: true } : t)
     );
-    setTimeout(() => setView({ type: "detail", testId }), 100);
+    setTimeout(() => {
+      setView({ type: "detail", testId });
+    }, 100);
   }
 
   // ── Routing ──
@@ -25928,7 +26673,7 @@ useEffect(() => {
         onDelete={() => handleDelete(test.id)}
         onEnterMarks={() => setView({ type: "marks", testId: test.id, mode: "enter" })}
         onModifyMarks={() => setView({ type: "marks", testId: test.id, mode: "modify" })}
-        onUploadMaterial={() => { /* wire to study materials flow */ }}
+        onUploadMaterial={() => loadTestMaterials(test.id)}
         canManage={canManage}
       />
     );
@@ -27467,6 +28212,12 @@ export type AnnouncementPayload = {
   school_attribute?: string | null;
 };
 
+export type AnnouncementAttachment = {
+  id: string;
+  file_url: string;
+  created_at: string;
+};
+
 export type AnnouncementRecord = {
   id: string;
   announcement_type: string;
@@ -27477,12 +28228,13 @@ export type AnnouncementRecord = {
   created_by: string;
   created_at: string;
   is_active: boolean;
+  attachments: AnnouncementAttachment[];
 };
 
 
 export async function createAnnouncementApi(
   payload: AnnouncementPayload
-): Promise<void> {
+): Promise<AnnouncementRecord> {
   const token = getToken();
   if (!token) throw new Error("Not authenticated");
 
@@ -27500,6 +28252,8 @@ export async function createAnnouncementApi(
   if (!res.ok) {
     throw new Error(data.error ?? "Failed to create announcement");
   }
+
+  return data.data as AnnouncementRecord;
 }
 export async function fetchAnnouncementsApi(): Promise<AnnouncementRecord[]> {
   const token = getToken();
@@ -27742,6 +28496,7 @@ export type BatchDetailed = {
   id: string;
   name: string;
   created_at: string;
+  academic_year_id: string;
   academic_year_label: string;
   created_by: string;
   student_count: number;
@@ -27806,6 +28561,40 @@ export async function fetchBatchStudentsApi(
   if (!res.ok) throw new Error(data.error ?? "Failed to fetch batch students");
   return { data: data.data, total: data.total, limit: data.limit, offset: data.offset };
 }
+
+export async function updateClassBatchApi(
+  batchId: string,
+  payload: CreateClassBatchPayload
+): Promise<void> {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+
+  const res = await fetch(`/api/class-batches/${encodeURIComponent(batchId)}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Failed to update batch");
+}
+
+export async function deleteClassBatchApi(batchId: string): Promise<void> {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+
+  const res = await fetch(`/api/class-batches/${encodeURIComponent(batchId)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Failed to delete batch");
+}
+
 
 export async function createClassBatchApi(
   payload: CreateClassBatchPayload
@@ -27918,10 +28707,11 @@ export type BatchFeeRow = {
 export type FeeOverviewData = {
   academic_year_id: string;
   academic_year_label: string;
-  total_expected: number;
-  total_collected: number;
-  outstanding: number;
+  total_expected: number | null;
+  total_collected: number | null;
+  outstanding: number | null;
   collection_pct: number | null;
+  show_financials: boolean;
   batches: BatchFeeRow[];
 };
 
@@ -27997,6 +28787,7 @@ export type FeeStructureRecord = {
   id: string;
   class_batch_id: string;
   label: string;
+  plan_type: string;
   total_amount: number;
   lump_sum_enabled: boolean;
   installments_enabled: boolean;
@@ -28755,11 +29546,11 @@ export type StudentStats = {
   new_this_month: number;
 };
 
-export async function fetchStudentStatsApi(): Promise<StudentStats> {
+export async function fetchStudentStatsApi(academicYearId?: string): Promise<StudentStats> {
   const token = getToken();
   if (!token) throw new Error("Not authenticated");
 
-  const res = await fetch("/api/students/stats", {
+  const res = await fetch(`/api/students/stats${academicYearId ? `?academic_year_id=${encodeURIComponent(academicYearId)}` : ""}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 
@@ -28768,18 +29559,15 @@ export async function fetchStudentStatsApi(): Promise<StudentStats> {
   return data.data as StudentStats;
 }
 
-export async function fetchStudentsApi(options: {
-  limit?: number;
-  offset?: number;
-  search?: string;
-}): Promise<{ students: StudentRow[]; total: number }> {
+export async function fetchStudentsApi(options: { limit?: number; offset?: number; search?: string; academicYearId?: string }): Promise<{ students: StudentRow[]; total: number }> {
   const token = getToken();
   if (!token) throw new Error("Not authenticated");
 
   const params = new URLSearchParams();
-  if (options.limit  != null) params.set("limit",  String(options.limit));
-  if (options.offset != null) params.set("offset", String(options.offset));
-  if (options.search)         params.set("search", options.search);
+  if (options.limit        != null) params.set("limit",            String(options.limit));
+  if (options.offset       != null) params.set("offset",           String(options.offset));
+  if (options.search)               params.set("search",           options.search);
+  if (options.academicYearId)       params.set("academic_year_id", options.academicYearId);
 
   const res = await fetch(`/api/students?${params.toString()}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -28818,19 +29606,18 @@ export async function enrollStudentApi(
 
 // ===== FILE: src\Lib\api\study-materials.ts =====
 
+//src/Lib/api/study-materials.ts
 import { getToken } from "../../app/auth";
 
 export type StudyMaterialRecord = {
   id: string;
-  linked_type: string;
-  linked_id: string;
   file_url: string;
+  linked_announcement_id: string | null;
+  linked_test_id: string | null;
   created_at: string;
   created_by: string;
   is_active: boolean;
   uploader_name: string | null;
-  batch_name: string | null;
-  batch_id: string | null;
 };
 
 function authHeaders(): HeadersInit {
@@ -28858,17 +29645,39 @@ export async function fetchStudyMaterialsApi(options?: {
 
 export async function uploadStudyMaterialApi(input: {
   file: File;
-  linked_type: "TEST" | "ANNOUNCEMENT";
-  linked_id: string;
+  linked_type?: "ANNOUNCEMENT" | "TEST";
+  linked_id?: string;
   class_batch_id?: string | null;
+  // legacy fields kept for backwards compatibility
+  linked_announcement_id?: string | null;
+  linked_test_id?: string | null;
 }): Promise<StudyMaterialRecord> {
   const token = getToken();
   if (!token) throw new Error("Not authenticated");
 
+  // Resolve to canonical fields — new callers use linked_type+linked_id,
+  // legacy callers use linked_announcement_id / linked_test_id directly.
+  const resolvedAnnouncementId =
+    (input.linked_type === "ANNOUNCEMENT" ? input.linked_id : null) ??
+    input.linked_announcement_id ??
+    null;
+  const resolvedTestId =
+    (input.linked_type === "TEST" ? input.linked_id : null) ??
+    input.linked_test_id ??
+    null;
+
+  if (!resolvedAnnouncementId && !resolvedTestId) {
+    throw new Error("Provide a valid linked_type + linked_id or linked_announcement_id / linked_test_id");
+  }
+
   const formData = new FormData();
-  formData.append("file",        input.file);
-  formData.append("linked_type", input.linked_type);
-  formData.append("linked_id",   input.linked_id);
+  formData.append("file", input.file);
+  if (resolvedAnnouncementId) {
+    formData.append("linked_announcement_id", resolvedAnnouncementId);
+  }
+  if (resolvedTestId) {
+    formData.append("linked_test_id", resolvedTestId);
+  }
   if (input.class_batch_id) {
     formData.append("class_batch_id", input.class_batch_id);
   }
@@ -28998,7 +29807,7 @@ import { getToken } from "../../app/auth";
 export type TeacherBatchDetail = {
   id: string;
   name: string;
-  subject: string | null;
+  subjects: string[];
   academic_year_label: string;
   student_count: number;
 };
@@ -29077,9 +29886,9 @@ export type ClassBatchOption = {
 
 
 export type TeacherBatch = {
-  id:      string;
-  name:    string;
-  subject: string | null;
+  id:       string;
+  name:     string;
+  subjects: string[]; // one entry per assigned subject
 };
 
 export type TeacherListItem = {
@@ -29140,7 +29949,7 @@ export async function fetchClassBatchesApi(): Promise<ClassBatchOption[]> {
 
 export async function assignTeacherApi(payload: {
   teacher_user_id:   string;
-  batch_assignments: { batch_id: string; subject: string | null }[];
+  batch_assignments: { batch_id: string; subjects: string[] }[];
 }): Promise<void> {
   const token = getToken();
   if (!token) throw new Error("Not authenticated");
@@ -29172,6 +29981,26 @@ export async function unassignTeacherBatchApi(
 
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? "Failed to unassign batch");
+}
+
+export async function unassignTeacherBatchSubjectApi(
+  teacherId: string,
+  batchId:   string,
+  subject:   string
+): Promise<void> {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+
+  const res = await fetch(
+    `/api/teachers/${teacherId}/batches/${batchId}/subjects/${encodeURIComponent(subject)}`,
+    {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Failed to unassign subject");
 }
 
 // ===== FILE: src\Lib\api\tests.ts =====
@@ -29305,7 +30134,26 @@ export async function bulkSubmitMarksApi(
     throw new Error(json.error ?? "Failed to submit marks");
   }
 }
+export type TestStudyMaterial = {
+  id: string;
+  file_url: string;
+  linked_type: string;
+  linked_id: string;
+  created_at: string;
+  uploader_name: string | null;
+  batch_name: string | null;
+};
 
+export async function fetchTestStudyMaterialsApi(testId: string): Promise<TestStudyMaterial[]> {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+  const res = await fetch(`/api/study-materials?linked_test_id=${testId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error ?? "Failed to fetch study materials");
+  return json.data as TestStudyMaterial[];
+}
 
 export async function createTestApi(payload: CreateTestPayload): Promise<{ created: number; data: { id: string }[] }> {
   const token = getToken();

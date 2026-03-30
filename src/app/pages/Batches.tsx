@@ -15,11 +15,10 @@ import {
 } from "../../Lib/api/class-batches";
 import {
   createFeeStructureApi,
+  updateFeeStructureApi,
   getFeeStructureForBatchApi,
   type LateFeeType,
-  type InstallmentInput,
   type FeeStructureRecord,
-  type CreateFeeStructurePayload,
 } from "../../Lib/api/fee-structure";
 import {
   Search,
@@ -41,7 +40,7 @@ import {
   MoreVertical,
 } from "lucide-react";
 
-// ─── Subject Color Map ─────────────────────────────────────────────────────────
+// â”€â”€â”€ Subject Color Map â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const subjectColors: Record<string, { color: string; bg: string }> = {
   Science:     { color: "#0d9488", bg: "#f0fdfa" },
@@ -60,7 +59,7 @@ function getSubjectColor(subject: string) {
 
 
 
-// ─── Create Fee Structure Modal ───────────────────────────────────────────────
+// â”€â”€â”€ Create Fee Structure Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type FeeCollectionType = "LUMP_SUM" | "INSTALLMENTS" | "BOTH";
 
@@ -86,24 +85,59 @@ const emptyFeeForm: FeeFormState = {
   installments: [],
 };
 
+function getFeeCollectionType(structure?: FeeStructureRecord | null): FeeCollectionType {
+  if (!structure) return "LUMP_SUM";
+  if (structure.lump_sum_enabled && structure.installments_enabled) return "BOTH";
+  if (structure.installments_enabled) return "INSTALLMENTS";
+  return "LUMP_SUM";
+}
+
+function buildFeeFormState(structure?: FeeStructureRecord | null): FeeFormState {
+  if (!structure) return { ...emptyFeeForm };
+
+  return {
+    label: structure.label ?? "",
+    totalAmount: structure.total_amount != null ? String(structure.total_amount) : "",
+    feeCollectionType: getFeeCollectionType(structure),
+    finalDueDate: structure.final_due_date ? String(structure.final_due_date).slice(0, 10) : "",
+    lateFeeAmount: structure.late_fee_amount != null ? String(structure.late_fee_amount) : "",
+    lateFeeType: structure.late_fee_type ?? "",
+    requireAdvance: Boolean(structure.require_advance),
+    installments: (structure.installments ?? []).map((inst) => ({
+      amount: String(inst.amount),
+      due_date: String(inst.due_date).slice(0, 10),
+    })),
+  };
+}
+
 function CreateFeeStructureModal({
   batchId,
   batchName,
+  existingStructure,
   onClose,
   onCreated,
 }: {
   batchId: string;
   batchName: string;
+  existingStructure?: FeeStructureRecord | null;
   onClose: () => void;
   onCreated: (structure: FeeStructureRecord) => void;
 }) {
-  const [form, setForm] = useState<FeeFormState>(emptyFeeForm);
+  const isUpdateMode = Boolean(existingStructure);
+  const [form, setForm] = useState<FeeFormState>(() => buildFeeFormState(existingStructure));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  // ── Derived helpers ──────────────────────────────────────────────────────
+  useEffect(() => {
+    setForm(buildFeeFormState(existingStructure));
+    setErrors({});
+    setApiError(null);
+    setSaved(false);
+  }, [existingStructure]);
+
+  // â”€â”€ Derived helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const totalAmountNum = parseFloat(form.totalAmount) || 0;
   const installmentSum = form.installments.reduce(
     (s, inst) => s + (parseFloat(inst.amount) || 0),
@@ -114,7 +148,7 @@ function CreateFeeStructureModal({
     form.installments.length > 0 &&
     Math.abs(installmentSum - totalAmountNum) > 0.01;
 
-  // ── Installment row helpers ──────────────────────────────────────────────
+  // â”€â”€ Installment row helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function addInstallment() {
     if (form.installments.length >= 12) return;
     setForm((f) => ({
@@ -149,11 +183,11 @@ function CreateFeeStructureModal({
   }
 
   function setFeeCollectionType(pt: FeeCollectionType) {
-    setForm((f) => ({ ...f, feeCollectionType: pt, installments: [] }));
+    setForm((f) => ({ ...f, feeCollectionType: pt, installments: pt === "LUMP_SUM" ? [] : f.installments }));
     setErrors({});
   }
 
-  // ── Validation ────────────────────────────────────────────────────────────
+  // â”€â”€ Validation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function validate(): Record<string, string> {
     const e: Record<string, string> = {};
 
@@ -183,54 +217,58 @@ function CreateFeeStructureModal({
       });
 
       if (form.installments.length > 0 && Math.abs(installmentSum - totalAmountNum) > 0.01)
-        e.installments = `Installment amounts sum to ₹${installmentSum.toFixed(2)}, but total is ₹${totalAmountNum.toFixed(2)}.`;
+        e.installments = `Installment amounts sum to INR ${installmentSum.toFixed(2)}, but total is INR ${totalAmountNum.toFixed(2)}.`;
     }
 
     return e;
   }
 
-  // ── Submit ────────────────────────────────────────────────────────────────
+  // â”€â”€ Submit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async function handleSubmit() {
     const e = validate();
     if (Object.keys(e).length > 0) { setErrors(e); return; }
     setSubmitting(true);
     setApiError(null);
 
-    const payload: CreateFeeStructurePayload = {
-      class_batch_id: batchId,
+    const payload = {
       label: form.label.trim(),
       total_amount: Number(form.totalAmount),
       lump_sum_enabled: form.feeCollectionType === "LUMP_SUM" || form.feeCollectionType === "BOTH",
       installments_enabled: form.feeCollectionType === "INSTALLMENTS" || form.feeCollectionType === "BOTH",
       final_due_date: form.finalDueDate,
       require_advance: form.requireAdvance,
+      late_fee_amount:
+        form.lateFeeAmount !== "" && form.lateFeeType !== ""
+          ? Number(form.lateFeeAmount)
+          : undefined,
+      late_fee_type:
+        form.lateFeeAmount !== "" && form.lateFeeType !== ""
+          ? (form.lateFeeType as LateFeeType)
+          : undefined,
+      installments:
+        form.feeCollectionType !== "LUMP_SUM"
+          ? form.installments.map((inst, idx) => ({
+              installment_number: idx + 1,
+              amount: Number(inst.amount),
+              due_date: inst.due_date,
+            }))
+          : undefined,
     };
 
-    if (form.lateFeeAmount !== "" && form.lateFeeType !== "") {
-      payload.late_fee_amount = Number(form.lateFeeAmount);
-      payload.late_fee_type = form.lateFeeType as LateFeeType;
-    }
-
-    if (form.feeCollectionType !== "LUMP_SUM") {
-      payload.installments = form.installments.map((inst, idx) => ({
-        installment_number: idx + 1,
-        amount: Number(inst.amount),
-        due_date: inst.due_date,
-      }));
-    }
-
     try {
-      const result = await createFeeStructureApi(payload);
+      const result = existingStructure
+        ? await updateFeeStructureApi(existingStructure.id, payload)
+        : await createFeeStructureApi({ class_batch_id: batchId, ...payload });
       setSaved(true);
       setTimeout(() => onCreated(result), 900);
     } catch (err: any) {
-      setApiError(err.message ?? "Failed to create fee structure.");
+      setApiError(err.message ?? (isUpdateMode ? "Failed to update fee structure." : "Failed to create fee structure."));
     } finally {
       setSubmitting(false);
     }
   }
 
-  // ── Success state ──────────────────────────────────────────────────────
+  // â”€â”€ Success state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (saved) {
     return (
       <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-6">
@@ -242,17 +280,17 @@ function CreateFeeStructureModal({
             <CheckCircle2 size={28} color="#0d9488" strokeWidth={2} />
           </div>
           <p className="text-gray-900" style={{ fontSize: "18px", fontWeight: 700 }}>
-            Fee Structure Created!
+{isUpdateMode ? "Fee Structure Updated!" : "Fee Structure Created!"}
           </p>
           <p className="text-gray-400 mt-1 text-center" style={{ fontSize: "13.5px" }}>
-            {batchName} now has an active fee structure.
+{isUpdateMode ? `${batchName} now uses the updated fee structure for future enrollments.` : `${batchName} now has an active fee structure.`}
           </p>
         </div>
       </div>
     );
   }
 
-  // ── Form ──────────────────────────────────────────────────────────────────
+  // â”€â”€ Form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   return (
     <div
       className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-6"
@@ -266,10 +304,10 @@ function CreateFeeStructureModal({
         <div className="flex items-start justify-between px-7 pt-7 pb-5 border-b border-gray-100 flex-shrink-0">
           <div>
             <h2 className="text-gray-900" style={{ fontSize: "18px", fontWeight: 700, letterSpacing: "-0.01em" }}>
-              Create Fee Structure
+{isUpdateMode ? "Update Fee Structure" : "Create Fee Structure"}
             </h2>
             <p className="text-gray-400 mt-0.5" style={{ fontSize: "13px" }}>
-              {batchName} — define how fees are collected for this batch.
+{isUpdateMode ? `${batchName} - revise the current fee setup for future enrollments.` : `${batchName} - define how fees are collected for this batch.`}
             </p>
           </div>
           <button
@@ -292,7 +330,7 @@ function CreateFeeStructureModal({
               type="text"
               value={form.label}
               onChange={(e) => { setForm((f) => ({ ...f, label: e.target.value })); setErrors((er) => { const c = { ...er }; delete c.label; return c; }); }}
-              placeholder="e.g. Annual Fees 2025–26"
+              placeholder="e.g. Annual Fees 2025-26"
               className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all"
               style={{ fontSize: "13.5px" }}
             />
@@ -302,7 +340,7 @@ function CreateFeeStructureModal({
           {/* Total Amount */}
           <div>
             <label className="block text-gray-700 mb-1.5" style={{ fontSize: "13px", fontWeight: 600 }}>
-              Total Amount (₹) <span className="text-red-500">*</span>
+              Total Amount (INR) <span className="text-red-500">*</span>
             </label>
             <input
               type="number"
@@ -389,7 +427,7 @@ function CreateFeeStructureModal({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-gray-600 mb-1" style={{ fontSize: "12px", fontWeight: 600 }}>
-                  Late Fee Amount (₹)
+                  Late Fee Amount (INR)
                 </label>
                 <input
                   type="number"
@@ -413,7 +451,7 @@ function CreateFeeStructureModal({
                   style={{ fontSize: "13px", color: form.lateFeeType ? "#1f2937" : "#d1d5db" }}
                 >
                   <option value="">None</option>
-                  <option value="FLAT">Flat (fixed ₹ amount)</option>
+                  <option value="FLAT">Flat (fixed INR amount)</option>
                   <option value="PERCENT">Percent (% of outstanding)</option>
                 </select>
                 {errors.lateFeeType && <p className="text-red-500 mt-1" style={{ fontSize: "11.5px" }}>{errors.lateFeeType}</p>}
@@ -444,7 +482,7 @@ function CreateFeeStructureModal({
             </button>
           </div>
 
-          {/* Fixed Installments — dynamic rows */}
+          {/* Fixed Installments - dynamic rows */}
           {form.feeCollectionType !== "LUMP_SUM" && (
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -487,8 +525,8 @@ function CreateFeeStructureModal({
                       color: sumMismatch ? "#dc2626" : "#0d9488",
                     }}
                   >
-                    Sum: ₹{installmentSum.toFixed(2)} / ₹{totalAmountNum.toFixed(2)}
-                    {!sumMismatch && installmentSum > 0 && " ✓"}
+                    Sum: INR {installmentSum.toFixed(2)} / INR {totalAmountNum.toFixed(2)}
+                    {!sumMismatch && installmentSum > 0 && " OK"}
                   </span>
                 </div>
               )}
@@ -508,7 +546,7 @@ function CreateFeeStructureModal({
                     className="grid px-4 py-2.5"
                     style={{ gridTemplateColumns: "40px 1fr 1fr 32px", backgroundColor: "#f9fafb", gap: "8px" }}
                   >
-                    {["#", "Amount (₹)", "Due Date", ""].map((col) => (
+                    {["#", "Amount (INR )", "Due Date", ""].map((col) => (
                       <p key={col} className="text-gray-400" style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.05em" }}>
                         {col.toUpperCase()}
                       </p>
@@ -612,7 +650,7 @@ function CreateFeeStructureModal({
             className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
             style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
           >
-            {submitting ? "Creating…" : "Create Fee Structure"}
+            {submitting ? (isUpdateMode ? "Updating..." : "Creating...") : (isUpdateMode ? "Update Fee Structure" : "Create Fee Structure")}
           </button>
         </div>
       </div>
@@ -621,7 +659,7 @@ function CreateFeeStructureModal({
 }
 
 
-// ─── Edit Batch Modal ─────────────────────────────────────────────────────────
+// â”€â”€â”€ Edit Batch Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function EditBatchModal({
   batch,
@@ -700,7 +738,7 @@ function EditBatchModal({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Science – Batch A"
+              placeholder="e.g. Science - Batch A"
               className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-50 transition-all"
               style={{ fontSize: "13.5px" }}
             />
@@ -712,7 +750,7 @@ function EditBatchModal({
             </label>
             {yearsLoading ? (
               <div className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-400" style={{ fontSize: "13.5px" }}>
-                Loading years…
+                Loading years...
               </div>
             ) : (
               <select
@@ -750,14 +788,14 @@ function EditBatchModal({
             className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
           >
-            {submitting ? "Saving…" : "Save Changes"}
+            {submitting ? "Saving..." : "Save Changes"}
           </button>
         </div>
       </div>
     </div>
   );
 }
-// ─── Create Batch Modal ────────────────────────────────────────────────────────
+// â”€â”€â”€ Create Batch Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function CreateBatchModal({
   onClose,
@@ -834,7 +872,7 @@ function CreateBatchModal({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Science – Batch A"
+              placeholder="e.g. Science - Batch A"
               className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-50 transition-all"
               style={{ fontSize: "13.5px" }}
             />
@@ -844,7 +882,7 @@ function CreateBatchModal({
             <label className="block text-gray-600 mb-1.5" style={{ fontSize: "13px", fontWeight: 600 }}>Academic Year</label>
             {yearsLoading ? (
               <div className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-400" style={{ fontSize: "13.5px" }}>
-                Loading years…
+                Loading years...
               </div>
             ) : (
               <select
@@ -883,7 +921,7 @@ function CreateBatchModal({
             className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
           >
-            {submitting ? "Creating…" : "Create Batch"}
+            {submitting ? "Creating..." : "Create Batch"}
           </button>
         </div>
       </div>
@@ -891,7 +929,7 @@ function CreateBatchModal({
   );
 }
 
-// ─── Student Profile Sub-Panel ─────────────────────────────────────────────────
+// â”€â”€â”€ Student Profile Sub-Panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function StudentProfilePanel({
   student,
@@ -962,7 +1000,7 @@ function StudentProfilePanel({
   );
 }
 
-// ─── Batch Detail Side Panel ──────────────────────────────────────────────────
+// â”€â”€â”€ Batch Detail Side Panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function BatchDetailPanel({
   batch,
@@ -983,6 +1021,7 @@ function BatchDetailPanel({
   const [feeStructure, setFeeStructure]         = useState<FeeStructureRecord | null | undefined>(undefined);
   const [loadingFee, setLoadingFee]             = useState(true);
   const [showFeeModal, setShowFeeModal]         = useState(false);
+  const [showEditFeeModal, setShowEditFeeModal] = useState(false);
   const [showEditModal, setShowEditModal]       = useState(false);
   const [showMenu, setShowMenu]                 = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -1142,12 +1181,22 @@ function BatchDetailPanel({
                       Create
                     </button>
                   )}
+                  {!loadingFee && feeStructure && (
+                    <button
+                      onClick={() => setShowEditFeeModal(true)}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-teal-200 text-teal-700 hover:bg-teal-50 transition-all"
+                      style={{ fontSize: "12px", fontWeight: 600 }}
+                    >
+                      <Edit2 size={12} strokeWidth={2.5} />
+                      Update
+                    </button>
+                  )}
                 </div>
 
                 {loadingFee ? (
                   <div className="flex items-center gap-2 text-gray-400">
                     <Loader2 size={14} className="animate-spin" />
-                    <span style={{ fontSize: "13px" }}>Loading…</span>
+                    <span style={{ fontSize: "13px" }}>Loading...</span>
                   </div>
                 ) : feeStructure ? (
                   <div className="rounded-xl border border-gray-100 overflow-hidden">
@@ -1173,7 +1222,7 @@ function BatchDetailPanel({
                           </span>
                         </div>
                         <p className="text-gray-900 flex-shrink-0" style={{ fontSize: "16px", fontWeight: 800, letterSpacing: "-0.02em" }}>
-                          ₹{Number(feeStructure.total_amount).toLocaleString("en-IN")}
+                          INR {Number(feeStructure.total_amount).toLocaleString("en-IN")}
                         </p>
                       </div>
 
@@ -1190,7 +1239,7 @@ function BatchDetailPanel({
                           <span className="text-gray-700" style={{ fontSize: "12.5px", fontWeight: 600 }}>
                             {feeStructure.late_fee_type === "PERCENT"
                               ? `${feeStructure.late_fee_amount}%`
-                              : `₹${Number(feeStructure.late_fee_amount).toLocaleString("en-IN")}`}{" "}
+                              : `INR ${Number(feeStructure.late_fee_amount).toLocaleString("en-IN")}`}{" "}
                             ({feeStructure.late_fee_type === "PERCENT" ? "of outstanding" : "flat"})
                           </span>
                         </div>
@@ -1217,7 +1266,7 @@ function BatchDetailPanel({
                               </span>
                               <div className="text-right">
                                 <span className="text-gray-700" style={{ fontSize: "12.5px", fontWeight: 600 }}>
-                                  ₹{Number(inst.amount).toLocaleString("en-IN")}
+                                  INR {Number(inst.amount).toLocaleString("en-IN")}
                                 </span>
                                 <span className="text-gray-400 ml-2" style={{ fontSize: "11.5px" }}>
                                   due {new Date(inst.due_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
@@ -1241,7 +1290,7 @@ function BatchDetailPanel({
                       className="mt-2 px-4 py-1.5 rounded-lg text-white hover:opacity-90 transition-all"
                       style={{ fontSize: "12.5px", fontWeight: 600, backgroundColor: "#0d9488" }}
                     >
-                      Create Fee Structure
+Create Fee Structure
                     </button>
                   </div>
                 )}
@@ -1289,7 +1338,7 @@ function BatchDetailPanel({
                 {loadingStudents ? (
                   <div className="flex items-center justify-center py-8 gap-2 text-gray-400">
                     <Loader2 size={16} className="animate-spin" />
-                    <span style={{ fontSize: "13px" }}>Loading students…</span>
+                    <span style={{ fontSize: "13px" }}>Loading students...</span>
                   </div>
                 ) : studentsError ? (
                   <p className="text-red-400 text-center py-6" style={{ fontSize: "13px" }}>{studentsError}</p>
@@ -1353,7 +1402,7 @@ function BatchDetailPanel({
                         style={{ fontSize: "13px", fontWeight: 600 }}
                       >
                         {loadingMore ? (
-                          <><Loader2 size={13} className="animate-spin" /> Loading…</>
+                          <><Loader2 size={13} className="animate-spin" /> Loading...</>
                         ) : (
                           `Show all ${totalStudents} students`
                         )}
@@ -1449,7 +1498,7 @@ function BatchDetailPanel({
                       className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                       style={{ backgroundColor: "#dc2626", fontSize: "13.5px", fontWeight: 600 }}
                     >
-                      {deleting ? "Deleting…" : "Delete"}
+                      {deleting ? "Deleting..." : "Delete"}
                     </button>
                   </div>
                 </div>
@@ -1481,6 +1530,18 @@ function BatchDetailPanel({
                 }}
               />
             )}
+            {showEditFeeModal && feeStructure && (
+              <CreateFeeStructureModal
+                batchId={batch.id}
+                batchName={batch.name}
+                existingStructure={feeStructure}
+                onClose={() => setShowEditFeeModal(false)}
+                onCreated={(structure) => {
+                  setFeeStructure(structure);
+                  setShowEditFeeModal(false);
+                }}
+              />
+            )}
           </>
         )}
       </div>
@@ -1488,7 +1549,7 @@ function BatchDetailPanel({
   );
 }
 
-// ─── Main Component ────────────────────────────────────────────────────────────
+// â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function Batches() {
   const [search, setSearch]             = useState("");
@@ -1530,14 +1591,14 @@ export function Batches() {
   return (
     <div className="p-8 max-w-[1100px] mx-auto">
 
-      {/* ── Page Header ── */}
+      {/* â”€â”€ Page Header â”€â”€ */}
       <div className="flex items-start justify-between mb-8">
         <div>
           <h1 className="text-gray-900" style={{ fontSize: "24px", fontWeight: 700, letterSpacing: "-0.02em" }}>
             Batches
           </h1>
           <p className="text-gray-400 mt-1" style={{ fontSize: "14px" }}>
-            {batchesLoading ? "Loading…" : `${batches.length} ${batches.length === 1 ? "batch" : "batches"} · active academic year`}
+            {batchesLoading ? "Loading..." : `${batches.length} ${batches.length === 1 ? "batch" : "batches"}  -  active academic year`}
           </p>
         </div>
         <button
@@ -1550,17 +1611,17 @@ export function Batches() {
         </button>
       </div>
 
-      {/* ── Stats Row ── */}
+      {/* â”€â”€ Stats Row â”€â”€ */}
       <div className="grid grid-cols-2 gap-4 mb-6">
         {[
           {
             label: "Active Batches",
-            value: summaryLoading ? "—" : (summary?.active_batches ?? 0).toString(),
+            value: summaryLoading ? "-" : (summary?.active_batches ?? 0).toString(),
             color: "#0d9488", bg: "#f0fdfa",
           },
           {
             label: "Total Students",
-            value: summaryLoading ? "—" : (summary?.total_students ?? 0).toString(),
+            value: summaryLoading ? "-" : (summary?.total_students ?? 0).toString(),
             color: "#7c3aed", bg: "#f5f3ff",
           },
         ].map((s) => (
@@ -1573,25 +1634,25 @@ export function Batches() {
         ))}
       </div>
 
-      {/* ── Search ── */}
+      {/* â”€â”€ Search â”€â”€ */}
       <div className="flex gap-3 mb-5">
         <div className="flex-1 relative">
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by batch name or teacher…"
+            placeholder="Search by batch name or teacher..."
             className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-300 shadow-sm transition-all"
             style={{ fontSize: "13.5px" }}
           />
         </div>
       </div>
 
-      {/* ── Batch Grid ── */}
+      {/* â”€â”€ Batch Grid â”€â”€ */}
       {batchesLoading ? (
         <div className="flex items-center justify-center py-20 gap-2 text-gray-400">
           <Loader2 size={20} className="animate-spin" />
-          <span style={{ fontSize: "14px" }}>Loading batches…</span>
+          <span style={{ fontSize: "14px" }}>Loading batches...</span>
         </div>
       ) : batchesError ? (
         <div className="py-16 text-center">
@@ -1676,7 +1737,7 @@ export function Batches() {
         </>
       )}
 
-      {/* ── Modals & Panels ── */}
+      {/* â”€â”€ Modals & Panels â”€â”€ */}
       {showCreate && (
         <CreateBatchModal
           onClose={() => setShowCreate(false)}
@@ -1698,3 +1759,13 @@ export function Batches() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+

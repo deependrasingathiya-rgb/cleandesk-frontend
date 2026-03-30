@@ -57,6 +57,19 @@ export async function deactivateUserApi(userId: string): Promise<void> {
   if (!res.ok) throw new Error(data.error ?? "Failed to deactivate user");
 }
 
+export async function reactivateUserApi(userId: string): Promise<void> {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+
+  const res = await fetch(`/api/users/${userId}/reactivate`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Failed to reactivate user");
+}
+
 export async function createUserApi(
   payload: CreateUserPayload
 ): Promise<CreatedUser> {

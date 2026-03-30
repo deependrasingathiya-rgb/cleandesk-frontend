@@ -17,7 +17,7 @@ import {
   Check,
 } from "lucide-react";
 import { getSession, ROLES, type RoleId } from "../auth";
-import { createUserApi, fetchUsersApi, deactivateUserApi, type CreatedUser, type UserListItem } from "../../Lib/api/users";
+import { createUserApi, fetchUsersApi, deactivateUserApi, reactivateUserApi, type CreatedUser, type UserListItem } from "../../Lib/api/users";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -85,7 +85,9 @@ function CreateUserModal({
   creatorRoleId: RoleId;
 }) {
   const [fullName, setFullName]       = useState("");
-  const [role, setRole]               = useState<UserRole>("Teacher");
+  const [role, setRole]               = useState<UserRole>(
+    creatorRoleId === ROLES.ADMIN ? "Admin" : "Teacher"
+  );
   const [mobile, setMobile]           = useState("");
   const [email, setEmail]             = useState("");
   const [address, setAddress]         = useState("");
@@ -98,8 +100,8 @@ function CreateUserModal({
 
   // Derive available roles from the creator's actual role — mirrors backend policy
   const availableRoles: UserRole[] = creatorRoleId === ROLES.ADMIN
-    ? ["Management", "Teacher", "Student"]
-    : ["Teacher", "Student"];
+    ? ["Admin", "Management", "Teacher"]
+    : ["Teacher"];
 
   const canSubmit =
     fullName.trim().length > 0 &&
@@ -400,10 +402,11 @@ function DeactivateModal({ user, onClose, onConfirm }: {
 
 // ─── User Profile Panel ────────────────────────────────────────────────────────
 
-function UserProfilePanel({ user, onClose, onDeactivate, currentUserId }: {
+function UserProfilePanel({ user, onClose, onDeactivate, onReactivate, currentUserId }: {
   user: User;
   onClose: () => void;
   onDeactivate: (id: string) => void;
+  onReactivate: (id: string) => void;
   currentUserId?: string;
 }) {
   const [showDeactivate, setShowDeactivate] = useState(false);
@@ -534,7 +537,7 @@ function UserProfilePanel({ user, onClose, onDeactivate, currentUserId }: {
           </div>
         </div>
 
-        {/* Footer — Deactivate action */}
+        {/* Footer — Deactivate / Reactivate action */}
         <div className="px-6 py-4 border-t border-gray-100">
           {user.active && !isCurrentUser ? (
             <button
@@ -546,13 +549,14 @@ function UserProfilePanel({ user, onClose, onDeactivate, currentUserId }: {
               Deactivate User
             </button>
           ) : !user.active ? (
-            <div
-              className="w-full py-2.5 rounded-xl flex items-center justify-center gap-2"
-              style={{ backgroundColor: "#f9fafb", color: "#9ca3af", fontSize: "13.5px", fontWeight: 600 }}
+            <button
+              onClick={() => { onReactivate(user.id); onClose(); }}
+              className="w-full py-2.5 rounded-xl border flex items-center justify-center gap-2 transition-all hover:bg-green-50"
+              style={{ borderColor: "#bbf7d0", color: "#16a34a", fontSize: "13.5px", fontWeight: 600 }}
             >
-              <UserX size={15} strokeWidth={2} />
-              Already Inactive
-            </div>
+              <UserCheck size={15} strokeWidth={2.5} />
+              Reactivate User
+            </button>
           ) : null}
         </div>
       </div>
@@ -576,6 +580,7 @@ function UserProfilePanel({ user, onClose, onDeactivate, currentUserId }: {
 export function Users() {
   const session = getSession();
   const creatorRoleId = (session?.payload.role_id ?? ROLES.MANAGEMENT) as RoleId;
+  const isManagementViewer = creatorRoleId === ROLES.MANAGEMENT;
 
   const [users, setUsers]               = useState<User[]>([]);
   const [loading, setLoading]           = useState(true);
@@ -605,7 +610,15 @@ export function Users() {
 
   const PAGE_SIZE = 25;
 
-  const filtered = users.filter((u) => {
+  const visibleUsers = isManagementViewer
+    ? users.filter((u) => u.role !== "Admin")
+    : users;
+
+  const visibleRoleFilters = isManagementViewer
+    ? ALL_ROLES.filter((role) => role !== "Admin")
+    : ALL_ROLES;
+
+  const filtered = visibleUsers.filter((u) => {
     const matchRole   = roleFilter === "All" || u.role === roleFilter;
     const matchSearch =
       u.loginIdentifier.toLowerCase().includes(search.toLowerCase()) ||
@@ -633,13 +646,21 @@ export function Users() {
       await deactivateUserApi(id);
       setUsers((prev) => prev.map((u) => u.id === id ? { ...u, active: false } : u));
     } catch (err: any) {
-      // Surface error without crashing — panel stays open, user sees nothing changed
       console.error("Deactivate failed:", err.message);
     }
   }
 
-  const activeCount   = users.filter((u) => u.active).length;
-  const inactiveCount = users.filter((u) => !u.active).length;
+  async function handleReactivate(id: string) {
+    try {
+      await reactivateUserApi(id);
+      setUsers((prev) => prev.map((u) => u.id === id ? { ...u, active: true } : u));
+    } catch (err: any) {
+      console.error("Reactivate failed:", err.message);
+    }
+  }
+
+  const activeCount   = visibleUsers.filter((u) => u.active).length;
+  const inactiveCount = visibleUsers.filter((u) => !u.active).length;
 
   return (
     <div className="p-8 max-w-[1100px] mx-auto">
@@ -651,7 +672,7 @@ export function Users() {
             Users
           </h1>
           <p className="text-gray-400 mt-1" style={{ fontSize: "14px" }}>
-            {loading ? "Loading…" : `${users.length} total system users`}
+            {loading ? "Loading…" : `${visibleUsers.length} total system users`}
           </p>
         </div>
         <button
@@ -675,10 +696,10 @@ export function Users() {
       {/* ── Stats Row ── */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         {[
-          { label: "Admins",      value: users.filter((u) => u.active && u.role === "Admin").length,      color: "#7c3aed", bg: "#f5f3ff" },
-          { label: "Management",  value: users.filter((u) => u.active && u.role === "Management").length, color: "#0d9488", bg: "#f0fdfa" },
-          { label: "Teachers",    value: users.filter((u) => u.active && u.role === "Teacher").length, color: "#2563eb", bg: "#eff6ff" },
-          { label: "Students",    value: users.filter((u) => u.active && u.role === "Student").length, color: "#d97706", bg: "#fffbeb" },
+          { label: "Admins",      value: visibleUsers.filter((u) => u.active && u.role === "Admin").length,      color: "#7c3aed", bg: "#f5f3ff" },
+          { label: "Management",  value: visibleUsers.filter((u) => u.active && u.role === "Management").length, color: "#0d9488", bg: "#f0fdfa" },
+          { label: "Teachers",    value: visibleUsers.filter((u) => u.active && u.role === "Teacher").length, color: "#2563eb", bg: "#eff6ff" },
+          { label: "Students",    value: visibleUsers.filter((u) => u.active && u.role === "Student").length, color: "#d97706", bg: "#fffbeb" },
         ].map((s) => (
           <div key={s.label} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
             <p style={{ fontSize: "12px", fontWeight: 500, color: "#9ca3af" }}>{s.label}</p>
@@ -702,7 +723,7 @@ export function Users() {
           />
         </div>
         <div className="flex gap-1.5">
-          {["All", ...ALL_ROLES].map((r) => (
+          {["All", ...visibleRoleFilters].map((r) => (
             <button
               key={r}
               onClick={() => handleFilterChange(() => setRoleFilter(r))}
@@ -921,6 +942,7 @@ export function Users() {
           user={users.find((u) => u.id === selectedUser.id) ?? selectedUser}
           onClose={() => setSelectedUser(null)}
           onDeactivate={handleDeactivate}
+          onReactivate={handleReactivate}
           currentUserId={session?.payload.user_id}
         />
       )}

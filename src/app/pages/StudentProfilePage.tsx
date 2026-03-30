@@ -45,7 +45,9 @@ import {
   overrideInstallmentPlanApi,
   type FeeTabData,
   type PaymentRow,
+  type InstallmentRow,
 } from "../../Lib/api/student-fee";
+import { updateStudentFeeRecordApi } from "../../Lib/api/student-fee-record-update";
 import { getSession, ROLES } from "../../app/auth";
 import {
   LineChart,
@@ -780,24 +782,49 @@ function RecordPaymentModal({
 
 // ─── Override Installment Plan Modal ──────────────────────────────────────────
 
-function OverrideInstallmentModal({
+function EditFeeStructureModal({
   feeRecordId,
+  feeStructureLabel,
+  currentDiscount,
+  currentDiscountReason,
+  currentInstallments,
   totalPayable,
   onClose,
   onSuccess,
 }: {
   feeRecordId: string;
+  feeStructureLabel: string;
+  currentDiscount: number;
+  currentDiscountReason: string | null;
+  currentInstallments: InstallmentRow[];
   totalPayable: number;
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  const [rows, setRows] = useState([{ amount: "", due_date: "" }]);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  // Fee fields
+  const [discountAmount, setDiscountAmount] = useState(currentDiscount > 0 ? String(currentDiscount) : "");
+  const [discountReason, setDiscountReason] = useState(currentDiscountReason ?? "");
+
+  // Custom installment plan
+  const [showInstallments, setShowInstallments] = useState(currentInstallments.length > 0);
+  const [rows, setRows] = useState<{ amount: string; due_date: string }[]>(
+    currentInstallments.length > 0
+      ? currentInstallments.map((i) => ({ amount: String(i.amount), due_date: String(i.due_date).slice(0, 10) }))
+      : [{ amount: "", due_date: "" }]
+  );
+
+  const [errors, setErrors]     = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
+  // Derived: what will the total payable be after the new discount
+  // The original total before any discount = totalPayable + currentDiscount
+  const originalTotal = totalPayable + currentDiscount;
+  const newDiscount = parseFloat(discountAmount) || 0;
+  const newTotalPayable = Math.max(0, originalTotal - newDiscount);
+
   const rowSum = rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
-  const sumMismatch = rows.length > 0 && Math.abs(rowSum - totalPayable) > 0.01;
+  const sumMismatch = showInstallments && rows.length > 0 && Math.abs(rowSum - newTotalPayable) > 0.01;
 
   function addRow() { if (rows.length < 12) setRows((r) => [...r, { amount: "", due_date: "" }]); }
   function removeRow(i: number) { setRows((r) => r.filter((_, idx) => idx !== i)); }
@@ -808,22 +835,34 @@ function OverrideInstallmentModal({
 
   async function handleSubmit() {
     const e: Record<string, string> = {};
-    rows.forEach((r, i) => {
-      if (!r.amount || isNaN(Number(r.amount)) || Number(r.amount) <= 0) e[`r_${i}_amount`] = "Required";
-      if (!r.due_date) e[`r_${i}_due_date`] = "Required";
-    });
-    if (sumMismatch) e.sum = `Sum ₹${rowSum.toFixed(2)} must equal total payable ₹${totalPayable.toLocaleString("en-IN")}.`;
+    if (newDiscount < 0) e.discountAmount = "Discount cannot be negative.";
+    if (newDiscount > originalTotal) e.discountAmount = `Discount cannot exceed ₹${originalTotal.toLocaleString("en-IN")}.`;
+    if (newDiscount > 0 && !discountReason.trim()) e.discountReason = "Reason is required when a discount is applied.";
+
+    if (showInstallments) {
+      rows.forEach((r, i) => {
+        if (!r.amount || isNaN(Number(r.amount)) || Number(r.amount) <= 0) e[`r_${i}_amount`] = "Required";
+        if (!r.due_date) e[`r_${i}_due_date`] = "Required";
+      });
+      if (rows.length === 0) e.installments = "Add at least one installment row.";
+      if (sumMismatch) e.installments = `Sum ₹${rowSum.toFixed(2)} must equal total payable ₹${newTotalPayable.toLocaleString("en-IN")}.`;
+    }
+
     if (Object.keys(e).length) { setErrors(e); return; }
 
     setSubmitting(true);
     setApiError(null);
     try {
-      await overrideInstallmentPlanApi(feeRecordId,
-        rows.map((r, i) => ({ installment_number: i + 1, amount: Number(r.amount), due_date: r.due_date }))
-      );
+      await updateStudentFeeRecordApi(feeRecordId, {
+        discount_amount: newDiscount,
+        discount_reason: discountReason.trim() || null,
+        installments: showInstallments
+          ? rows.map((r, i) => ({ installment_number: i + 1, amount: Number(r.amount), due_date: r.due_date }))
+          : undefined,
+      });
       onSuccess();
     } catch (err: any) {
-      setApiError(err.message ?? "Failed to override plan.");
+      setApiError(err.message ?? "Failed to update fee record.");
     } finally {
       setSubmitting(false);
     }
@@ -832,78 +871,149 @@ function OverrideInstallmentModal({
   return (
     <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-6"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-[560px] flex flex-col" style={{ maxHeight: "88vh" }}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-[580px] flex flex-col" style={{ maxHeight: "90vh" }}>
+
+        {/* Header */}
         <div className="flex items-start justify-between px-7 pt-7 pb-5 border-b border-gray-100 flex-shrink-0">
           <div>
-            <h2 className="text-gray-900" style={{ fontSize: "18px", fontWeight: 700 }}>Override Installment Plan</h2>
-            <p className="text-gray-400 mt-0.5" style={{ fontSize: "13px" }}>
-              Total payable: <span className="font-semibold text-gray-700">₹{totalPayable.toLocaleString("en-IN")}</span>
-            </p>
+            <h2 className="text-gray-900" style={{ fontSize: "18px", fontWeight: 700 }}>Edit Fee Structure</h2>
+            <p className="text-gray-400 mt-0.5" style={{ fontSize: "13px" }}>{feeStructureLabel}</p>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-md flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors">
             <X size={16} />
           </button>
         </div>
 
-        <div className="overflow-y-auto px-7 py-5 flex-1">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-gray-600" style={{ fontSize: "13px", fontWeight: 600 }}>Installments <span className="text-gray-400 font-normal">(max 12)</span></p>
-            <button onClick={addRow} disabled={rows.length >= 12}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-teal-200 text-teal-700 hover:bg-teal-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{ fontSize: "12px", fontWeight: 600 }}>
-              <Plus size={12} strokeWidth={2.5} /> Add Row
-            </button>
-          </div>
+        <div className="overflow-y-auto px-7 py-6 flex-1 space-y-5">
 
-          {/* Sum indicator */}
-          <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl"
-            style={{ backgroundColor: sumMismatch ? "#fef2f2" : "#f0fdfa", border: `1px solid ${sumMismatch ? "#fecaca" : "#ccfbf1"}` }}>
-            {sumMismatch
-              ? <AlertCircle size={13} style={{ color: "#dc2626" }} strokeWidth={2} />
-              : <CheckCircle2 size={13} style={{ color: "#0d9488" }} strokeWidth={2} />}
-            <span style={{ fontSize: "12px", fontWeight: 600, color: sumMismatch ? "#dc2626" : "#0d9488" }}>
-              Sum: ₹{rowSum.toFixed(2)} / ₹{totalPayable.toLocaleString("en-IN")}{!sumMismatch && rowSum > 0 && " ✓"}
-            </span>
-          </div>
-
-          <div className="rounded-xl border border-gray-100 overflow-hidden">
-            <div className="grid px-4 py-2.5" style={{ gridTemplateColumns: "36px 1fr 1fr 32px", backgroundColor: "#f9fafb", gap: "8px" }}>
-              {["#", "Amount (₹)", "Due Date", ""].map((h) => (
-                <p key={h} className="text-gray-400" style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.05em" }}>{h}</p>
-              ))}
+          {/* Total summary */}
+          <div className="rounded-xl px-4 py-3 flex items-center justify-between"
+            style={{ backgroundColor: "#f9fafb", border: "1px solid #f3f4f6" }}>
+            <div className="flex items-center gap-4 text-gray-500" style={{ fontSize: "13px" }}>
+              <span>Original: <span className="text-gray-700 font-semibold">₹{originalTotal.toLocaleString("en-IN")}</span></span>
+              {newDiscount > 0 && (
+                <>
+                  <span className="text-gray-300">−</span>
+                  <span>Discount: <span style={{ color: "#dc2626", fontWeight: 600 }}>₹{newDiscount.toLocaleString("en-IN")}</span></span>
+                </>
+              )}
             </div>
-            <div className="divide-y divide-gray-50">
-              {rows.map((row, i) => (
-                <div key={i} className="grid px-4 py-3 items-start" style={{ gridTemplateColumns: "36px 1fr 1fr 32px", gap: "8px" }}>
-                  <span className="text-gray-400 pt-2.5" style={{ fontSize: "12.5px", fontWeight: 600 }}>{i + 1}</span>
-                  <div>
-                    <input type="number" min={0.01} value={row.amount} onChange={(e) => updateRow(i, "amount", e.target.value)} placeholder="0.00"
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 transition-all"
-                      style={{ fontSize: "13px", borderColor: errors[`r_${i}_amount`] ? "#fca5a5" : undefined }} />
-                    {errors[`r_${i}_amount`] && <p className="text-red-400 mt-0.5" style={{ fontSize: "11px" }}>{errors[`r_${i}_amount`]}</p>}
-                  </div>
-                  <div>
-                    <input type="date" value={row.due_date} onChange={(e) => updateRow(i, "due_date", e.target.value)}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:border-teal-400 transition-all bg-white"
-                      style={{ fontSize: "13px", borderColor: errors[`r_${i}_due_date`] ? "#fca5a5" : undefined }} />
-                    {errors[`r_${i}_due_date`] && <p className="text-red-400 mt-0.5" style={{ fontSize: "11px" }}>{errors[`r_${i}_due_date`]}</p>}
-                  </div>
-                  <button onClick={() => removeRow(i)} className="mt-2 w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-red-50 transition-all">
-                    <X size={13} strokeWidth={2} />
+            <div className="text-right">
+              <p className="text-gray-400" style={{ fontSize: "10.5px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Total Payable</p>
+              <p style={{ fontSize: "18px", fontWeight: 800, letterSpacing: "-0.02em", color: newDiscount > 0 ? "#0d9488" : "#374151" }}>
+                ₹{newTotalPayable.toLocaleString("en-IN")}
+              </p>
+            </div>
+          </div>
+
+          {/* Discount */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-700 mb-1.5" style={{ fontSize: "13px", fontWeight: 600 }}>Discount Amount (₹)</label>
+              <input type="number" min={0} value={discountAmount}
+                onChange={(e) => { setDiscountAmount(e.target.value); setErrors((er) => { const c = { ...er }; delete c.discountAmount; return c; }); }}
+                placeholder="e.g. 2000"
+                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all"
+                style={{ fontSize: "13.5px", borderColor: errors.discountAmount ? "#fca5a5" : undefined }} />
+              {errors.discountAmount && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.discountAmount}</p>}
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-1.5" style={{ fontSize: "13px", fontWeight: 600 }}>
+                Discount Reason {newDiscount > 0 && <span className="text-red-500">*</span>}
+              </label>
+              <input type="text" value={discountReason}
+                onChange={(e) => { setDiscountReason(e.target.value); setErrors((er) => { const c = { ...er }; delete c.discountReason; return c; }); }}
+                placeholder="e.g. Merit scholarship"
+                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all"
+                style={{ fontSize: "13.5px", borderColor: errors.discountReason ? "#fca5a5" : undefined }} />
+              {errors.discountReason && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.discountReason}</p>}
+            </div>
+          </div>
+
+          {/* Custom Installment Plan toggle */}
+          <div className="border-t border-gray-100 pt-5">
+            <div className="flex items-center justify-between mb-1">
+              <div>
+                <p className="text-gray-700" style={{ fontSize: "13.5px", fontWeight: 600 }}>Custom Installment Plan</p>
+                <p className="text-gray-400 mt-0.5" style={{ fontSize: "12px" }}>Override the batch installment schedule for this student.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowInstallments((v) => !v)}
+                className="relative inline-flex items-center rounded-full transition-all duration-200 flex-shrink-0 ml-4"
+                style={{ width: "44px", height: "24px", backgroundColor: showInstallments ? "#0d9488" : "#e5e7eb" }}>
+                <span className="inline-block rounded-full bg-white shadow transition-transform duration-200"
+                  style={{ width: "18px", height: "18px", transform: showInstallments ? "translateX(22px)" : "translateX(2px)" }} />
+              </button>
+            </div>
+
+            {showInstallments && (
+              <div className="mt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-gray-600" style={{ fontSize: "13px", fontWeight: 600 }}>
+                    Installments <span className="text-gray-400 font-normal">(max 12)</span>
+                  </p>
+                  <button onClick={addRow} disabled={rows.length >= 12}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-teal-200 text-teal-700 hover:bg-teal-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{ fontSize: "12px", fontWeight: 600 }}>
+                    <Plus size={12} strokeWidth={2.5} /> Add Row
                   </button>
                 </div>
-              ))}
-            </div>
+
+                {/* Sum indicator */}
+                <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl"
+                  style={{ backgroundColor: sumMismatch ? "#fef2f2" : "#f0fdfa", border: `1px solid ${sumMismatch ? "#fecaca" : "#ccfbf1"}` }}>
+                  {sumMismatch
+                    ? <AlertCircle size={13} style={{ color: "#dc2626" }} strokeWidth={2} />
+                    : <CheckCircle2 size={13} style={{ color: "#0d9488" }} strokeWidth={2} />}
+                  <span style={{ fontSize: "12px", fontWeight: 600, color: sumMismatch ? "#dc2626" : "#0d9488" }}>
+                    Sum: ₹{rowSum.toFixed(2)} / ₹{newTotalPayable.toLocaleString("en-IN")}{!sumMismatch && rowSum > 0 && " ✓"}
+                  </span>
+                </div>
+
+                <div className="rounded-xl border border-gray-100 overflow-hidden">
+                  <div className="grid px-4 py-2.5" style={{ gridTemplateColumns: "36px 1fr 1fr 32px", backgroundColor: "#f9fafb", gap: "8px" }}>
+                    {["#", "Amount (₹)", "Due Date", ""].map((h) => (
+                      <p key={h} className="text-gray-400" style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.05em" }}>{h}</p>
+                    ))}
+                  </div>
+                  <div className="divide-y divide-gray-50">
+                    {rows.map((row, i) => (
+                      <div key={i} className="grid px-4 py-3 items-start" style={{ gridTemplateColumns: "36px 1fr 1fr 32px", gap: "8px" }}>
+                        <span className="text-gray-400 pt-2.5" style={{ fontSize: "12.5px", fontWeight: 600 }}>{i + 1}</span>
+                        <div>
+                          <input type="number" min={0.01} value={row.amount} onChange={(e) => updateRow(i, "amount", e.target.value)} placeholder="0.00"
+                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 transition-all"
+                            style={{ fontSize: "13px", borderColor: errors[`r_${i}_amount`] ? "#fca5a5" : undefined }} />
+                          {errors[`r_${i}_amount`] && <p className="text-red-400 mt-0.5" style={{ fontSize: "11px" }}>{errors[`r_${i}_amount`]}</p>}
+                        </div>
+                        <div>
+                          <input type="date" value={row.due_date} onChange={(e) => updateRow(i, "due_date", e.target.value)}
+                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:border-teal-400 transition-all bg-white"
+                            style={{ fontSize: "13px", borderColor: errors[`r_${i}_due_date`] ? "#fca5a5" : undefined }} />
+                          {errors[`r_${i}_due_date`] && <p className="text-red-400 mt-0.5" style={{ fontSize: "11px" }}>{errors[`r_${i}_due_date`]}</p>}
+                        </div>
+                        <button onClick={() => removeRow(i)} className="mt-2 w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-red-50 transition-all">
+                          <X size={13} strokeWidth={2} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {errors.installments && <p className="text-red-500 mt-2" style={{ fontSize: "12px" }}>{errors.installments}</p>}
+              </div>
+            )}
           </div>
-          {errors.sum && <p className="text-red-500 mt-2" style={{ fontSize: "12px" }}>{errors.sum}</p>}
+
           {apiError && (
-            <div className="flex items-center gap-2 px-3 py-3 rounded-xl mt-3" style={{ backgroundColor: "#fef2f2", border: "1px solid #fecaca" }}>
+            <div className="flex items-center gap-2 px-3 py-3 rounded-xl" style={{ backgroundColor: "#fef2f2", border: "1px solid #fecaca" }}>
               <AlertCircle size={14} style={{ color: "#dc2626" }} strokeWidth={2} />
               <p style={{ fontSize: "12.5px", color: "#dc2626" }}>{apiError}</p>
             </div>
           )}
         </div>
 
+        {/* Footer */}
         <div className="flex gap-3 px-7 py-5 border-t border-gray-100 flex-shrink-0">
           <button onClick={onClose} disabled={submitting}
             className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
@@ -911,7 +1021,7 @@ function OverrideInstallmentModal({
           <button onClick={handleSubmit} disabled={submitting}
             className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
             style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}>
-            {submitting ? "Saving…" : "Save Plan"}
+            {submitting ? "Saving…" : "Save Changes"}
           </button>
         </div>
       </div>
@@ -929,8 +1039,8 @@ function FeeTab({
   isAdmin,
   showPaymentModal,
   setShowPaymentModal,
-  showOverrideModal,
-  setShowOverrideModal,
+  showEditFeeModal,
+setShowEditFeeModal,
   cancellingPaymentId,
   setCancellingPaymentId,
   onRefresh,
@@ -942,8 +1052,8 @@ function FeeTab({
   isAdmin: boolean;
   showPaymentModal: boolean;
   setShowPaymentModal: (v: boolean) => void;
-  showOverrideModal: boolean;
-  setShowOverrideModal: (v: boolean) => void;
+  showEditFeeModal: boolean;
+  setShowEditFeeModal: (v: boolean) => void;
   cancellingPaymentId: string | null;
   setCancellingPaymentId: (v: string | null) => void;
   onRefresh: () => void;
@@ -1065,14 +1175,14 @@ function FeeTab({
           <Plus size={15} strokeWidth={2.5} />
           Record Payment
         </button>
-        {isAdmin && !isLumpSum && (
+        {isAdmin && (
           <button
-            onClick={() => setShowOverrideModal(true)}
+            onClick={() => setShowEditFeeModal(true)}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-all"
             style={{ fontSize: "13.5px", fontWeight: 600 }}
           >
             <Pencil size={14} strokeWidth={2} />
-            Override Installment Plan
+            Edit Fee Structure
           </button>
         )}
       </div>
@@ -1100,15 +1210,40 @@ function FeeTab({
               </tr>
             </thead>
             <tbody>
-              {/* Note: installment data comes from fee_record if we extend the API.
-                  For now show a placeholder row directing user to payments tab */}
-              <tr>
-                <td colSpan={4} className="px-5 py-8 text-center">
-                  <p className="text-gray-400" style={{ fontSize: "13px" }}>
-                    Installment schedule is managed via the installment plan. Use "Override Installment Plan" to customise.
-                  </p>
-                </td>
-              </tr>
+              {fr.has_custom_plan && fr.installments && fr.installments.length > 0 ? (
+                fr.installments.map((inst) => {
+                  const isOverdue = inst.due_date < today;
+                  return (
+                    <tr key={inst.id} className="border-t border-gray-50">
+                      <td className="px-5 py-3.5 text-gray-600" style={{ fontSize: "13px", fontWeight: 600 }}>
+                        #{inst.installment_number}
+                      </td>
+                      <td className="px-5 py-3.5 text-gray-600" style={{ fontSize: "13px" }}>
+                        {new Date(inst.due_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                        {isOverdue && fr.fee_status !== "PAID" && (
+                          <span className="ml-2 px-1.5 py-0.5 rounded" style={{ fontSize: "10px", fontWeight: 700, color: "#dc2626", backgroundColor: "#fef2f2" }}>Overdue</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5" style={{ fontSize: "13.5px", fontWeight: 700, color: "#374151" }}>
+                        ₹{Number(inst.amount).toLocaleString("en-IN")}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className="text-gray-400" style={{ fontSize: "12px" }}>—</span>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={4} className="px-5 py-8 text-center">
+                    <p className="text-gray-400" style={{ fontSize: "13px" }}>
+                      {fr.has_custom_plan
+                        ? "Loading installment schedule…"
+                        : "No custom installment plan. Use \"Edit Fee Structure\" to create one."}
+                    </p>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -1233,12 +1368,16 @@ function FeeTab({
           onSuccess={() => { setShowPaymentModal(false); onRefresh(); }}
         />
       )}
-      {showOverrideModal && (
-        <OverrideInstallmentModal
+      {showEditFeeModal && (
+        <EditFeeStructureModal
           feeRecordId={fr.id}
+          feeStructureLabel={fr.fee_structure_label}
+          currentDiscount={Number(fr.discount_amount)}
+          currentDiscountReason={fr.discount_reason}
+          currentInstallments={fr.installments ?? []}
           totalPayable={Number(fr.total_payable)}
-          onClose={() => setShowOverrideModal(false)}
-          onSuccess={() => { setShowOverrideModal(false); onRefresh(); }}
+          onClose={() => setShowEditFeeModal(false)}
+          onSuccess={() => { setShowEditFeeModal(false); onRefresh(); }}
         />
       )}
       {viewingReceipt && (
@@ -1293,8 +1432,7 @@ const [activeTab, setActiveTab] = useState<"results" | "fee">(initialTab);
 
   // Record payment modal
   const [showPaymentModal, setShowPaymentModal]     = useState(false);
-  // Override installment plan modal
-  const [showOverrideModal, setShowOverrideModal]   = useState(false);
+  const [showEditFeeModal, setShowEditFeeModal]     = useState(false);
   // Cancel payment
   const [cancellingPaymentId, setCancellingPaymentId] = useState<string | null>(null);
 
@@ -1490,8 +1628,8 @@ const [activeTab, setActiveTab] = useState<"results" | "fee">(initialTab);
           isAdmin={isAdmin}
           showPaymentModal={showPaymentModal}
           setShowPaymentModal={setShowPaymentModal}
-          showOverrideModal={showOverrideModal}
-          setShowOverrideModal={setShowOverrideModal}
+          showEditFeeModal={showEditFeeModal}
+          setShowEditFeeModal={setShowEditFeeModal}
           cancellingPaymentId={cancellingPaymentId}
           setCancellingPaymentId={setCancellingPaymentId}
           onRefresh={() => {

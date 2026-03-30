@@ -13,6 +13,7 @@ function authHeaders(): HeadersInit {
 export type FeeRecord = {
   id: string;
   total_payable: number;
+  installments?: InstallmentRow[];
   discount_amount: number;
   discount_reason: string | null;
   total_collected: number;
@@ -66,15 +67,16 @@ export type FeeTabData = {
 export async function getStudentFeeTabApi(
   studentUserId: string
 ): Promise<FeeTabData | null> {
-  // Step 1: get fee record id for this student
+  // Step 1: get full fee record (with installments if custom plan exists)
   const recRes = await fetch(
-    `/api/students/${encodeURIComponent(studentUserId)}/fee-record`,
+    `/api/students/${encodeURIComponent(studentUserId)}/fee-record/full`,
     { headers: authHeaders() }
   );
   if (recRes.status === 404) return null;
   const recJson = await recRes.json();
   if (!recRes.ok) throw new Error(recJson.error ?? "Failed to fetch fee record");
   const feeRecordId: string = recJson.data.id;
+  const installments: InstallmentRow[] = recJson.data.installments ?? [];
 
   // Step 2: get full detail + payments via the list endpoint (includes fee_record shape)
   const listRes = await fetch(
@@ -85,7 +87,7 @@ export async function getStudentFeeTabApi(
   if (!listRes.ok) throw new Error(listJson.error ?? "Failed to fetch fee data");
 
   return {
-    fee_record: listJson.data.fee_record as FeeRecord,
+    fee_record: { ...listJson.data.fee_record as FeeRecord, installments },
     payments: listJson.data.payments as PaymentRow[],
   };
 }

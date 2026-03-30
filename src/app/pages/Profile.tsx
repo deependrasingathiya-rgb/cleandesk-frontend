@@ -291,219 +291,6 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ─── Two-Factor Auth Modal ─────────────────────────────────────────────────────
-
-function TwoFactorModal({ onClose, enabled: initialEnabled }: { onClose: (newState: boolean) => void; enabled: boolean }) {
-  const [step,    setStep]    = useState<"overview" | "setup" | "verify" | "done" | "disable">("overview");
-  const [code,    setCode]    = useState("");
-  const [codeErr, setCodeErr] = useState(false);
-
-  // Fake TOTP secret / QR stand-in
-  const fakeSecret = "JBSWY3DPEHPK3PXP";
-  const fakeQR     = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=otpauth://totp/CleanDesk:user@institute.edu?secret=${fakeSecret}&issuer=CleanDesk`;
-
-  function handleVerify() {
-    // Accept "123456" as the demo valid code
-    if (code === "123456") {
-      setCodeErr(false);
-      setStep("done");
-    } else {
-      setCodeErr(true);
-    }
-  }
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: "rgba(0,0,0,0.35)" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(initialEnabled); }}
-    >
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-7" style={{ border: "1px solid #f3f4f6" }}>
-        <div className="flex items-start justify-between mb-6">
-          <div>
-            <h2 className="text-gray-900" style={{ fontSize: "18px", fontWeight: 700, letterSpacing: "-0.01em" }}>
-              Two-Factor Authentication
-            </h2>
-            <p className="text-gray-400 mt-1" style={{ fontSize: "13px" }}>
-              {initialEnabled ? "2FA is currently active on your account." : "Add an extra layer of security."}
-            </p>
-          </div>
-          <button onClick={() => onClose(initialEnabled)} className="w-8 h-8 rounded-md flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors">
-            <X size={16} />
-          </button>
-        </div>
-
-        {/* Overview */}
-        {step === "overview" && (
-          <div>
-            <div
-              className="flex items-center gap-3 p-4 rounded-xl mb-5"
-              style={{
-                backgroundColor: initialEnabled ? "#f0fdf4" : "#f9fafb",
-                border: `1px solid ${initialEnabled ? "#bbf7d0" : "#f3f4f6"}`,
-              }}
-            >
-              <div
-                className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{ backgroundColor: initialEnabled ? "#dcfce7" : "#f0fdfa" }}
-              >
-                <Shield size={18} style={{ color: initialEnabled ? "#16a34a" : "#0d9488" }} strokeWidth={2} />
-              </div>
-              <div>
-                <p style={{ fontSize: "13.5px", fontWeight: 700, color: initialEnabled ? "#15803d" : "#374151" }}>
-                  {initialEnabled ? "2FA is Enabled" : "2FA is Disabled"}
-                </p>
-                <p className="text-gray-400 mt-0.5" style={{ fontSize: "12px" }}>
-                  {initialEnabled
-                    ? "Your account is protected with an authenticator app."
-                    : "Enable 2FA to protect your account with a one-time code."}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <button onClick={() => onClose(initialEnabled)} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors" style={{ fontSize: "13.5px", fontWeight: 600 }}>
-                Cancel
-              </button>
-              {initialEnabled ? (
-                <button
-                  onClick={() => setStep("disable")}
-                  className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
-                  style={{ backgroundColor: "#dc2626", fontSize: "13.5px", fontWeight: 600 }}
-                >
-                  Disable 2FA
-                </button>
-              ) : (
-                <button
-                  onClick={() => setStep("setup")}
-                  className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
-                  style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
-                >
-                  Enable 2FA
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Setup — show QR */}
-        {step === "setup" && (
-          <div>
-            <ol className="space-y-3 mb-5 text-gray-600" style={{ fontSize: "13px" }}>
-              <li className="flex items-start gap-2"><span className="w-5 h-5 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center flex-shrink-0 text-xs font-bold mt-0.5">1</span>Install an authenticator app (Google Authenticator, Authy, etc.)</li>
-              <li className="flex items-start gap-2"><span className="w-5 h-5 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center flex-shrink-0 text-xs font-bold mt-0.5">2</span>Scan the QR code below with your app.</li>
-              <li className="flex items-start gap-2"><span className="w-5 h-5 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center flex-shrink-0 text-xs font-bold mt-0.5">3</span>Enter the 6-digit code from the app to verify.</li>
-            </ol>
-            <div className="flex justify-center mb-4">
-              <div className="p-3 rounded-2xl border border-gray-100" style={{ backgroundColor: "#f9fafb" }}>
-                <img src={fakeQR} alt="QR Code" className="w-40 h-40 rounded-xl" />
-              </div>
-            </div>
-            <p className="text-center text-gray-400 mb-5" style={{ fontSize: "11.5px" }}>
-              Or enter key manually: <span className="font-mono text-gray-600 select-all">{fakeSecret}</span>
-            </p>
-            <div className="flex gap-3">
-              <button onClick={() => setStep("overview")} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors" style={{ fontSize: "13.5px", fontWeight: 600 }}>
-                Back
-              </button>
-              <button onClick={() => setStep("verify")} className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all" style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}>
-                Next — Verify
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Verify code */}
-        {step === "verify" && (
-          <div>
-            <p className="text-gray-600 mb-4" style={{ fontSize: "13px" }}>
-              Enter the 6-digit code from your authenticator app to confirm setup.
-            </p>
-            <input
-              type="text"
-              inputMode="numeric"
-              maxLength={6}
-              value={code}
-              onChange={(e) => { setCode(e.target.value.replace(/\D/g, "")); setCodeErr(false); }}
-              placeholder="000000"
-              className="w-full border rounded-xl px-4 py-3 text-center text-gray-800 focus:outline-none focus:ring-2 focus:ring-teal-100 transition-all mb-2"
-              style={{
-                fontSize: "24px",
-                fontWeight: 700,
-                letterSpacing: "0.3em",
-                borderColor: codeErr ? "#fca5a5" : "#e5e7eb",
-              }}
-            />
-            {codeErr && (
-              <p className="text-center mb-3" style={{ fontSize: "12px", color: "#dc2626" }}>
-                Invalid code. Try <strong>123456</strong> for this demo.
-              </p>
-            )}
-            <p className="text-gray-400 text-center mb-5" style={{ fontSize: "11.5px" }}>
-              Demo hint: enter <strong>123456</strong>
-            </p>
-            <div className="flex gap-3">
-              <button onClick={() => setStep("setup")} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors" style={{ fontSize: "13.5px", fontWeight: 600 }}>
-                Back
-              </button>
-              <button
-                disabled={code.length !== 6}
-                onClick={handleVerify}
-                className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
-              >
-                Verify & Enable
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Done */}
-        {step === "done" && (
-          <div className="text-center py-4">
-            <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: "#f0fdf4" }}>
-              <CheckCircle2 size={28} style={{ color: "#16a34a" }} strokeWidth={1.8} />
-            </div>
-            <p className="text-gray-900 mb-1" style={{ fontSize: "16px", fontWeight: 700 }}>2FA Enabled</p>
-            <p className="text-gray-400 mb-6" style={{ fontSize: "13px" }}>Your account is now protected with two-factor authentication.</p>
-            <button
-              onClick={() => onClose(true)}
-              className="px-6 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
-              style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
-            >
-              Done
-            </button>
-          </div>
-        )}
-
-        {/* Disable confirm */}
-        {step === "disable" && (
-          <div>
-            <div className="flex items-start gap-3 p-4 rounded-xl mb-5" style={{ backgroundColor: "#fef2f2", border: "1px solid #fecaca" }}>
-              <AlertTriangle size={16} style={{ color: "#dc2626", marginTop: "2px" }} strokeWidth={2} />
-              <p className="text-red-700" style={{ fontSize: "13px" }}>
-                Disabling 2FA will make your account less secure. You can re-enable it at any time.
-              </p>
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => setStep("overview")} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors" style={{ fontSize: "13.5px", fontWeight: 600 }}>
-                Keep 2FA On
-              </button>
-              <button
-                onClick={() => onClose(false)}
-                className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
-                style={{ backgroundColor: "#dc2626", fontSize: "13.5px", fontWeight: 600 }}
-              >
-                Yes, Disable
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ─── Notification Preferences Modal ───────────────────────────────────────────
 
 type NotifPrefs = {
@@ -692,10 +479,8 @@ export function Profile() {
   }, []);
 
   // Modal state
-  const [showPassword, setShowPassword]     = useState(false);
-  const [showTwoFactor, setShowTwoFactor]   = useState(false);
-  const [showNotif, setShowNotif]           = useState(false);
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showNotif, setShowNotif] = useState(false);
 
   // Recompute initials dynamically from the live name
   const initials = name.split(" ").filter(Boolean).map((w) => w[0].toUpperCase()).join("").slice(0, 2);
@@ -776,19 +561,6 @@ export function Profile() {
               Last login: Today
             </p>
 
-            {/* 2FA status badge */}
-            <div
-              className="mt-3 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl"
-              style={{
-                backgroundColor: twoFactorEnabled ? "#f0fdf4" : "#f9fafb",
-                border: `1px solid ${twoFactorEnabled ? "#bbf7d0" : "#f3f4f6"}`,
-              }}
-            >
-              <Shield size={12} style={{ color: twoFactorEnabled ? "#16a34a" : "#9ca3af" }} strokeWidth={2} />
-              <span style={{ fontSize: "11.5px", fontWeight: 600, color: twoFactorEnabled ? "#16a34a" : "#9ca3af" }}>
-                2FA {twoFactorEnabled ? "Enabled" : "Disabled"}
-              </span>
-            </div>
           </div>
         </div>
 
@@ -862,38 +634,6 @@ export function Profile() {
                 <span className="text-gray-300 group-hover:text-teal-500">→</span>
               </div>
 
-              {/* Two-Factor Auth */}
-              <div
-                onClick={() => setShowTwoFactor(true)}
-                className="flex items-center justify-between p-3.5 rounded-xl border border-gray-100 hover:border-teal-200 hover:bg-teal-50 transition-all cursor-pointer group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-md flex items-center justify-center" style={{ backgroundColor: "#f0fdfa" }}>
-                    <Shield size={15} style={{ color: "#0d9488" }} />
-                  </div>
-                  <div>
-                    <p className="text-gray-800 group-hover:text-teal-700" style={{ fontSize: "13.5px", fontWeight: 600 }}>Two-Factor Authentication</p>
-                    <p className="text-gray-400" style={{ fontSize: "12px" }}>
-                      {twoFactorEnabled ? "Enabled — click to manage" : "Add an extra layer of security"}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span
-                    className="px-2 py-0.5 rounded-full"
-                    style={{
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      color: twoFactorEnabled ? "#16a34a" : "#9ca3af",
-                      backgroundColor: twoFactorEnabled ? "#f0fdf4" : "#f9fafb",
-                    }}
-                  >
-                    {twoFactorEnabled ? "On" : "Off"}
-                  </span>
-                  <span className="text-gray-300 group-hover:text-teal-500">→</span>
-                </div>
-              </div>
-
               {/* Notification Preferences */}
               <div
                 onClick={() => setShowNotif(true)}
@@ -928,12 +668,6 @@ export function Profile() {
       {/* ── Modals ── */}
       {showPassword && (
         <ChangePasswordModal onClose={() => setShowPassword(false)} />
-      )}
-      {showTwoFactor && (
-        <TwoFactorModal
-          enabled={twoFactorEnabled}
-          onClose={(newState) => { setTwoFactorEnabled(newState); setShowTwoFactor(false); }}
-        />
       )}
       {showNotif && (
         <NotificationModal onClose={() => setShowNotif(false)} />

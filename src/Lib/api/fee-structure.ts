@@ -1,8 +1,8 @@
-// src/Lib/api/fee-structure.ts
+﻿// src/Lib/api/fee-structure.ts
 
 import { getToken } from "../../app/auth";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // (PlanType removed as it's replaced by independent toggles)
 
@@ -28,6 +28,8 @@ export type CreateFeeStructurePayload = {
   installments?: InstallmentInput[];
 };
 
+export type UpdateFeeStructurePayload = Omit<CreateFeeStructurePayload, "class_batch_id">;
+
 export type FeeStructureRecord = {
   id: string;
   class_batch_id: string;
@@ -51,7 +53,7 @@ export type FeeStructureRecord = {
   }[];
 };
 
-// ─── API helpers ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ API helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function authHeaders(): HeadersInit {
   const token = getToken();
@@ -59,7 +61,7 @@ function authHeaders(): HeadersInit {
   return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 }
 
-// ─── Create ───────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Create â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function createFeeStructureApi(
   payload: CreateFeeStructurePayload
@@ -71,6 +73,20 @@ export async function createFeeStructureApi(
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error ?? "Failed to create fee structure");
+  return json.data as FeeStructureRecord;
+}
+
+export async function updateFeeStructureApi(
+  feeStructureId: string,
+  payload: UpdateFeeStructurePayload
+): Promise<FeeStructureRecord> {
+  const res = await fetch(`/api/fee-structures/${encodeURIComponent(feeStructureId)}`, {
+    method: "PUT",
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error ?? "Failed to update fee structure");
   return json.data as FeeStructureRecord;
 }
 
@@ -107,7 +123,7 @@ export async function recordAdvancePaymentApi(
 }
 
 
-// ─── Read (for a batch) ───────────────────────────────────────────────────────
+// â”€â”€â”€ Read (for a batch) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function getFeeStructureForBatchApi(
   batchId: string
@@ -120,3 +136,4 @@ export async function getFeeStructureForBatchApi(
   if (!res.ok) throw new Error(json.error ?? "Failed to fetch fee structure");
   return json.data as FeeStructureRecord | null;
 }
+

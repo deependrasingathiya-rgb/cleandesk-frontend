@@ -1,3 +1,4 @@
+//src/app/components/layout/Shell.tsx
 import { Outlet } from "react-router";
 import { Sidebar } from "./Sidebar";
 import { SidebarProvider, useSidebarCollapsed } from "./SidebarContext";

@@ -9910,11 +9910,10 @@ import {
 } from "../../Lib/api/class-batches";
 import {
   createFeeStructureApi,
+  updateFeeStructureApi,
   getFeeStructureForBatchApi,
   type LateFeeType,
-  type InstallmentInput,
   type FeeStructureRecord,
-  type CreateFeeStructurePayload,
 } from "../../Lib/api/fee-structure";
 import {
   Search,
@@ -9936,7 +9935,7 @@ import {
   MoreVertical,
 } from "lucide-react";
 
-// ─── Subject Color Map ─────────────────────────────────────────────────────────
+// â”€â”€â”€ Subject Color Map â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const subjectColors: Record<string, { color: string; bg: string }> = {
   Science:     { color: "#0d9488", bg: "#f0fdfa" },
@@ -9955,7 +9954,7 @@ function getSubjectColor(subject: string) {
 
 
 
-// ─── Create Fee Structure Modal ───────────────────────────────────────────────
+// â”€â”€â”€ Create Fee Structure Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type FeeCollectionType = "LUMP_SUM" | "INSTALLMENTS" | "BOTH";
 
@@ -9981,24 +9980,59 @@ const emptyFeeForm: FeeFormState = {
   installments: [],
 };
 
+function getFeeCollectionType(structure?: FeeStructureRecord | null): FeeCollectionType {
+  if (!structure) return "LUMP_SUM";
+  if (structure.lump_sum_enabled && structure.installments_enabled) return "BOTH";
+  if (structure.installments_enabled) return "INSTALLMENTS";
+  return "LUMP_SUM";
+}
+
+function buildFeeFormState(structure?: FeeStructureRecord | null): FeeFormState {
+  if (!structure) return { ...emptyFeeForm };
+
+  return {
+    label: structure.label ?? "",
+    totalAmount: structure.total_amount != null ? String(structure.total_amount) : "",
+    feeCollectionType: getFeeCollectionType(structure),
+    finalDueDate: structure.final_due_date ? String(structure.final_due_date).slice(0, 10) : "",
+    lateFeeAmount: structure.late_fee_amount != null ? String(structure.late_fee_amount) : "",
+    lateFeeType: structure.late_fee_type ?? "",
+    requireAdvance: Boolean(structure.require_advance),
+    installments: (structure.installments ?? []).map((inst) => ({
+      amount: String(inst.amount),
+      due_date: String(inst.due_date).slice(0, 10),
+    })),
+  };
+}
+
 function CreateFeeStructureModal({
   batchId,
   batchName,
+  existingStructure,
   onClose,
   onCreated,
 }: {
   batchId: string;
   batchName: string;
+  existingStructure?: FeeStructureRecord | null;
   onClose: () => void;
   onCreated: (structure: FeeStructureRecord) => void;
 }) {
-  const [form, setForm] = useState<FeeFormState>(emptyFeeForm);
+  const isUpdateMode = Boolean(existingStructure);
+  const [form, setForm] = useState<FeeFormState>(() => buildFeeFormState(existingStructure));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  // ── Derived helpers ──────────────────────────────────────────────────────
+  useEffect(() => {
+    setForm(buildFeeFormState(existingStructure));
+    setErrors({});
+    setApiError(null);
+    setSaved(false);
+  }, [existingStructure]);
+
+  // â”€â”€ Derived helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const totalAmountNum = parseFloat(form.totalAmount) || 0;
   const installmentSum = form.installments.reduce(
     (s, inst) => s + (parseFloat(inst.amount) || 0),
@@ -10009,7 +10043,7 @@ function CreateFeeStructureModal({
     form.installments.length > 0 &&
     Math.abs(installmentSum - totalAmountNum) > 0.01;
 
-  // ── Installment row helpers ──────────────────────────────────────────────
+  // â”€â”€ Installment row helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function addInstallment() {
     if (form.installments.length >= 12) return;
     setForm((f) => ({
@@ -10044,11 +10078,11 @@ function CreateFeeStructureModal({
   }
 
   function setFeeCollectionType(pt: FeeCollectionType) {
-    setForm((f) => ({ ...f, feeCollectionType: pt, installments: [] }));
+    setForm((f) => ({ ...f, feeCollectionType: pt, installments: pt === "LUMP_SUM" ? [] : f.installments }));
     setErrors({});
   }
 
-  // ── Validation ────────────────────────────────────────────────────────────
+  // â”€â”€ Validation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function validate(): Record<string, string> {
     const e: Record<string, string> = {};
 
@@ -10078,54 +10112,58 @@ function CreateFeeStructureModal({
       });
 
       if (form.installments.length > 0 && Math.abs(installmentSum - totalAmountNum) > 0.01)
-        e.installments = `Installment amounts sum to ₹${installmentSum.toFixed(2)}, but total is ₹${totalAmountNum.toFixed(2)}.`;
+        e.installments = `Installment amounts sum to INR ${installmentSum.toFixed(2)}, but total is INR ${totalAmountNum.toFixed(2)}.`;
     }
 
     return e;
   }
 
-  // ── Submit ────────────────────────────────────────────────────────────────
+  // â”€â”€ Submit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async function handleSubmit() {
     const e = validate();
     if (Object.keys(e).length > 0) { setErrors(e); return; }
     setSubmitting(true);
     setApiError(null);
 
-    const payload: CreateFeeStructurePayload = {
-      class_batch_id: batchId,
+    const payload = {
       label: form.label.trim(),
       total_amount: Number(form.totalAmount),
       lump_sum_enabled: form.feeCollectionType === "LUMP_SUM" || form.feeCollectionType === "BOTH",
       installments_enabled: form.feeCollectionType === "INSTALLMENTS" || form.feeCollectionType === "BOTH",
       final_due_date: form.finalDueDate,
       require_advance: form.requireAdvance,
+      late_fee_amount:
+        form.lateFeeAmount !== "" && form.lateFeeType !== ""
+          ? Number(form.lateFeeAmount)
+          : undefined,
+      late_fee_type:
+        form.lateFeeAmount !== "" && form.lateFeeType !== ""
+          ? (form.lateFeeType as LateFeeType)
+          : undefined,
+      installments:
+        form.feeCollectionType !== "LUMP_SUM"
+          ? form.installments.map((inst, idx) => ({
+              installment_number: idx + 1,
+              amount: Number(inst.amount),
+              due_date: inst.due_date,
+            }))
+          : undefined,
     };
 
-    if (form.lateFeeAmount !== "" && form.lateFeeType !== "") {
-      payload.late_fee_amount = Number(form.lateFeeAmount);
-      payload.late_fee_type = form.lateFeeType as LateFeeType;
-    }
-
-    if (form.feeCollectionType !== "LUMP_SUM") {
-      payload.installments = form.installments.map((inst, idx) => ({
-        installment_number: idx + 1,
-        amount: Number(inst.amount),
-        due_date: inst.due_date,
-      }));
-    }
-
     try {
-      const result = await createFeeStructureApi(payload);
+      const result = existingStructure
+        ? await updateFeeStructureApi(existingStructure.id, payload)
+        : await createFeeStructureApi({ class_batch_id: batchId, ...payload });
       setSaved(true);
       setTimeout(() => onCreated(result), 900);
     } catch (err: any) {
-      setApiError(err.message ?? "Failed to create fee structure.");
+      setApiError(err.message ?? (isUpdateMode ? "Failed to update fee structure." : "Failed to create fee structure."));
     } finally {
       setSubmitting(false);
     }
   }
 
-  // ── Success state ──────────────────────────────────────────────────────
+  // â”€â”€ Success state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (saved) {
     return (
       <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-6">
@@ -10137,17 +10175,17 @@ function CreateFeeStructureModal({
             <CheckCircle2 size={28} color="#0d9488" strokeWidth={2} />
           </div>
           <p className="text-gray-900" style={{ fontSize: "18px", fontWeight: 700 }}>
-            Fee Structure Created!
+{isUpdateMode ? "Fee Structure Updated!" : "Fee Structure Created!"}
           </p>
           <p className="text-gray-400 mt-1 text-center" style={{ fontSize: "13.5px" }}>
-            {batchName} now has an active fee structure.
+{isUpdateMode ? `${batchName} now uses the updated fee structure for future enrollments.` : `${batchName} now has an active fee structure.`}
           </p>
         </div>
       </div>
     );
   }
 
-  // ── Form ──────────────────────────────────────────────────────────────────
+  // â”€â”€ Form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   return (
     <div
       className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-6"
@@ -10161,10 +10199,10 @@ function CreateFeeStructureModal({
         <div className="flex items-start justify-between px-7 pt-7 pb-5 border-b border-gray-100 flex-shrink-0">
           <div>
             <h2 className="text-gray-900" style={{ fontSize: "18px", fontWeight: 700, letterSpacing: "-0.01em" }}>
-              Create Fee Structure
+{isUpdateMode ? "Update Fee Structure" : "Create Fee Structure"}
             </h2>
             <p className="text-gray-400 mt-0.5" style={{ fontSize: "13px" }}>
-              {batchName} — define how fees are collected for this batch.
+{isUpdateMode ? `${batchName} - revise the current fee setup for future enrollments.` : `${batchName} - define how fees are collected for this batch.`}
             </p>
           </div>
           <button
@@ -10187,7 +10225,7 @@ function CreateFeeStructureModal({
               type="text"
               value={form.label}
               onChange={(e) => { setForm((f) => ({ ...f, label: e.target.value })); setErrors((er) => { const c = { ...er }; delete c.label; return c; }); }}
-              placeholder="e.g. Annual Fees 2025–26"
+              placeholder="e.g. Annual Fees 2025-26"
               className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all"
               style={{ fontSize: "13.5px" }}
             />
@@ -10197,7 +10235,7 @@ function CreateFeeStructureModal({
           {/* Total Amount */}
           <div>
             <label className="block text-gray-700 mb-1.5" style={{ fontSize: "13px", fontWeight: 600 }}>
-              Total Amount (₹) <span className="text-red-500">*</span>
+              Total Amount (INR) <span className="text-red-500">*</span>
             </label>
             <input
               type="number"
@@ -10284,7 +10322,7 @@ function CreateFeeStructureModal({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-gray-600 mb-1" style={{ fontSize: "12px", fontWeight: 600 }}>
-                  Late Fee Amount (₹)
+                  Late Fee Amount (INR)
                 </label>
                 <input
                   type="number"
@@ -10308,7 +10346,7 @@ function CreateFeeStructureModal({
                   style={{ fontSize: "13px", color: form.lateFeeType ? "#1f2937" : "#d1d5db" }}
                 >
                   <option value="">None</option>
-                  <option value="FLAT">Flat (fixed ₹ amount)</option>
+                  <option value="FLAT">Flat (fixed INR amount)</option>
                   <option value="PERCENT">Percent (% of outstanding)</option>
                 </select>
                 {errors.lateFeeType && <p className="text-red-500 mt-1" style={{ fontSize: "11.5px" }}>{errors.lateFeeType}</p>}
@@ -10339,7 +10377,7 @@ function CreateFeeStructureModal({
             </button>
           </div>
 
-          {/* Fixed Installments — dynamic rows */}
+          {/* Fixed Installments - dynamic rows */}
           {form.feeCollectionType !== "LUMP_SUM" && (
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -10382,8 +10420,8 @@ function CreateFeeStructureModal({
                       color: sumMismatch ? "#dc2626" : "#0d9488",
                     }}
                   >
-                    Sum: ₹{installmentSum.toFixed(2)} / ₹{totalAmountNum.toFixed(2)}
-                    {!sumMismatch && installmentSum > 0 && " ✓"}
+                    Sum: INR {installmentSum.toFixed(2)} / INR {totalAmountNum.toFixed(2)}
+                    {!sumMismatch && installmentSum > 0 && " OK"}
                   </span>
                 </div>
               )}
@@ -10403,7 +10441,7 @@ function CreateFeeStructureModal({
                     className="grid px-4 py-2.5"
                     style={{ gridTemplateColumns: "40px 1fr 1fr 32px", backgroundColor: "#f9fafb", gap: "8px" }}
                   >
-                    {["#", "Amount (₹)", "Due Date", ""].map((col) => (
+                    {["#", "Amount (INR )", "Due Date", ""].map((col) => (
                       <p key={col} className="text-gray-400" style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.05em" }}>
                         {col.toUpperCase()}
                       </p>
@@ -10507,7 +10545,7 @@ function CreateFeeStructureModal({
             className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
             style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
           >
-            {submitting ? "Creating…" : "Create Fee Structure"}
+            {submitting ? (isUpdateMode ? "Updating..." : "Creating...") : (isUpdateMode ? "Update Fee Structure" : "Create Fee Structure")}
           </button>
         </div>
       </div>
@@ -10516,7 +10554,7 @@ function CreateFeeStructureModal({
 }
 
 
-// ─── Edit Batch Modal ─────────────────────────────────────────────────────────
+// â”€â”€â”€ Edit Batch Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function EditBatchModal({
   batch,
@@ -10595,7 +10633,7 @@ function EditBatchModal({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Science – Batch A"
+              placeholder="e.g. Science - Batch A"
               className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-50 transition-all"
               style={{ fontSize: "13.5px" }}
             />
@@ -10607,7 +10645,7 @@ function EditBatchModal({
             </label>
             {yearsLoading ? (
               <div className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-400" style={{ fontSize: "13.5px" }}>
-                Loading years…
+                Loading years...
               </div>
             ) : (
               <select
@@ -10645,14 +10683,14 @@ function EditBatchModal({
             className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
           >
-            {submitting ? "Saving…" : "Save Changes"}
+            {submitting ? "Saving..." : "Save Changes"}
           </button>
         </div>
       </div>
     </div>
   );
 }
-// ─── Create Batch Modal ────────────────────────────────────────────────────────
+// â”€â”€â”€ Create Batch Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function CreateBatchModal({
   onClose,
@@ -10729,7 +10767,7 @@ function CreateBatchModal({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Science – Batch A"
+              placeholder="e.g. Science - Batch A"
               className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-50 transition-all"
               style={{ fontSize: "13.5px" }}
             />
@@ -10739,7 +10777,7 @@ function CreateBatchModal({
             <label className="block text-gray-600 mb-1.5" style={{ fontSize: "13px", fontWeight: 600 }}>Academic Year</label>
             {yearsLoading ? (
               <div className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-400" style={{ fontSize: "13.5px" }}>
-                Loading years…
+                Loading years...
               </div>
             ) : (
               <select
@@ -10778,7 +10816,7 @@ function CreateBatchModal({
             className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
           >
-            {submitting ? "Creating…" : "Create Batch"}
+            {submitting ? "Creating..." : "Create Batch"}
           </button>
         </div>
       </div>
@@ -10786,7 +10824,7 @@ function CreateBatchModal({
   );
 }
 
-// ─── Student Profile Sub-Panel ─────────────────────────────────────────────────
+// â”€â”€â”€ Student Profile Sub-Panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function StudentProfilePanel({
   student,
@@ -10857,7 +10895,7 @@ function StudentProfilePanel({
   );
 }
 
-// ─── Batch Detail Side Panel ──────────────────────────────────────────────────
+// â”€â”€â”€ Batch Detail Side Panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function BatchDetailPanel({
   batch,
@@ -10878,6 +10916,7 @@ function BatchDetailPanel({
   const [feeStructure, setFeeStructure]         = useState<FeeStructureRecord | null | undefined>(undefined);
   const [loadingFee, setLoadingFee]             = useState(true);
   const [showFeeModal, setShowFeeModal]         = useState(false);
+  const [showEditFeeModal, setShowEditFeeModal] = useState(false);
   const [showEditModal, setShowEditModal]       = useState(false);
   const [showMenu, setShowMenu]                 = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -11037,12 +11076,22 @@ function BatchDetailPanel({
                       Create
                     </button>
                   )}
+                  {!loadingFee && feeStructure && (
+                    <button
+                      onClick={() => setShowEditFeeModal(true)}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-teal-200 text-teal-700 hover:bg-teal-50 transition-all"
+                      style={{ fontSize: "12px", fontWeight: 600 }}
+                    >
+                      <Edit2 size={12} strokeWidth={2.5} />
+                      Update
+                    </button>
+                  )}
                 </div>
 
                 {loadingFee ? (
                   <div className="flex items-center gap-2 text-gray-400">
                     <Loader2 size={14} className="animate-spin" />
-                    <span style={{ fontSize: "13px" }}>Loading…</span>
+                    <span style={{ fontSize: "13px" }}>Loading...</span>
                   </div>
                 ) : feeStructure ? (
                   <div className="rounded-xl border border-gray-100 overflow-hidden">
@@ -11068,7 +11117,7 @@ function BatchDetailPanel({
                           </span>
                         </div>
                         <p className="text-gray-900 flex-shrink-0" style={{ fontSize: "16px", fontWeight: 800, letterSpacing: "-0.02em" }}>
-                          ₹{Number(feeStructure.total_amount).toLocaleString("en-IN")}
+                          INR {Number(feeStructure.total_amount).toLocaleString("en-IN")}
                         </p>
                       </div>
 
@@ -11085,7 +11134,7 @@ function BatchDetailPanel({
                           <span className="text-gray-700" style={{ fontSize: "12.5px", fontWeight: 600 }}>
                             {feeStructure.late_fee_type === "PERCENT"
                               ? `${feeStructure.late_fee_amount}%`
-                              : `₹${Number(feeStructure.late_fee_amount).toLocaleString("en-IN")}`}{" "}
+                              : `INR ${Number(feeStructure.late_fee_amount).toLocaleString("en-IN")}`}{" "}
                             ({feeStructure.late_fee_type === "PERCENT" ? "of outstanding" : "flat"})
                           </span>
                         </div>
@@ -11112,7 +11161,7 @@ function BatchDetailPanel({
                               </span>
                               <div className="text-right">
                                 <span className="text-gray-700" style={{ fontSize: "12.5px", fontWeight: 600 }}>
-                                  ₹{Number(inst.amount).toLocaleString("en-IN")}
+                                  INR {Number(inst.amount).toLocaleString("en-IN")}
                                 </span>
                                 <span className="text-gray-400 ml-2" style={{ fontSize: "11.5px" }}>
                                   due {new Date(inst.due_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
@@ -11136,7 +11185,7 @@ function BatchDetailPanel({
                       className="mt-2 px-4 py-1.5 rounded-lg text-white hover:opacity-90 transition-all"
                       style={{ fontSize: "12.5px", fontWeight: 600, backgroundColor: "#0d9488" }}
                     >
-                      Create Fee Structure
+Create Fee Structure
                     </button>
                   </div>
                 )}
@@ -11184,7 +11233,7 @@ function BatchDetailPanel({
                 {loadingStudents ? (
                   <div className="flex items-center justify-center py-8 gap-2 text-gray-400">
                     <Loader2 size={16} className="animate-spin" />
-                    <span style={{ fontSize: "13px" }}>Loading students…</span>
+                    <span style={{ fontSize: "13px" }}>Loading students...</span>
                   </div>
                 ) : studentsError ? (
                   <p className="text-red-400 text-center py-6" style={{ fontSize: "13px" }}>{studentsError}</p>
@@ -11248,7 +11297,7 @@ function BatchDetailPanel({
                         style={{ fontSize: "13px", fontWeight: 600 }}
                       >
                         {loadingMore ? (
-                          <><Loader2 size={13} className="animate-spin" /> Loading…</>
+                          <><Loader2 size={13} className="animate-spin" /> Loading...</>
                         ) : (
                           `Show all ${totalStudents} students`
                         )}
@@ -11344,7 +11393,7 @@ function BatchDetailPanel({
                       className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                       style={{ backgroundColor: "#dc2626", fontSize: "13.5px", fontWeight: 600 }}
                     >
-                      {deleting ? "Deleting…" : "Delete"}
+                      {deleting ? "Deleting..." : "Delete"}
                     </button>
                   </div>
                 </div>
@@ -11376,6 +11425,18 @@ function BatchDetailPanel({
                 }}
               />
             )}
+            {showEditFeeModal && feeStructure && (
+              <CreateFeeStructureModal
+                batchId={batch.id}
+                batchName={batch.name}
+                existingStructure={feeStructure}
+                onClose={() => setShowEditFeeModal(false)}
+                onCreated={(structure) => {
+                  setFeeStructure(structure);
+                  setShowEditFeeModal(false);
+                }}
+              />
+            )}
           </>
         )}
       </div>
@@ -11383,7 +11444,7 @@ function BatchDetailPanel({
   );
 }
 
-// ─── Main Component ────────────────────────────────────────────────────────────
+// â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function Batches() {
   const [search, setSearch]             = useState("");
@@ -11425,14 +11486,14 @@ export function Batches() {
   return (
     <div className="p-8 max-w-[1100px] mx-auto">
 
-      {/* ── Page Header ── */}
+      {/* â”€â”€ Page Header â”€â”€ */}
       <div className="flex items-start justify-between mb-8">
         <div>
           <h1 className="text-gray-900" style={{ fontSize: "24px", fontWeight: 700, letterSpacing: "-0.02em" }}>
             Batches
           </h1>
           <p className="text-gray-400 mt-1" style={{ fontSize: "14px" }}>
-            {batchesLoading ? "Loading…" : `${batches.length} ${batches.length === 1 ? "batch" : "batches"} · active academic year`}
+            {batchesLoading ? "Loading..." : `${batches.length} ${batches.length === 1 ? "batch" : "batches"}  -  active academic year`}
           </p>
         </div>
         <button
@@ -11445,17 +11506,17 @@ export function Batches() {
         </button>
       </div>
 
-      {/* ── Stats Row ── */}
+      {/* â”€â”€ Stats Row â”€â”€ */}
       <div className="grid grid-cols-2 gap-4 mb-6">
         {[
           {
             label: "Active Batches",
-            value: summaryLoading ? "—" : (summary?.active_batches ?? 0).toString(),
+            value: summaryLoading ? "-" : (summary?.active_batches ?? 0).toString(),
             color: "#0d9488", bg: "#f0fdfa",
           },
           {
             label: "Total Students",
-            value: summaryLoading ? "—" : (summary?.total_students ?? 0).toString(),
+            value: summaryLoading ? "-" : (summary?.total_students ?? 0).toString(),
             color: "#7c3aed", bg: "#f5f3ff",
           },
         ].map((s) => (
@@ -11468,25 +11529,25 @@ export function Batches() {
         ))}
       </div>
 
-      {/* ── Search ── */}
+      {/* â”€â”€ Search â”€â”€ */}
       <div className="flex gap-3 mb-5">
         <div className="flex-1 relative">
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by batch name or teacher…"
+            placeholder="Search by batch name or teacher..."
             className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-300 shadow-sm transition-all"
             style={{ fontSize: "13.5px" }}
           />
         </div>
       </div>
 
-      {/* ── Batch Grid ── */}
+      {/* â”€â”€ Batch Grid â”€â”€ */}
       {batchesLoading ? (
         <div className="flex items-center justify-center py-20 gap-2 text-gray-400">
           <Loader2 size={20} className="animate-spin" />
-          <span style={{ fontSize: "14px" }}>Loading batches…</span>
+          <span style={{ fontSize: "14px" }}>Loading batches...</span>
         </div>
       ) : batchesError ? (
         <div className="py-16 text-center">
@@ -11571,7 +11632,7 @@ export function Batches() {
         </>
       )}
 
-      {/* ── Modals & Panels ── */}
+      {/* â”€â”€ Modals & Panels â”€â”€ */}
       {showCreate && (
         <CreateBatchModal
           onClose={() => setShowCreate(false)}
@@ -11593,6 +11654,16 @@ export function Batches() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
 
 
 // ===== FILE: src\app\pages\Dashboard.tsx =====
@@ -18069,7 +18140,9 @@ import {
   overrideInstallmentPlanApi,
   type FeeTabData,
   type PaymentRow,
+  type InstallmentRow,
 } from "../../Lib/api/student-fee";
+import { updateStudentFeeRecordApi } from "../../Lib/api/student-fee-record-update";
 import { getSession, ROLES } from "../../app/auth";
 import {
   LineChart,
@@ -18804,24 +18877,50 @@ function RecordPaymentModal({
 
 // ─── Override Installment Plan Modal ──────────────────────────────────────────
 
-function OverrideInstallmentModal({
+function EditFeeStructureModal({
   feeRecordId,
+  feeStructureLabel,
+  currentDiscount,
+  currentDiscountReason,
+  currentInstallments,
   totalPayable,
   onClose,
   onSuccess,
 }: {
   feeRecordId: string;
+  feeStructureLabel: string;
+  currentDiscount: number;
+  currentDiscountReason: string | null;
+  currentInstallments: InstallmentRow[];
   totalPayable: number;
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  const [rows, setRows] = useState([{ amount: "", due_date: "" }]);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  // Fee fields
+  const [discountAmount, setDiscountAmount] = useState(currentDiscount > 0 ? String(currentDiscount) : "");
+  const [discountReason, setDiscountReason] = useState(currentDiscountReason ?? "");
+
+  // Custom installment plan
+  const [showInstallments, setShowInstallments] = useState(currentInstallments.length > 0);
+  const [rows, setRows] = useState<{ amount: string; due_date: string }[]>(
+    currentInstallments.length > 0
+      ? currentInstallments.map((i) => ({ amount: String(i.amount), due_date: String(i.due_date).slice(0, 10) }))
+      : [{ amount: "", due_date: "" }]
+  );
+
+  const [errors, setErrors]     = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
+  // Derived: what will the total payable be after the new discount
+  // The original total before any discount = totalPayable + currentDiscount
+  // totalPayable is the gross amount (set at enrollment, never changes).
+  // outstanding_balance on the DB is (total_payable - discount_amount) - total_collected.
+  const newDiscount = parseFloat(discountAmount) || 0;
+  const newTotalPayable = Math.max(0, totalPayable - newDiscount);
+
   const rowSum = rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
-  const sumMismatch = rows.length > 0 && Math.abs(rowSum - totalPayable) > 0.01;
+  const sumMismatch = showInstallments && rows.length > 0 && Math.abs(rowSum - newTotalPayable) > 0.01;
 
   function addRow() { if (rows.length < 12) setRows((r) => [...r, { amount: "", due_date: "" }]); }
   function removeRow(i: number) { setRows((r) => r.filter((_, idx) => idx !== i)); }
@@ -18832,22 +18931,34 @@ function OverrideInstallmentModal({
 
   async function handleSubmit() {
     const e: Record<string, string> = {};
-    rows.forEach((r, i) => {
-      if (!r.amount || isNaN(Number(r.amount)) || Number(r.amount) <= 0) e[`r_${i}_amount`] = "Required";
-      if (!r.due_date) e[`r_${i}_due_date`] = "Required";
-    });
-    if (sumMismatch) e.sum = `Sum ₹${rowSum.toFixed(2)} must equal total payable ₹${totalPayable.toLocaleString("en-IN")}.`;
+    if (newDiscount < 0) e.discountAmount = "Discount cannot be negative.";
+if (newDiscount > totalPayable) e.discountAmount = `Discount cannot exceed ₹${totalPayable.toLocaleString("en-IN")}.`;
+    if (newDiscount > 0 && !discountReason.trim()) e.discountReason = "Reason is required when a discount is applied.";
+
+    if (showInstallments) {
+      rows.forEach((r, i) => {
+        if (!r.amount || isNaN(Number(r.amount)) || Number(r.amount) <= 0) e[`r_${i}_amount`] = "Required";
+        if (!r.due_date) e[`r_${i}_due_date`] = "Required";
+      });
+      if (rows.length === 0) e.installments = "Add at least one installment row.";
+      if (sumMismatch) e.installments = `Sum ₹${rowSum.toFixed(2)} must equal total payable ₹${newTotalPayable.toLocaleString("en-IN")}.`;
+    }
+
     if (Object.keys(e).length) { setErrors(e); return; }
 
     setSubmitting(true);
     setApiError(null);
     try {
-      await overrideInstallmentPlanApi(feeRecordId,
-        rows.map((r, i) => ({ installment_number: i + 1, amount: Number(r.amount), due_date: r.due_date }))
-      );
+      await updateStudentFeeRecordApi(feeRecordId, {
+        discount_amount: newDiscount,
+        discount_reason: discountReason.trim() || null,
+        installments: showInstallments
+          ? rows.map((r, i) => ({ installment_number: i + 1, amount: Number(r.amount), due_date: r.due_date }))
+          : undefined,
+      });
       onSuccess();
     } catch (err: any) {
-      setApiError(err.message ?? "Failed to override plan.");
+      setApiError(err.message ?? "Failed to update fee record.");
     } finally {
       setSubmitting(false);
     }
@@ -18856,78 +18967,149 @@ function OverrideInstallmentModal({
   return (
     <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-6"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-[560px] flex flex-col" style={{ maxHeight: "88vh" }}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-[580px] flex flex-col" style={{ maxHeight: "90vh" }}>
+
+        {/* Header */}
         <div className="flex items-start justify-between px-7 pt-7 pb-5 border-b border-gray-100 flex-shrink-0">
           <div>
-            <h2 className="text-gray-900" style={{ fontSize: "18px", fontWeight: 700 }}>Override Installment Plan</h2>
-            <p className="text-gray-400 mt-0.5" style={{ fontSize: "13px" }}>
-              Total payable: <span className="font-semibold text-gray-700">₹{totalPayable.toLocaleString("en-IN")}</span>
-            </p>
+            <h2 className="text-gray-900" style={{ fontSize: "18px", fontWeight: 700 }}>Edit Fee Structure</h2>
+            <p className="text-gray-400 mt-0.5" style={{ fontSize: "13px" }}>{feeStructureLabel}</p>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-md flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors">
             <X size={16} />
           </button>
         </div>
 
-        <div className="overflow-y-auto px-7 py-5 flex-1">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-gray-600" style={{ fontSize: "13px", fontWeight: 600 }}>Installments <span className="text-gray-400 font-normal">(max 12)</span></p>
-            <button onClick={addRow} disabled={rows.length >= 12}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-teal-200 text-teal-700 hover:bg-teal-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{ fontSize: "12px", fontWeight: 600 }}>
-              <Plus size={12} strokeWidth={2.5} /> Add Row
-            </button>
-          </div>
+        <div className="overflow-y-auto px-7 py-6 flex-1 space-y-5">
 
-          {/* Sum indicator */}
-          <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl"
-            style={{ backgroundColor: sumMismatch ? "#fef2f2" : "#f0fdfa", border: `1px solid ${sumMismatch ? "#fecaca" : "#ccfbf1"}` }}>
-            {sumMismatch
-              ? <AlertCircle size={13} style={{ color: "#dc2626" }} strokeWidth={2} />
-              : <CheckCircle2 size={13} style={{ color: "#0d9488" }} strokeWidth={2} />}
-            <span style={{ fontSize: "12px", fontWeight: 600, color: sumMismatch ? "#dc2626" : "#0d9488" }}>
-              Sum: ₹{rowSum.toFixed(2)} / ₹{totalPayable.toLocaleString("en-IN")}{!sumMismatch && rowSum > 0 && " ✓"}
-            </span>
-          </div>
-
-          <div className="rounded-xl border border-gray-100 overflow-hidden">
-            <div className="grid px-4 py-2.5" style={{ gridTemplateColumns: "36px 1fr 1fr 32px", backgroundColor: "#f9fafb", gap: "8px" }}>
-              {["#", "Amount (₹)", "Due Date", ""].map((h) => (
-                <p key={h} className="text-gray-400" style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.05em" }}>{h}</p>
-              ))}
+          {/* Total summary */}
+          <div className="rounded-xl px-4 py-3 flex items-center justify-between"
+            style={{ backgroundColor: "#f9fafb", border: "1px solid #f3f4f6" }}>
+            <div className="flex items-center gap-4 text-gray-500" style={{ fontSize: "13px" }}>
+              <span>Original: <span className="text-gray-700 font-semibold">₹{totalPayable.toLocaleString("en-IN")}</span></span>
+              {newDiscount > 0 && (
+                <>
+                  <span className="text-gray-300">−</span>
+                  <span>Discount: <span style={{ color: "#dc2626", fontWeight: 600 }}>₹{newDiscount.toLocaleString("en-IN")}</span></span>
+                </>
+              )}
             </div>
-            <div className="divide-y divide-gray-50">
-              {rows.map((row, i) => (
-                <div key={i} className="grid px-4 py-3 items-start" style={{ gridTemplateColumns: "36px 1fr 1fr 32px", gap: "8px" }}>
-                  <span className="text-gray-400 pt-2.5" style={{ fontSize: "12.5px", fontWeight: 600 }}>{i + 1}</span>
-                  <div>
-                    <input type="number" min={0.01} value={row.amount} onChange={(e) => updateRow(i, "amount", e.target.value)} placeholder="0.00"
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 transition-all"
-                      style={{ fontSize: "13px", borderColor: errors[`r_${i}_amount`] ? "#fca5a5" : undefined }} />
-                    {errors[`r_${i}_amount`] && <p className="text-red-400 mt-0.5" style={{ fontSize: "11px" }}>{errors[`r_${i}_amount`]}</p>}
-                  </div>
-                  <div>
-                    <input type="date" value={row.due_date} onChange={(e) => updateRow(i, "due_date", e.target.value)}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:border-teal-400 transition-all bg-white"
-                      style={{ fontSize: "13px", borderColor: errors[`r_${i}_due_date`] ? "#fca5a5" : undefined }} />
-                    {errors[`r_${i}_due_date`] && <p className="text-red-400 mt-0.5" style={{ fontSize: "11px" }}>{errors[`r_${i}_due_date`]}</p>}
-                  </div>
-                  <button onClick={() => removeRow(i)} className="mt-2 w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-red-50 transition-all">
-                    <X size={13} strokeWidth={2} />
+            <div className="text-right">
+              <p className="text-gray-400" style={{ fontSize: "10.5px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Total Payable</p>
+              <p style={{ fontSize: "18px", fontWeight: 800, letterSpacing: "-0.02em", color: newDiscount > 0 ? "#0d9488" : "#374151" }}>
+                ₹{newTotalPayable.toLocaleString("en-IN")}
+              </p>
+            </div>
+          </div>
+
+          {/* Discount */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-700 mb-1.5" style={{ fontSize: "13px", fontWeight: 600 }}>Discount Amount (₹)</label>
+              <input type="number" min={0} value={discountAmount}
+                onChange={(e) => { setDiscountAmount(e.target.value); setErrors((er) => { const c = { ...er }; delete c.discountAmount; return c; }); }}
+                placeholder="e.g. 2000"
+                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all"
+                style={{ fontSize: "13.5px", borderColor: errors.discountAmount ? "#fca5a5" : undefined }} />
+              {errors.discountAmount && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.discountAmount}</p>}
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-1.5" style={{ fontSize: "13px", fontWeight: 600 }}>
+                Discount Reason {newDiscount > 0 && <span className="text-red-500">*</span>}
+              </label>
+              <input type="text" value={discountReason}
+                onChange={(e) => { setDiscountReason(e.target.value); setErrors((er) => { const c = { ...er }; delete c.discountReason; return c; }); }}
+                placeholder="e.g. Merit scholarship"
+                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all"
+                style={{ fontSize: "13.5px", borderColor: errors.discountReason ? "#fca5a5" : undefined }} />
+              {errors.discountReason && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.discountReason}</p>}
+            </div>
+          </div>
+
+          {/* Custom Installment Plan toggle */}
+          <div className="border-t border-gray-100 pt-5">
+            <div className="flex items-center justify-between mb-1">
+              <div>
+                <p className="text-gray-700" style={{ fontSize: "13.5px", fontWeight: 600 }}>Custom Installment Plan</p>
+                <p className="text-gray-400 mt-0.5" style={{ fontSize: "12px" }}>Override the batch installment schedule for this student.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowInstallments((v) => !v)}
+                className="relative inline-flex items-center rounded-full transition-all duration-200 flex-shrink-0 ml-4"
+                style={{ width: "44px", height: "24px", backgroundColor: showInstallments ? "#0d9488" : "#e5e7eb" }}>
+                <span className="inline-block rounded-full bg-white shadow transition-transform duration-200"
+                  style={{ width: "18px", height: "18px", transform: showInstallments ? "translateX(22px)" : "translateX(2px)" }} />
+              </button>
+            </div>
+
+            {showInstallments && (
+              <div className="mt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-gray-600" style={{ fontSize: "13px", fontWeight: 600 }}>
+                    Installments <span className="text-gray-400 font-normal">(max 12)</span>
+                  </p>
+                  <button onClick={addRow} disabled={rows.length >= 12}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-teal-200 text-teal-700 hover:bg-teal-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{ fontSize: "12px", fontWeight: 600 }}>
+                    <Plus size={12} strokeWidth={2.5} /> Add Row
                   </button>
                 </div>
-              ))}
-            </div>
+
+                {/* Sum indicator */}
+                <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl"
+                  style={{ backgroundColor: sumMismatch ? "#fef2f2" : "#f0fdfa", border: `1px solid ${sumMismatch ? "#fecaca" : "#ccfbf1"}` }}>
+                  {sumMismatch
+                    ? <AlertCircle size={13} style={{ color: "#dc2626" }} strokeWidth={2} />
+                    : <CheckCircle2 size={13} style={{ color: "#0d9488" }} strokeWidth={2} />}
+                  <span style={{ fontSize: "12px", fontWeight: 600, color: sumMismatch ? "#dc2626" : "#0d9488" }}>
+                    Sum: ₹{rowSum.toFixed(2)} / ₹{newTotalPayable.toLocaleString("en-IN")}{!sumMismatch && rowSum > 0 && " ✓"}
+                  </span>
+                </div>
+
+                <div className="rounded-xl border border-gray-100 overflow-hidden">
+                  <div className="grid px-4 py-2.5" style={{ gridTemplateColumns: "36px 1fr 1fr 32px", backgroundColor: "#f9fafb", gap: "8px" }}>
+                    {["#", "Amount (₹)", "Due Date", ""].map((h) => (
+                      <p key={h} className="text-gray-400" style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.05em" }}>{h}</p>
+                    ))}
+                  </div>
+                  <div className="divide-y divide-gray-50">
+                    {rows.map((row, i) => (
+                      <div key={i} className="grid px-4 py-3 items-start" style={{ gridTemplateColumns: "36px 1fr 1fr 32px", gap: "8px" }}>
+                        <span className="text-gray-400 pt-2.5" style={{ fontSize: "12.5px", fontWeight: 600 }}>{i + 1}</span>
+                        <div>
+                          <input type="number" min={0.01} value={row.amount} onChange={(e) => updateRow(i, "amount", e.target.value)} placeholder="0.00"
+                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 transition-all"
+                            style={{ fontSize: "13px", borderColor: errors[`r_${i}_amount`] ? "#fca5a5" : undefined }} />
+                          {errors[`r_${i}_amount`] && <p className="text-red-400 mt-0.5" style={{ fontSize: "11px" }}>{errors[`r_${i}_amount`]}</p>}
+                        </div>
+                        <div>
+                          <input type="date" value={row.due_date} onChange={(e) => updateRow(i, "due_date", e.target.value)}
+                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:border-teal-400 transition-all bg-white"
+                            style={{ fontSize: "13px", borderColor: errors[`r_${i}_due_date`] ? "#fca5a5" : undefined }} />
+                          {errors[`r_${i}_due_date`] && <p className="text-red-400 mt-0.5" style={{ fontSize: "11px" }}>{errors[`r_${i}_due_date`]}</p>}
+                        </div>
+                        <button onClick={() => removeRow(i)} className="mt-2 w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-red-50 transition-all">
+                          <X size={13} strokeWidth={2} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {errors.installments && <p className="text-red-500 mt-2" style={{ fontSize: "12px" }}>{errors.installments}</p>}
+              </div>
+            )}
           </div>
-          {errors.sum && <p className="text-red-500 mt-2" style={{ fontSize: "12px" }}>{errors.sum}</p>}
+
           {apiError && (
-            <div className="flex items-center gap-2 px-3 py-3 rounded-xl mt-3" style={{ backgroundColor: "#fef2f2", border: "1px solid #fecaca" }}>
+            <div className="flex items-center gap-2 px-3 py-3 rounded-xl" style={{ backgroundColor: "#fef2f2", border: "1px solid #fecaca" }}>
               <AlertCircle size={14} style={{ color: "#dc2626" }} strokeWidth={2} />
               <p style={{ fontSize: "12.5px", color: "#dc2626" }}>{apiError}</p>
             </div>
           )}
         </div>
 
+        {/* Footer */}
         <div className="flex gap-3 px-7 py-5 border-t border-gray-100 flex-shrink-0">
           <button onClick={onClose} disabled={submitting}
             className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
@@ -18935,7 +19117,7 @@ function OverrideInstallmentModal({
           <button onClick={handleSubmit} disabled={submitting}
             className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
             style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}>
-            {submitting ? "Saving…" : "Save Plan"}
+            {submitting ? "Saving…" : "Save Changes"}
           </button>
         </div>
       </div>
@@ -18953,8 +19135,8 @@ function FeeTab({
   isAdmin,
   showPaymentModal,
   setShowPaymentModal,
-  showOverrideModal,
-  setShowOverrideModal,
+  showEditFeeModal,
+setShowEditFeeModal,
   cancellingPaymentId,
   setCancellingPaymentId,
   onRefresh,
@@ -18966,8 +19148,8 @@ function FeeTab({
   isAdmin: boolean;
   showPaymentModal: boolean;
   setShowPaymentModal: (v: boolean) => void;
-  showOverrideModal: boolean;
-  setShowOverrideModal: (v: boolean) => void;
+  showEditFeeModal: boolean;
+  setShowEditFeeModal: (v: boolean) => void;
   cancellingPaymentId: string | null;
   setCancellingPaymentId: (v: string | null) => void;
   onRefresh: () => void;
@@ -19054,7 +19236,7 @@ function FeeTab({
 
         <div className="grid grid-cols-4 gap-4 pt-5 border-t border-gray-50">
           {[
-            { label: "Total Payable",        value: `₹${Number(fr.total_payable).toLocaleString("en-IN")}`,        color: "#374151" },
+            { label: "Total Payable",        value: `₹${(Number(fr.total_payable) - Number(fr.discount_amount)).toLocaleString("en-IN")}`,        color: "#374151" },
             { label: "Total Collected",      value: `₹${Number(fr.total_collected).toLocaleString("en-IN")}`,      color: "#16a34a" },
             { label: "Outstanding Balance",  value: `₹${Number(fr.outstanding_balance).toLocaleString("en-IN")}`,  color: Number(fr.outstanding_balance) > 0 ? "#dc2626" : "#16a34a" },
             { label: "Final Due Date",       value: new Date(fr.final_due_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }), color: fr.final_due_date < today && fr.fee_status !== "PAID" ? "#dc2626" : "#374151" },
@@ -19089,14 +19271,14 @@ function FeeTab({
           <Plus size={15} strokeWidth={2.5} />
           Record Payment
         </button>
-        {isAdmin && !isLumpSum && (
+        {isAdmin && (
           <button
-            onClick={() => setShowOverrideModal(true)}
+            onClick={() => setShowEditFeeModal(true)}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-all"
             style={{ fontSize: "13.5px", fontWeight: 600 }}
           >
             <Pencil size={14} strokeWidth={2} />
-            Override Installment Plan
+            Edit Fee Structure
           </button>
         )}
       </div>
@@ -19124,15 +19306,40 @@ function FeeTab({
               </tr>
             </thead>
             <tbody>
-              {/* Note: installment data comes from fee_record if we extend the API.
-                  For now show a placeholder row directing user to payments tab */}
-              <tr>
-                <td colSpan={4} className="px-5 py-8 text-center">
-                  <p className="text-gray-400" style={{ fontSize: "13px" }}>
-                    Installment schedule is managed via the installment plan. Use "Override Installment Plan" to customise.
-                  </p>
-                </td>
-              </tr>
+              {fr.has_custom_plan && fr.installments && fr.installments.length > 0 ? (
+                fr.installments.map((inst) => {
+                  const isOverdue = inst.due_date < today;
+                  return (
+                    <tr key={inst.id} className="border-t border-gray-50">
+                      <td className="px-5 py-3.5 text-gray-600" style={{ fontSize: "13px", fontWeight: 600 }}>
+                        #{inst.installment_number}
+                      </td>
+                      <td className="px-5 py-3.5 text-gray-600" style={{ fontSize: "13px" }}>
+                        {new Date(inst.due_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                        {isOverdue && fr.fee_status !== "PAID" && (
+                          <span className="ml-2 px-1.5 py-0.5 rounded" style={{ fontSize: "10px", fontWeight: 700, color: "#dc2626", backgroundColor: "#fef2f2" }}>Overdue</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5" style={{ fontSize: "13.5px", fontWeight: 700, color: "#374151" }}>
+                        ₹{Number(inst.amount).toLocaleString("en-IN")}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className="text-gray-400" style={{ fontSize: "12px" }}>—</span>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={4} className="px-5 py-8 text-center">
+                    <p className="text-gray-400" style={{ fontSize: "13px" }}>
+                      {fr.has_custom_plan
+                        ? "Loading installment schedule…"
+                        : "No custom installment plan. Use \"Edit Fee Structure\" to create one."}
+                    </p>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -19257,12 +19464,16 @@ function FeeTab({
           onSuccess={() => { setShowPaymentModal(false); onRefresh(); }}
         />
       )}
-      {showOverrideModal && (
-        <OverrideInstallmentModal
+      {showEditFeeModal && (
+        <EditFeeStructureModal
           feeRecordId={fr.id}
+          feeStructureLabel={fr.fee_structure_label}
+          currentDiscount={Number(fr.discount_amount)}
+          currentDiscountReason={fr.discount_reason}
+          currentInstallments={fr.installments ?? []}
           totalPayable={Number(fr.total_payable)}
-          onClose={() => setShowOverrideModal(false)}
-          onSuccess={() => { setShowOverrideModal(false); onRefresh(); }}
+          onClose={() => setShowEditFeeModal(false)}
+          onSuccess={() => { setShowEditFeeModal(false); onRefresh(); }}
         />
       )}
       {viewingReceipt && (
@@ -19317,8 +19528,7 @@ const [activeTab, setActiveTab] = useState<"results" | "fee">(initialTab);
 
   // Record payment modal
   const [showPaymentModal, setShowPaymentModal]     = useState(false);
-  // Override installment plan modal
-  const [showOverrideModal, setShowOverrideModal]   = useState(false);
+  const [showEditFeeModal, setShowEditFeeModal]     = useState(false);
   // Cancel payment
   const [cancellingPaymentId, setCancellingPaymentId] = useState<string | null>(null);
 
@@ -19514,8 +19724,8 @@ const [activeTab, setActiveTab] = useState<"results" | "fee">(initialTab);
           isAdmin={isAdmin}
           showPaymentModal={showPaymentModal}
           setShowPaymentModal={setShowPaymentModal}
-          showOverrideModal={showOverrideModal}
-          setShowOverrideModal={setShowOverrideModal}
+          showEditFeeModal={showEditFeeModal}
+          setShowEditFeeModal={setShowEditFeeModal}
           cancellingPaymentId={cancellingPaymentId}
           setCancellingPaymentId={setCancellingPaymentId}
           onRefresh={() => {
@@ -27062,7 +27272,7 @@ import {
   Check,
 } from "lucide-react";
 import { getSession, ROLES, type RoleId } from "../auth";
-import { createUserApi, fetchUsersApi, deactivateUserApi, type CreatedUser, type UserListItem } from "../../Lib/api/users";
+import { createUserApi, fetchUsersApi, deactivateUserApi, reactivateUserApi, type CreatedUser, type UserListItem } from "../../Lib/api/users";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -27447,10 +27657,11 @@ function DeactivateModal({ user, onClose, onConfirm }: {
 
 // ─── User Profile Panel ────────────────────────────────────────────────────────
 
-function UserProfilePanel({ user, onClose, onDeactivate, currentUserId }: {
+function UserProfilePanel({ user, onClose, onDeactivate, onReactivate, currentUserId }: {
   user: User;
   onClose: () => void;
   onDeactivate: (id: string) => void;
+  onReactivate: (id: string) => void;
   currentUserId?: string;
 }) {
   const [showDeactivate, setShowDeactivate] = useState(false);
@@ -27581,7 +27792,7 @@ function UserProfilePanel({ user, onClose, onDeactivate, currentUserId }: {
           </div>
         </div>
 
-        {/* Footer — Deactivate action */}
+        {/* Footer — Deactivate / Reactivate action */}
         <div className="px-6 py-4 border-t border-gray-100">
           {user.active && !isCurrentUser ? (
             <button
@@ -27593,13 +27804,14 @@ function UserProfilePanel({ user, onClose, onDeactivate, currentUserId }: {
               Deactivate User
             </button>
           ) : !user.active ? (
-            <div
-              className="w-full py-2.5 rounded-xl flex items-center justify-center gap-2"
-              style={{ backgroundColor: "#f9fafb", color: "#9ca3af", fontSize: "13.5px", fontWeight: 600 }}
+            <button
+              onClick={() => { onReactivate(user.id); onClose(); }}
+              className="w-full py-2.5 rounded-xl border flex items-center justify-center gap-2 transition-all hover:bg-green-50"
+              style={{ borderColor: "#bbf7d0", color: "#16a34a", fontSize: "13.5px", fontWeight: 600 }}
             >
-              <UserX size={15} strokeWidth={2} />
-              Already Inactive
-            </div>
+              <UserCheck size={15} strokeWidth={2.5} />
+              Reactivate User
+            </button>
           ) : null}
         </div>
       </div>
@@ -27689,8 +27901,16 @@ export function Users() {
       await deactivateUserApi(id);
       setUsers((prev) => prev.map((u) => u.id === id ? { ...u, active: false } : u));
     } catch (err: any) {
-      // Surface error without crashing — panel stays open, user sees nothing changed
       console.error("Deactivate failed:", err.message);
+    }
+  }
+
+  async function handleReactivate(id: string) {
+    try {
+      await reactivateUserApi(id);
+      setUsers((prev) => prev.map((u) => u.id === id ? { ...u, active: true } : u));
+    } catch (err: any) {
+      console.error("Reactivate failed:", err.message);
     }
   }
 
@@ -27977,6 +28197,7 @@ export function Users() {
           user={users.find((u) => u.id === selectedUser.id) ?? selectedUser}
           onClose={() => setSelectedUser(null)}
           onDeactivate={handleDeactivate}
+          onReactivate={handleReactivate}
           currentUserId={session?.payload.user_id}
         />
       )}
@@ -28968,11 +29189,11 @@ export async function getBatchDrillDownApi(batchId: string): Promise<BatchDrillD
 
 // ===== FILE: src\Lib\api\fee-structure.ts =====
 
-// src/Lib/api/fee-structure.ts
+﻿// src/Lib/api/fee-structure.ts
 
 import { getToken } from "../../app/auth";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // (PlanType removed as it's replaced by independent toggles)
 
@@ -28998,6 +29219,8 @@ export type CreateFeeStructurePayload = {
   installments?: InstallmentInput[];
 };
 
+export type UpdateFeeStructurePayload = Omit<CreateFeeStructurePayload, "class_batch_id">;
+
 export type FeeStructureRecord = {
   id: string;
   class_batch_id: string;
@@ -29021,7 +29244,7 @@ export type FeeStructureRecord = {
   }[];
 };
 
-// ─── API helpers ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ API helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function authHeaders(): HeadersInit {
   const token = getToken();
@@ -29029,7 +29252,7 @@ function authHeaders(): HeadersInit {
   return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 }
 
-// ─── Create ───────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Create â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function createFeeStructureApi(
   payload: CreateFeeStructurePayload
@@ -29041,6 +29264,20 @@ export async function createFeeStructureApi(
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error ?? "Failed to create fee structure");
+  return json.data as FeeStructureRecord;
+}
+
+export async function updateFeeStructureApi(
+  feeStructureId: string,
+  payload: UpdateFeeStructurePayload
+): Promise<FeeStructureRecord> {
+  const res = await fetch(`/api/fee-structures/${encodeURIComponent(feeStructureId)}`, {
+    method: "PUT",
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error ?? "Failed to update fee structure");
   return json.data as FeeStructureRecord;
 }
 
@@ -29077,7 +29314,7 @@ export async function recordAdvancePaymentApi(
 }
 
 
-// ─── Read (for a batch) ───────────────────────────────────────────────────────
+// â”€â”€â”€ Read (for a batch) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function getFeeStructureForBatchApi(
   batchId: string
@@ -29090,6 +29327,8 @@ export async function getFeeStructureForBatchApi(
   if (!res.ok) throw new Error(json.error ?? "Failed to fetch fee structure");
   return json.data as FeeStructureRecord | null;
 }
+
+
 
 // ===== FILE: src\Lib\api\holiday.ts =====
 
@@ -29438,6 +29677,37 @@ export async function fetchStudentDashboard(): Promise<StudentDashboardData> {
   return json.data as StudentDashboardData;
 }
 
+// ===== FILE: src\Lib\api\student-fee-record-update.ts =====
+
+// src/Lib/api/student-fee-record-update.ts
+import { getToken } from "../../app/auth";
+
+function authHeaders(): HeadersInit {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+  return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+}
+
+export async function updateStudentFeeRecordApi(
+  studentFeeRecordId: string,
+  payload: {
+    discount_amount: number;
+    discount_reason: string | null;
+    installments?: { installment_number: number; amount: number; due_date: string }[];
+  }
+): Promise<void> {
+  const res = await fetch(
+    `/api/fee-records/${encodeURIComponent(studentFeeRecordId)}`,
+    {
+      method: "PUT",
+      headers: authHeaders(),
+      body: JSON.stringify(payload),
+    }
+  );
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error ?? "Failed to update fee record");
+}
+
 // ===== FILE: src\Lib\api\student-fee-self.ts =====
 
 // src/Lib/api/student-fee-self.ts
@@ -29517,6 +29787,7 @@ function authHeaders(): HeadersInit {
 export type FeeRecord = {
   id: string;
   total_payable: number;
+  installments?: InstallmentRow[];
   discount_amount: number;
   discount_reason: string | null;
   total_collected: number;
@@ -29570,15 +29841,16 @@ export type FeeTabData = {
 export async function getStudentFeeTabApi(
   studentUserId: string
 ): Promise<FeeTabData | null> {
-  // Step 1: get fee record id for this student
+  // Step 1: get full fee record (with installments if custom plan exists)
   const recRes = await fetch(
-    `/api/students/${encodeURIComponent(studentUserId)}/fee-record`,
+    `/api/students/${encodeURIComponent(studentUserId)}/fee-record/full`,
     { headers: authHeaders() }
   );
   if (recRes.status === 404) return null;
   const recJson = await recRes.json();
   if (!recRes.ok) throw new Error(recJson.error ?? "Failed to fetch fee record");
   const feeRecordId: string = recJson.data.id;
+  const installments: InstallmentRow[] = recJson.data.installments ?? [];
 
   // Step 2: get full detail + payments via the list endpoint (includes fee_record shape)
   const listRes = await fetch(
@@ -29589,7 +29861,7 @@ export async function getStudentFeeTabApi(
   if (!listRes.ok) throw new Error(listJson.error ?? "Failed to fetch fee data");
 
   return {
-    fee_record: listJson.data.fee_record as FeeRecord,
+    fee_record: { ...listJson.data.fee_record as FeeRecord, installments },
     payments: listJson.data.payments as PaymentRow[],
   };
 }
@@ -30447,6 +30719,19 @@ export async function deactivateUserApi(userId: string): Promise<void> {
 
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? "Failed to deactivate user");
+}
+
+export async function reactivateUserApi(userId: string): Promise<void> {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+
+  const res = await fetch(`/api/users/${userId}/reactivate`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Failed to reactivate user");
 }
 
 export async function createUserApi(

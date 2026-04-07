@@ -28,6 +28,7 @@ import { ManagementDashboard } from "./pages/Management/ManagementDashboard";
 import { StudentDashboard } from "./pages/Student/StudentDashboard";
 import { StudentMarks } from "./pages/Student/StudentMarks";
 import { MyFee } from "./pages/Student/MyFee";
+import { StudentAnnouncements } from "./pages/Student/StudentAnnouncements";
 import { Notifications } from "./pages/Notifications";
 import { Login } from "./pages/Login";
 import { ForgotPassword } from "./pages/ForgotPassword";
@@ -62,9 +63,7 @@ function ManagementPeopleRoute() {
 function StudentStudyMaterialsRoute() {
   return createElement(StudyMaterials, { canManage: false });
 }
-function StudentAnnouncementsRoute() {
-  return createElement(Announcements, { canManage: false });
-}
+
 
 export const router = createBrowserRouter([
   // ── Public ──────────────────────────────────────────────────────────────────
@@ -172,7 +171,7 @@ element: createElement(ErrorBoundary, { section: "My Attendance", children: crea
 element: createElement(ErrorBoundary, { section: "My Results", children: createElement(StudentMarks) }),
       },
       { path: "study-materials", Component: StudentStudyMaterialsRoute },
-      { path: "announcements", Component: StudentAnnouncementsRoute },
+      { path: "announcements", Component: StudentAnnouncements },
       { path: "fee", Component: MyFee },
       { path: "notifications", Component: Notifications },
       { path: "profile", Component: Profile },

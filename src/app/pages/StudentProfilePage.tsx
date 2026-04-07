@@ -819,9 +819,10 @@ function EditFeeStructureModal({
 
   // Derived: what will the total payable be after the new discount
   // The original total before any discount = totalPayable + currentDiscount
-  const originalTotal = totalPayable + currentDiscount;
+  // totalPayable is the gross amount (set at enrollment, never changes).
+  // outstanding_balance on the DB is (total_payable - discount_amount) - total_collected.
   const newDiscount = parseFloat(discountAmount) || 0;
-  const newTotalPayable = Math.max(0, originalTotal - newDiscount);
+  const newTotalPayable = Math.max(0, totalPayable - newDiscount);
 
   const rowSum = rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
   const sumMismatch = showInstallments && rows.length > 0 && Math.abs(rowSum - newTotalPayable) > 0.01;
@@ -836,7 +837,7 @@ function EditFeeStructureModal({
   async function handleSubmit() {
     const e: Record<string, string> = {};
     if (newDiscount < 0) e.discountAmount = "Discount cannot be negative.";
-    if (newDiscount > originalTotal) e.discountAmount = `Discount cannot exceed ₹${originalTotal.toLocaleString("en-IN")}.`;
+if (newDiscount > totalPayable) e.discountAmount = `Discount cannot exceed ₹${totalPayable.toLocaleString("en-IN")}.`;
     if (newDiscount > 0 && !discountReason.trim()) e.discountReason = "Reason is required when a discount is applied.";
 
     if (showInstallments) {
@@ -890,7 +891,7 @@ function EditFeeStructureModal({
           <div className="rounded-xl px-4 py-3 flex items-center justify-between"
             style={{ backgroundColor: "#f9fafb", border: "1px solid #f3f4f6" }}>
             <div className="flex items-center gap-4 text-gray-500" style={{ fontSize: "13px" }}>
-              <span>Original: <span className="text-gray-700 font-semibold">₹{originalTotal.toLocaleString("en-IN")}</span></span>
+              <span>Original: <span className="text-gray-700 font-semibold">₹{totalPayable.toLocaleString("en-IN")}</span></span>
               {newDiscount > 0 && (
                 <>
                   <span className="text-gray-300">−</span>
@@ -1140,7 +1141,7 @@ setShowEditFeeModal,
 
         <div className="grid grid-cols-4 gap-4 pt-5 border-t border-gray-50">
           {[
-            { label: "Total Payable",        value: `₹${Number(fr.total_payable).toLocaleString("en-IN")}`,        color: "#374151" },
+            { label: "Total Payable",        value: `₹${(Number(fr.total_payable) - Number(fr.discount_amount)).toLocaleString("en-IN")}`,        color: "#374151" },
             { label: "Total Collected",      value: `₹${Number(fr.total_collected).toLocaleString("en-IN")}`,      color: "#16a34a" },
             { label: "Outstanding Balance",  value: `₹${Number(fr.outstanding_balance).toLocaleString("en-IN")}`,  color: Number(fr.outstanding_balance) > 0 ? "#dc2626" : "#16a34a" },
             { label: "Final Due Date",       value: new Date(fr.final_due_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }), color: fr.final_due_date < today && fr.fee_status !== "PAID" ? "#dc2626" : "#374151" },

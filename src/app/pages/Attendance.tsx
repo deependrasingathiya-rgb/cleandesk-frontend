@@ -1,6 +1,6 @@
 // src/app/pages/Attendance.tsx
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { fetchWeeklyAttendanceTrend, type WeeklyTrendDay } from "../../Lib/api/attendance";
 import {
   fetchAttendanceBatchSummaryApi,
@@ -22,7 +22,6 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
-  ChevronDown,
   ArrowLeft,
   CalendarDays,
   Clock,
@@ -63,6 +62,10 @@ function getYesterdayIso(): string {
 }
 const TODAY = getTodayIso();
 const YESTERDAY = getYesterdayIso();
+
+// Mirrors ATTENDANCE_CREATE_WINDOW_DAYS = 1 from backend
+// Only today and yesterday are valid for creating new attendance
+const EARLIEST_MARKABLE_DATE = YESTERDAY;
 
 function formatDisplayDate(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
@@ -179,16 +182,19 @@ function CalendarPicker({
           const iso = `${yr}-${pad(mo + 1)}-${pad(day)}`;
           const isSelected = iso === value;
           const isToday = iso === TODAY;
+          const isDisabled = iso > TODAY || iso < EARLIEST_MARKABLE_DATE;
           return (
             <button
               key={iso}
-              onClick={() => { onChange(iso); onClose(); }}
+              onClick={() => { if (!isDisabled) { onChange(iso); onClose(); } }}
+              disabled={isDisabled}
               className="w-8 h-8 rounded-md mx-auto flex items-center justify-center transition-all"
               style={{
                 fontSize: "12.5px",
                 fontWeight: isSelected ? 700 : 500,
                 backgroundColor: isSelected ? "#0d9488" : isToday ? "#f0fdfa" : "transparent",
-                color: isSelected ? "white" : isToday ? "#0d9488" : "#374151",
+                color: isSelected ? "white" : isDisabled ? "#d1d5db" : isToday ? "#0d9488" : "#374151",
+                cursor: isDisabled ? "not-allowed" : "pointer",
               }}
             >
               {day}
@@ -781,9 +787,7 @@ type ViewState =
 
 export function Attendance({ canManage = true }: { canManage?: boolean }) {
   const [selectedDate, setSelectedDate] = useState(TODAY);
-  const [showCalendar, setShowCalendar] = useState(false);
   const [view, setView] = useState<ViewState>({ type: "list" });
-  const calendarRef = useRef<HTMLDivElement>(null);
 
   // Live batch summary state
   const [batchSummaries, setBatchSummaries] = useState<BatchSummaryItem[]>([]);
@@ -835,16 +839,7 @@ const [weeklyTrend, setWeeklyTrend] = useState<WeeklyTrendDay[]>([]);
     loadSummary(selectedDate);
   }, [selectedDate, loadSummary]);
 
-  // Close calendar on outside click
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (calendarRef.current && !calendarRef.current.contains(e.target as Node)) {
-        setShowCalendar(false);
-      }
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  // Calendar outside-click handler removed with calendar picker
 
   function getSummary(batchId: string): BatchSummaryItem | undefined {
     return batchSummaries.find(s => s.batch_id === batchId);
@@ -996,29 +991,7 @@ const [weeklyTrend, setWeeklyTrend] = useState<WeeklyTrendDay[]>([]);
               {d === TODAY ? "Today" : "Yesterday"}
             </button>
           ))}
-          <div ref={calendarRef} className="relative">
-            <button
-              onClick={() => setShowCalendar(o => !o)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border shadow-sm transition-all"
-              style={{
-                fontSize: "13px", fontWeight: 500,
-                backgroundColor: selectedDate !== TODAY && selectedDate !== YESTERDAY ? "#0d9488" : "white",
-                color: selectedDate !== TODAY && selectedDate !== YESTERDAY ? "white" : "#6b7280",
-                borderColor: selectedDate !== TODAY && selectedDate !== YESTERDAY ? "#0d9488" : "#f3f4f6",
-              }}
-            >
-              <CalendarDays size={14} />
-              {selectedDate !== TODAY && selectedDate !== YESTERDAY ? formatDisplayDate(selectedDate) : "Choose Date"}
-              <ChevronDown size={13} style={{ transform: showCalendar ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
-            </button>
-            {showCalendar && (
-              <CalendarPicker
-                value={selectedDate}
-                onChange={(d) => { setSelectedDate(d); }}
-                onClose={() => setShowCalendar(false)}
-              />
-            )}
-          </div>
+          {/* Calendar removed: only today/yesterday are valid for attendance marking */}
         </div>
       </div>
 

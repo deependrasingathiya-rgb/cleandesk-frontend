@@ -5,13 +5,17 @@ import { ROLES } from "../../app/auth";
 
 export type EnrollStudentPayload = {
   full_name: string;
-  father_name?: string;
+  guardian_name?: string;
   mobile: string;
   alternate_mobile?: string;
   school_name: string;
   education_board: string;
   academic_year_id: string;
   class_batch_id?: string;
+  email?: string;
+  address?: string;
+  discount_amount?: number;
+  discount_reason?: string;
 };
 
 export type EnrolledStudent = {

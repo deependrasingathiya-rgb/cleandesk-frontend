@@ -48,7 +48,7 @@ type EducationBoard = "CBSE" | "ICSE" | "Maharashtra State Board";
 type Student = {
   id: string;
   name: string;
-  fatherName: string;
+  guardianName: string;
   mobile: string;
   alternateMobile: string;
   batch: string;
@@ -63,7 +63,7 @@ function mapRowToStudent(row: StudentRow): Student {
   return {
     id: row.id,
     name: row.name ?? "—",
-    fatherName: "",
+    guardianName: "",
     mobile: row.mobile ?? "",
     alternateMobile: "",
     batch: row.batch ?? "",
@@ -84,21 +84,23 @@ const BOARD_OPTIONS: EducationBoard[] = ["CBSE", "ICSE", "Maharashtra State Boar
 
 type EnrollForm = {
   name: string;
-  fatherName: string;
+  guardianName: string;
   batch: string;
   academicYearId: string;
   school: string;
   mobile: string;
   alternateMobile: string;
+  email: string;
+  address: string;
   board: EducationBoard | "";
   discountAmount: string;
   discountReason: string;
 };
 
 const emptyForm: EnrollForm = {
-  name: "", fatherName: "", batch: "", academicYearId: "",
-  school: "", mobile: "", alternateMobile: "", board: "",
-  discountAmount: "", discountReason: "",
+  name: "", guardianName: "", batch: "", academicYearId: "",
+  school: "", mobile: "", alternateMobile: "", email: "", address: "",
+  board: "", discountAmount: "", discountReason: "",
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -232,8 +234,8 @@ function EnrollStudentForm({ onBack, onSubmit }: {
     else if (!/^\d{10}$/.test(form.mobile)) e.mobile = "Enter a valid 10-digit number.";
     if (!form.school.trim()) e.school = "School name is required.";
     if (!form.board) e.board = "Education board is required.";
-    if (form.alternateMobile && !/^\d{10}$/.test(form.alternateMobile))
-      e.alternateMobile = "Enter a valid 10-digit number.";
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
+      e.email = "Enter a valid email address.";
     if (!form.academicYearId) e.academicYearId = "Academic year is required.";
     if (!form.batch) e.batch = "Batch selection is required.";
 
@@ -257,9 +259,11 @@ function EnrollStudentForm({ onBack, onSubmit }: {
       const discountNum = parseFloat(form.discountAmount) || 0;
       const result = await enrollStudentApi({
         full_name: form.name.trim(),
-        father_name: form.fatherName.trim() || undefined,
+        guardian_name: form.guardianName.trim() || undefined,
         mobile: form.mobile.trim(),
         alternate_mobile: form.alternateMobile.trim() || undefined,
+        email: form.email.trim() || undefined,
+        address: form.address.trim() || undefined,
         school_name: form.school.trim(),
         education_board: form.board,
         academic_year_id: form.academicYearId,
@@ -550,8 +554,8 @@ function EnrollStudentForm({ onBack, onSubmit }: {
             {errors.name && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.name}</p>}
           </div>
           <div>
-            <FieldLabel>Father's Name</FieldLabel>
-            <TextInput value={form.fatherName} onChange={set("fatherName")} placeholder="e.g. Rajesh Patel" />
+            <FieldLabel>Parent / Guardian's Name</FieldLabel>
+            <TextInput value={form.guardianName} onChange={set("guardianName")} placeholder="e.g. Rajesh Patel" />
           </div>
         </div>
 
@@ -565,6 +569,18 @@ function EnrollStudentForm({ onBack, onSubmit }: {
             <FieldLabel>Alternate Mobile Number</FieldLabel>
             <TextInput value={form.alternateMobile} onChange={set("alternateMobile")} placeholder="Optional" type="tel" />
             {errors.alternateMobile && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.alternateMobile}</p>}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-5 mb-6">
+          <div>
+            <FieldLabel>Email Address</FieldLabel>
+            <TextInput value={form.email} onChange={set("email")} placeholder="e.g. sneha@example.com" type="email" />
+            {errors.email && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.email}</p>}
+          </div>
+          <div>
+            <FieldLabel>Address</FieldLabel>
+            <TextInput value={form.address} onChange={set("address")} placeholder="e.g. 12, MG Road, Mumbai" />
           </div>
         </div>
 
@@ -956,7 +972,7 @@ function StudentProfile({ student, onBack, onDeactivate }: {
           {[
             { icon: BookOpen, label: "Education Board", value: student.board,
               badge: true, color: bc.color, bg: bc.bg },
-            { icon: CalendarDays, label: "Father's Name", value: student.fatherName || "—" },
+            { icon: CalendarDays, label: "Parent / Guardian", value: student.guardianName || "—" },
           ].map(({ icon: Icon, label, value, badge, color, bg }: any) => (
             <div key={label}>
               <div className="flex items-center gap-1.5 mb-1">

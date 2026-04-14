@@ -113,20 +113,35 @@ function redirectToLogin(): void {
  */
 export async function refreshAccessToken(): Promise<string | null> {
   try {
-    const res = await fetch(buildApiUrl("/api/refresh"), {
+    const url = buildApiUrl("/api/refresh");
+    console.log("[refreshAccessToken] calling:", url);
+
+    const res = await fetch(url, {
       method: "POST",
       credentials: "include",
     });
 
-    if (!res.ok) return null;
+    console.log("[refreshAccessToken] response status:", res.status);
+
+    if (!res.ok) {
+      const body = await res.text();
+      console.log("[refreshAccessToken] FAIL body:", body);
+      return null;
+    }
 
     const data = await res.json();
+    console.log("[refreshAccessToken] response data keys:", Object.keys(data));
+
     if (data.token) {
       saveToken(data.token);
+      console.log("[refreshAccessToken] SUCCESS: new token saved");
       return data.token;
     }
+
+    console.log("[refreshAccessToken] FAIL: no token in response", data);
     return null;
-  } catch {
+  } catch (err) {
+    console.log("[refreshAccessToken] EXCEPTION:", err);
     return null;
   }
 }

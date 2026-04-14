@@ -1,3 +1,4 @@
+//src/app/api-url.ts
 const RAW_API_BASE = (import.meta.env.VITE_API_URL ?? "").trim();
 
 function normalizeApiBaseUrl(value: string): string {

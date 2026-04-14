@@ -79,8 +79,24 @@ async function withUnauthorizedHandling(
 
 export async function apiFetch(path: string, options?: RequestInit) {
   const url = buildApiUrl(path);
-  const optionsWithCredentials: RequestInit = { credentials: "include", ...options };
-  return withUnauthorizedHandling(fetch(url, optionsWithCredentials), optionsWithCredentials);
+  const { getToken } = await import("./auth");
+  const token = getToken();
+
+  const headers = new Headers(options?.headers);
+  if (token && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const optionsWithCredentials: RequestInit = {
+    credentials: "include",
+    ...options,
+    headers,
+  };
+
+  return withUnauthorizedHandling(
+    _fetch(url, optionsWithCredentials),
+    optionsWithCredentials
+  );
 }
 
 // ── Intercept ALL fetch("/api/...") calls globally ──────────────────────────
@@ -88,9 +104,18 @@ const _fetch = window.fetch.bind(window);
 window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   if (typeof input === "string" && input.startsWith("/api/")) {
     const url = buildApiUrl(input);
+    const token = localStorage.getItem("auth_token");
 
-    // Always include credentials so the HttpOnly refresh token cookie is sent
-    const initWithCredentials: RequestInit = { credentials: "include", ...init };
+    const headers = new Headers(init?.headers);
+    if (token && !headers.has("Authorization")) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+
+    const initWithCredentials: RequestInit = {
+      credentials: "include",
+      ...init,
+      headers,
+    };
 
     return withUnauthorizedHandling(_fetch(url, initWithCredentials), initWithCredentials);
   }

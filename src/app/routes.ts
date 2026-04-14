@@ -1,4 +1,4 @@
-// src/app/routes.ts
+// src/app/routes.ts(frontend)
 
 import { createElement } from "react";
 import { MyBatches } from "./pages/Teacher/MyBatches";

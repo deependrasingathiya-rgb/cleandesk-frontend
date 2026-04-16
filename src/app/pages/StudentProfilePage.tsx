@@ -1173,14 +1173,16 @@ setShowEditFeeModal,
 
       {/* ── Action buttons ── */}
       <div className="flex items-center gap-3 mb-5">
-        <button
-          onClick={() => setShowPaymentModal(true)}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
-          style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
-        >
-          <Plus size={15} strokeWidth={2.5} />
-          Record Payment
-        </button>
+        {fr.fee_status !== "PAID" && (
+          <button
+            onClick={() => setShowPaymentModal(true)}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
+            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+          >
+            <Plus size={15} strokeWidth={2.5} />
+            Record Payment
+          </button>
+        )}
         {isAdmin && (
           <button
             onClick={() => setShowEditFeeModal(true)}

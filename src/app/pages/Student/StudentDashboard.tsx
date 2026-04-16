@@ -561,7 +561,7 @@ export function StudentDashboard() {
                 <div className="flex items-center gap-5 pt-4 border-t border-gray-50 flex-wrap">
                   <div>
                     <p className="text-gray-900" style={{ fontSize: "15px", fontWeight: 700 }}>
-                      ₹{Number(feeRecord.total_payable).toLocaleString("en-IN")}
+                      ₹{Number(feeRecord.net_payable).toLocaleString("en-IN")}
                     </p>
                     <p className="text-gray-400" style={{ fontSize: "11.5px" }}>Total payable</p>
                   </div>
@@ -604,13 +604,13 @@ export function StudentDashboard() {
                 </div>
 
                 {/* Progress bar */}
-                {feeRecord.total_payable > 0 && (
+                {feeRecord.net_payable > 0 && (
                   <div className="mt-4">
                     <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: "#f3f4f6" }}>
                       <div
                         className="h-full rounded-full transition-all"
                         style={{
-                          width: `${Math.min(100, Math.round((feeRecord.total_collected / feeRecord.total_payable) * 100))}%`,
+                          width: `${Math.min(100, Math.round((feeRecord.total_collected / feeRecord.net_payable) * 100))}%`,
                           backgroundColor: feeRecord.fee_status === "PAID" ? "#16a34a" : "#0d9488",
                         }}
                       />

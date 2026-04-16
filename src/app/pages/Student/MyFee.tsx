@@ -299,8 +299,8 @@ export function MyFee() {
 
   const isInstallmentBased = record.plan_type !== "LUMP_SUM";
   const finalDueOverdue    = record.final_due_date < today && record.fee_status !== "PAID";
-  const collectionPct      = record.total_payable > 0
-    ? Math.min(100, Math.round((record.total_collected / record.total_payable) * 100))
+  const collectionPct      = record.net_payable > 0
+    ? Math.min(100, Math.round((record.total_collected / record.net_payable) * 100))
     : 0;
 
   return (
@@ -335,7 +335,7 @@ export function MyFee() {
         {/* Stats grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-5 pt-5 border-t border-gray-50">
           {[
-            { label: "Total Payable",       value: inr(record.total_payable),       color: "#374151" },
+            { label: "Total Payable",       value: inr(record.net_payable),       color: "#374151" },
             { label: "Amount Paid",         value: inr(record.total_collected),     color: "#16a34a" },
             { label: "Outstanding Balance", value: inr(record.outstanding_balance), color: record.outstanding_balance > 0 ? "#dc2626" : "#16a34a" },
             { label: "Final Due Date",      value: fmtDate(record.final_due_date),  color: finalDueOverdue ? "#dc2626" : "#374151" },

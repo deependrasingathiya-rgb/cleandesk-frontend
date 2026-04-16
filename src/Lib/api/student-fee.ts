@@ -12,7 +12,8 @@ function authHeaders(): HeadersInit {
 
 export type FeeRecord = {
   id: string;
-  total_payable: number;
+  gross_fee: number;
+  net_payable: number;
   installments?: InstallmentRow[];
   discount_amount: number;
   discount_reason: string | null;

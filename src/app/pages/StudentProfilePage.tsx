@@ -1146,7 +1146,7 @@ setShowEditFeeModal,
 
         <div className="grid grid-cols-4 gap-4 pt-5 border-t border-gray-50">
           {[
-            { label: "Total Payable",        value: `₹${(Number(fr.total_payable) - Number(fr.discount_amount)).toLocaleString("en-IN")}`,        color: "#374151" },
+            { label: "Total Payable",        value: `₹${Number(fr.net_payable).toLocaleString("en-IN")}`,        color: "#374151" },
             { label: "Total Collected",      value: `₹${Number(fr.total_collected).toLocaleString("en-IN")}`,      color: "#16a34a" },
             { label: "Outstanding Balance",  value: `₹${Number(fr.outstanding_balance).toLocaleString("en-IN")}`,  color: Number(fr.outstanding_balance) > 0 ? "#dc2626" : "#16a34a" },
             { label: "Final Due Date",       value: new Date(fr.final_due_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }), color: fr.final_due_date < today && fr.fee_status !== "PAID" ? "#dc2626" : "#374151" },
@@ -1381,7 +1381,7 @@ setShowEditFeeModal,
           currentDiscount={Number(fr.discount_amount)}
           currentDiscountReason={fr.discount_reason}
           currentInstallments={fr.installments ?? []}
-          totalPayable={Number(fr.total_payable)}
+          totalPayable={Number(fr.gross_fee)}
           onClose={() => setShowEditFeeModal(false)}
           onSuccess={() => { setShowEditFeeModal(false); onRefresh(); }}
         />

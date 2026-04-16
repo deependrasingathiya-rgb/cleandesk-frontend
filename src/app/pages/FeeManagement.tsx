@@ -209,7 +209,7 @@ function BatchDrillDown({
                   {/* Total payable */}
                   <td className="px-5 py-3.5">
                     <span className="text-gray-700" style={{ fontSize: "13px", fontWeight: 600 }}>
-                      {inr(s.total_payable)}
+                      {inr(s.net_payable)}
                     </span>
                   </td>
 

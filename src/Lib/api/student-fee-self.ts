@@ -32,7 +32,8 @@ export type StudentOwnPayment = {
 
 export type StudentOwnFeeRecord = {
   id: string;
-  total_payable: number;
+  gross_fee: number;
+  net_payable: number;
   discount_amount: number;
   discount_reason: string | null;
   total_collected: number;

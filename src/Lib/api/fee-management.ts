@@ -46,7 +46,7 @@ export type BatchDrillDownStudent = {
   student_name: string;
   login_identifier: string;
   fee_status: string;
-  total_payable: number;
+  net_payable: number;
   outstanding_balance: number;
   total_collected: number;
   last_payment_date: string | null;

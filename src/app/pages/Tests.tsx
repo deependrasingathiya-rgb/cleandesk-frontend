@@ -1,6 +1,6 @@
 // src/app/pages/Tests.tsx
 
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   createTestApi,
   fetchTestsApi,
@@ -16,6 +16,7 @@ import {
   type TestStudyMaterial,
 } from "../../Lib/api/tests";
 import { fetchBatchesDetailedApi } from "../../Lib/api/class-batches";
+import { getToken } from "../../app/auth";
 import { fetchSubjectCatalogApi, addSubjectApi } from "../../Lib/api/subjects";
 import {
   Search,
@@ -1176,6 +1177,79 @@ function MarksEntryView({
 
 // ─── Test Detail View ──────────────────────────────────────────────────────────
 
+function DownloadPdfButton({ testId }: { testId: string }) {
+  const [state, setState] = React.useState<"idle" | "generating" | "error">("idle");
+  const [error, setError] = React.useState<string | null>(null);
+
+  async function handleClick() {
+    setState("generating");
+    setError(null);
+    try {
+      const token = getToken();
+      if (!token) throw new Error("Not authenticated");
+
+      const genRes = await fetch(`/api/tests/${testId}/results/pdf/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ triggerReason: "manual" }),
+      });
+      if (!genRes.ok) {
+        const body = await genRes.json().catch(() => ({}));
+        throw new Error(body.message ?? `Generate failed (${genRes.status})`);
+      }
+
+      const urlRes = await fetch(`/api/tests/${testId}/results/pdf/url`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!urlRes.ok) {
+        const body = await urlRes.json().catch(() => ({}));
+        throw new Error(body.message ?? `URL fetch failed (${urlRes.status})`);
+      }
+
+      const { presignedUrl } = await urlRes.json();
+      window.open(presignedUrl, "_blank", "noopener,noreferrer");
+      setState("idle");
+    } catch (err: any) {
+      setError(err.message ?? "Failed to download PDF.");
+      setState("error");
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        onClick={handleClick}
+        disabled={state === "generating"}
+        className="flex items-center gap-2 px-4 py-2 rounded-xl border transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        style={{
+          fontSize: "13px",
+          fontWeight: 600,
+          borderColor: state === "error" ? "#fca5a5" : "#bfdbfe",
+          color: state === "error" ? "#dc2626" : "#1d4ed8",
+          backgroundColor: state === "error" ? "#fef2f2" : "#eff6ff",
+        }}
+      >
+        {state === "generating" ? (
+          <>
+            <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+            </svg>
+            Generating…
+          </>
+        ) : (
+          <>
+            <FileText size={13} strokeWidth={2} />
+            {state === "error" ? "Retry PDF" : "Download Results PDF"}
+          </>
+        )}
+      </button>
+      {state === "error" && error && (
+        <p style={{ fontSize: "11.5px", color: "#dc2626" }}>{error}</p>
+      )}
+    </div>
+  );
+}
+
 function TestDetail({
   test,
   onBack,
@@ -1292,6 +1366,8 @@ function TestDetail({
                   <UploadCloud size={13} strokeWidth={2} />
                   Upload Material
                 </button>
+
+                <DownloadPdfButton testId={test.id} />
               </>
             )}
 

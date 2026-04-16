@@ -50,6 +50,11 @@ import {
 import { updateStudentFeeRecordApi } from "../../Lib/api/student-fee-record-update";
 import { getSession, ROLES } from "../../app/auth";
 import {
+  getUserProfileApi,
+  updateUserProfileApi,
+  type UserProfile,
+} from "../../Lib/api/profile";
+import {
   LineChart,
   Line,
   XAxis,
@@ -1403,6 +1408,249 @@ setShowEditFeeModal,
   );
 }
 
+// ─── Edit Profile Modal ────────────────────────────────────────────────────────
+
+function EditProfileModal({
+  userId,
+  profile,
+  onClose,
+  onSuccess,
+}: {
+  userId: string;
+  profile: UserProfile;
+  onClose: () => void;
+  onSuccess: (updated: UserProfile) => void;
+}) {
+  const [fullName, setFullName]               = useState(profile.full_name);
+  const [email, setEmail]                     = useState(profile.email ?? "");
+  const [mobile, setMobile]                   = useState(profile.mobile ?? "");
+  const [alternateMobile, setAlternateMobile] = useState(profile.alternate_mobile ?? "");
+  const [address, setAddress]                 = useState(profile.address ?? "");
+  const [guardianName, setGuardianName]       = useState(profile.guardian_name ?? "");
+  const [schoolName, setSchoolName]           = useState(profile.school_name ?? "");
+  const [educationBoard, setEducationBoard]   = useState(profile.education_board ?? "");
+
+  const [errors, setErrors]         = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [apiError, setApiError]     = useState<string | null>(null);
+
+  const BOARDS = ["CBSE", "ICSE", "State Board", "IB", "IGCSE", "Other"];
+
+  async function handleSubmit() {
+    const e: Record<string, string> = {};
+    if (!fullName.trim()) e.fullName = "Full name is required.";
+    if (mobile && !/^\d{10}$/.test(mobile.trim())) e.mobile = "Must be 10 digits.";
+    if (alternateMobile && !/^\d{10}$/.test(alternateMobile.trim())) e.alternateMobile = "Must be 10 digits.";
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) e.email = "Invalid email.";
+    if (Object.keys(e).length) { setErrors(e); return; }
+
+    setSubmitting(true);
+    setApiError(null);
+    try {
+      await updateUserProfileApi(userId, {
+        full_name:        fullName.trim(),
+        email:            email.trim() || undefined,
+        mobile:           mobile.trim() || undefined,
+        address:          address.trim() || undefined,
+        guardian_name:    guardianName.trim() || undefined,
+        alternate_mobile: alternateMobile.trim() || undefined,
+        school_name:      schoolName.trim() || undefined,
+        education_board:  educationBoard || undefined,
+      });
+      // Return updated profile shape to parent so UI refreshes without re-fetch
+      onSuccess({
+        ...profile,
+        full_name:        fullName.trim(),
+        email:            email.trim() || null,
+        mobile:           mobile.trim() || null,
+        address:          address.trim() || null,
+        guardian_name:    guardianName.trim() || null,
+        alternate_mobile: alternateMobile.trim() || null,
+        school_name:      schoolName.trim() || null,
+        education_board:  educationBoard || null,
+      });
+    } catch (err: any) {
+      setApiError(err.message ?? "Failed to update profile.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function field(
+    label: string,
+    value: string,
+    onChange: (v: string) => void,
+    key: string,
+    placeholder = "",
+    type = "text"
+  ) {
+    return (
+      <div>
+        <label className="block text-gray-700 mb-1.5" style={{ fontSize: "13px", fontWeight: 600 }}>
+          {label}
+        </label>
+        <input
+          type={type}
+          value={value}
+          onChange={(e) => {
+            onChange(e.target.value);
+            setErrors((er) => { const c = { ...er }; delete c[key]; return c; });
+          }}
+          placeholder={placeholder}
+          className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all"
+          style={{ fontSize: "13.5px", borderColor: errors[key] ? "#fca5a5" : undefined }}
+        />
+        {errors[key] && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors[key]}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-6"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-[580px] flex flex-col" style={{ maxHeight: "90vh" }}>
+        {/* Header */}
+        <div className="flex items-start justify-between px-7 pt-7 pb-5 border-b border-gray-100 flex-shrink-0">
+          <div>
+            <h2 className="text-gray-900" style={{ fontSize: "18px", fontWeight: 700 }}>Edit Profile</h2>
+            <p className="text-gray-400 mt-0.5" style={{ fontSize: "13px" }}>Changes are saved immediately.</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-md flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto px-7 py-6 flex-1 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            {field("Full Name *", fullName, setFullName, "fullName", "e.g. Akshaye Khanna")}
+            {field("Email", email, setEmail, "email", "e.g. akshaye@email.com", "email")}
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            {field("Mobile", mobile, setMobile, "mobile", "10-digit number")}
+            {field("Alternate Mobile", alternateMobile, setAlternateMobile, "alternateMobile", "10-digit number")}
+          </div>
+          {field("Address", address, setAddress, "address", "e.g. 12, MG Road, Mumbai")}
+
+          <div className="border-t border-gray-100 pt-4">
+            <p className="text-gray-500 mb-3" style={{ fontSize: "12px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              Student Details
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              {field("Guardian Name", guardianName, setGuardianName, "guardianName", "e.g. Ramesh Khanna")}
+              {field("School Name", schoolName, setSchoolName, "schoolName", "e.g. DPS Mumbai")}
+            </div>
+            <div className="mt-4">
+              <label className="block text-gray-700 mb-1.5" style={{ fontSize: "13px", fontWeight: 600 }}>
+                Education Board
+              </label>
+              <select
+                value={educationBoard}
+                onChange={(e) => setEducationBoard(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white"
+                style={{ fontSize: "13.5px" }}
+              >
+                <option value="">Select board</option>
+                {BOARDS.map((b) => <option key={b} value={b}>{b}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {apiError && (
+            <div className="flex items-center gap-2 px-3 py-3 rounded-xl" style={{ backgroundColor: "#fef2f2", border: "1px solid #fecaca" }}>
+              <AlertCircle size={14} style={{ color: "#dc2626" }} strokeWidth={2} />
+              <p style={{ fontSize: "12.5px", color: "#dc2626" }}>{apiError}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex gap-3 px-7 py-5 border-t border-gray-100 flex-shrink-0">
+          <button onClick={onClose} disabled={submitting}
+            className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
+            style={{ fontSize: "13.5px", fontWeight: 600 }}>Cancel</button>
+          <button onClick={handleSubmit} disabled={submitting}
+            className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}>
+            {submitting ? "Saving…" : "Save Changes"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Full Profile Panel ────────────────────────────────────────────────────────
+
+function FullProfilePanel({
+  profile,
+  onEdit,
+}: {
+  profile: UserProfile;
+  onEdit: () => void;
+}) {
+  const bc = profile.education_board
+    ? profile.education_board === "CBSE"
+      ? { color: "#2563eb", bg: "#eff6ff" }
+      : profile.education_board === "ICSE"
+      ? { color: "#7c3aed", bg: "#f5f3ff" }
+      : { color: "#d97706", bg: "#fffbeb" }
+    : null;
+
+  function Row({ label, value }: { label: string; value: string | null | undefined }) {
+    return (
+      <div className="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0">
+        <span className="text-gray-400" style={{ fontSize: "12.5px", fontWeight: 500 }}>{label}</span>
+        <span className="text-gray-700" style={{ fontSize: "13px", fontWeight: 600 }}>
+          {value || <span className="text-gray-300 font-normal">—</span>}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-5 pt-5 border-t border-gray-100">
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-gray-500" style={{ fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>
+          Full Profile
+        </p>
+        <button
+          onClick={onEdit}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:border-teal-300 hover:text-teal-700 hover:bg-teal-50 transition-all"
+          style={{ fontSize: "12px", fontWeight: 600 }}
+        >
+          <Pencil size={12} strokeWidth={2.5} />
+          Edit
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-x-10">
+        <div>
+          <Row label="Login ID"        value={profile.login_identifier} />
+          <Row label="Email"           value={profile.email} />
+          <Row label="Mobile"          value={profile.mobile} />
+          <Row label="Alt. Mobile"     value={profile.alternate_mobile} />
+          <Row label="Address"         value={profile.address} />
+        </div>
+        <div>
+          <Row label="Guardian"        value={profile.guardian_name} />
+          <Row label="School"          value={profile.school_name} />
+          <div className="flex items-center justify-between py-2.5 border-b border-gray-50">
+            <span className="text-gray-400" style={{ fontSize: "12.5px", fontWeight: 500 }}>Board</span>
+            {bc && profile.education_board
+              ? <span className="px-2 py-0.5 rounded-full" style={{ fontSize: "12px", fontWeight: 600, color: bc.color, backgroundColor: bc.bg }}>
+                  {profile.education_board}
+                </span>
+              : <span className="text-gray-300" style={{ fontSize: "13px" }}>—</span>}
+          </div>
+          <Row label="Member Since"    value={new Date(profile.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function StudentProfilePage() {
   const { studentId } = useParams<{ studentId: string }>();
   const navigate      = useNavigate();
@@ -1437,8 +1685,23 @@ const [activeTab, setActiveTab] = useState<"results" | "fee">(initialTab);
   // Cancel payment
   const [cancellingPaymentId, setCancellingPaymentId] = useState<string | null>(null);
 
+  // Full profile
+  const [fullProfile, setFullProfile]           = useState<UserProfile | null>(null);
+  const [loadingProfile, setLoadingProfile]     = useState(false);
+  const [showFullProfile, setShowFullProfile]   = useState(false);
+  const [showEditProfile, setShowEditProfile]   = useState(false);
+
   const session = getSession();
   const isAdmin = session?.payload.role_id === ROLES.ADMIN;
+
+  useEffect(() => {
+    if (!showFullProfile || !studentId || fullProfile) return;
+    setLoadingProfile(true);
+    getUserProfileApi(studentId)
+      .then(setFullProfile)
+      .catch(() => {}) // silently fail — hero card still shows basic info
+      .finally(() => setLoadingProfile(false));
+  }, [showFullProfile, studentId]);
 
   useEffect(() => {
     if (activeTab !== "fee" || !studentId) return;
@@ -1561,7 +1824,9 @@ const [activeTab, setActiveTab] = useState<"results" | "fee">(initialTab);
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 flex-wrap mb-1">
-              <h1 className="text-gray-900" style={{ fontSize: "22px", fontWeight: 800, letterSpacing: "-0.02em" }}>{studentName}</h1>
+              <h1 className="text-gray-900" style={{ fontSize: "22px", fontWeight: 800, letterSpacing: "-0.02em" }}>
+                {fullProfile?.full_name ?? studentName}
+              </h1>
               <span className="px-2.5 py-0.5 rounded-full"
                 style={{ fontSize: "11.5px", fontWeight: 600, color: "#0d9488", backgroundColor: "#f0fdfa" }}>
                 Student
@@ -1576,16 +1841,22 @@ const [activeTab, setActiveTab] = useState<"results" | "fee">(initialTab);
               )}
             </div>
             <div className="flex items-center gap-5 mt-2 flex-wrap">
-              {studentMeta?.mobile && (
+              {(fullProfile?.mobile ?? studentMeta?.mobile) && (
                 <div className="flex items-center gap-1.5 text-gray-500" style={{ fontSize: "13px" }}>
                   <Phone size={13} strokeWidth={2} className="text-gray-400" />
-                  {studentMeta.mobile}
+                  {fullProfile?.mobile ?? studentMeta?.mobile}
                 </div>
               )}
               {studentMeta?.batch && (
                 <div className="flex items-center gap-1.5 text-gray-500" style={{ fontSize: "13px" }}>
                   <Users2 size={13} strokeWidth={2} className="text-gray-400" />
                   {studentMeta.batch}
+                </div>
+              )}
+              {fullProfile?.school_name && (
+                <div className="flex items-center gap-1.5 text-gray-500" style={{ fontSize: "13px" }}>
+                  <School size={13} strokeWidth={2} className="text-gray-400" />
+                  {fullProfile.school_name}
                 </div>
               )}
               {studentMeta && (
@@ -1596,8 +1867,48 @@ const [activeTab, setActiveTab] = useState<"results" | "fee">(initialTab);
               )}
             </div>
           </div>
+          {/* View Full Profile toggle */}
+          {isAdmin && (
+            <button
+              onClick={() => setShowFullProfile((v) => !v)}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-gray-200 text-gray-500 hover:border-teal-300 hover:text-teal-700 hover:bg-teal-50 transition-all flex-shrink-0"
+              style={{ fontSize: "13px", fontWeight: 600 }}
+            >
+              {showFullProfile ? <X size={13} strokeWidth={2.5} /> : <ChevronRight size={13} strokeWidth={2.5} />}
+              {showFullProfile ? "Close" : "Full Profile"}
+            </button>
+          )}
         </div>
+
+        {/* Expanded full profile */}
+        {showFullProfile && (
+          loadingProfile
+            ? <div className="mt-5 pt-5 border-t border-gray-100 flex items-center gap-2 text-gray-400">
+                <Loader2 size={15} className="animate-spin" />
+                <span style={{ fontSize: "13px" }}>Loading profile…</span>
+              </div>
+            : fullProfile
+            ? <FullProfilePanel
+                profile={fullProfile}
+                onEdit={() => setShowEditProfile(true)}
+              />
+            : null
+        )}
       </div>
+
+      {/* ── Edit Profile Modal ── */}
+      {showEditProfile && fullProfile && (
+        <EditProfileModal
+          userId={studentId!}
+          profile={fullProfile}
+          onClose={() => setShowEditProfile(false)}
+          onSuccess={(updated) => {
+            setFullProfile(updated);
+            setStudentName(updated.full_name);
+            setShowEditProfile(false);
+          }}
+        />
+      )}
 
       {/* ── Tab bar ── */}
       <div className="flex gap-1 p-1 rounded-xl mb-6 w-fit" style={{ backgroundColor: "#f3f4f6" }}>

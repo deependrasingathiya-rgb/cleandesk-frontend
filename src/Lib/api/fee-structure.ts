@@ -92,7 +92,7 @@ export async function updateFeeStructureApi(
 
 export async function getStudentFeeRecordApi(
   studentUserId: string
-): Promise<{ id: string; total_payable: number; discount_amount: number; fee_status: string } | null> {
+): Promise<{ id: string; gross_fee: number; net_payable: number; discount_amount: number; fee_status: string } | null> {
   const res = await fetch(
     `/api/students/${encodeURIComponent(studentUserId)}/fee-record`,
     { headers: authHeaders() }

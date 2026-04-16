@@ -282,7 +282,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
           const feeRec = await getStudentFeeRecordApi(result.id);
           if (feeRec) {
             setFeeRecordId(feeRec.id);
-            setAdvanceAmount(String(feeRec.total_payable));
+            setAdvanceAmount(String(feeRec.net_payable));
             setAdvanceStep(true);
             return; // Don't show success screen yet — show advance payment first
           }

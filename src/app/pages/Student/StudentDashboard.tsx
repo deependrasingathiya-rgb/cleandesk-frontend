@@ -27,6 +27,10 @@ import {
   type StudentDashboardData,
   type TodayAttendanceStatus,
 } from "../../../Lib/api/student-dashboard";
+import {
+  fetchStudentResults,
+  type StudentResultsData,
+} from "../../../Lib/api/student-results";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -237,6 +241,7 @@ function SectionHeader({
 export function StudentDashboard() {
   const navigate = useNavigate();
   const [data, setData] = useState<StudentDashboardData | null>(null);
+  const [resultsData, setResultsData] = useState<StudentResultsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [feeRecord, setFeeRecord]   = useState<StudentOwnFeeRecord | null | undefined>(undefined);
@@ -247,9 +252,20 @@ export function StudentDashboard() {
     setLoading(true);
     setFeeLoading(true);
 
-    fetchStudentDashboard()
-      .then((d) => { if (!cancelled) { setData(d); setLoading(false); } })
-      .catch((err) => { if (!cancelled) { setError(err.message ?? "Failed to load dashboard"); setLoading(false); } });
+    Promise.all([fetchStudentDashboard(), fetchStudentResults()])
+      .then(([d, r]) => {
+        if (!cancelled) {
+          setData(d);
+          setResultsData(r);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err.message ?? "Failed to load dashboard");
+          setLoading(false);
+        }
+      });
 
     fetchOwnFeeRecordApi()
       .then((rec) => { if (!cancelled) { setFeeRecord(rec); setFeeLoading(false); } })
@@ -295,11 +311,8 @@ export function StudentDashboard() {
 
   const { profile, today_attendance, attendance_stats, recent_marks, recent_announcements } = data;
 
-  // Derived values for the performance card
-  const avgPct =
-    recent_marks.length > 0
-      ? Math.round(recent_marks.reduce((acc, m) => acc + m.percentage, 0) / recent_marks.length)
-      : null;
+  // Use overall_pct from results endpoint (same source as Marks page) to avoid discrepancy
+  const avgPct = resultsData?.overall_pct ?? null;
   const aGradeCount = recent_marks.filter((m) => m.percentage >= 80).length;
 
   return (

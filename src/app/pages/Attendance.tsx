@@ -6,6 +6,8 @@ import {
   fetchAttendanceBatchSummaryApi,
   fetchAttendanceBatchDetailApi,
   markBatchAttendanceApi,
+  generateAttendancePdfApi,
+  getAttendancePdfUrlApi,
   updateBatchAttendanceApi,
   type BatchSummaryItem,
   type StudentDetailItem,
@@ -490,6 +492,59 @@ function MarkAttendancePage({
   );
 }
 
+function AttendancePdfButton({ batchId, date }: { batchId: string; date: string }) {
+  const [state, setState] = useState<"idle" | "generating" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleClick() {
+    setState("generating");
+    setError(null);
+    try {
+      await generateAttendancePdfApi(batchId, date);
+      const url = await getAttendancePdfUrlApi(batchId, date);
+      window.open(url, "_blank", "noopener,noreferrer");
+      setState("idle");
+    } catch (err: any) {
+      setError(err.message ?? "Failed to generate PDF.");
+      setState("error");
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        onClick={handleClick}
+        disabled={state === "generating"}
+        className="flex items-center gap-2 px-4 py-2 rounded-xl border transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        style={{
+          fontSize: "13px",
+          fontWeight: 600,
+          borderColor: state === "error" ? "#fca5a5" : "#99f6e4",
+          color: state === "error" ? "#dc2626" : "#0d9488",
+          backgroundColor: state === "error" ? "#fef2f2" : "#f0fdfa",
+        }}
+      >
+        {state === "generating" ? (
+          <>
+            <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+            </svg>
+            Generating…
+          </>
+        ) : (
+          <>
+            <ClipboardList size={13} strokeWidth={2} />
+            {state === "error" ? "Retry PDF" : "Download Attendance PDF"}
+          </>
+        )}
+      </button>
+      {state === "error" && error && (
+        <p style={{ fontSize: "11.5px", color: "#dc2626" }}>{error}</p>
+      )}
+    </div>
+  );
+}
+
 // ─── Batch Attendance Summary Page ────────────────────────────────────────────
 
 function BatchSummaryPage({
@@ -589,7 +644,7 @@ function BatchSummaryPage({
                   <Pencil size={13} strokeWidth={2} />
                   Modify Attendance
                 </button>
-               
+                <AttendancePdfButton batchId={batchId} date={date} />
               </div>
             ) : null
           ) : (

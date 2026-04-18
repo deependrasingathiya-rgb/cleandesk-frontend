@@ -119,3 +119,29 @@ export async function updateBatchAttendanceApi(
     }
   }
 }
+
+export async function generateAttendancePdfApi(
+  batchId: string,
+  date: string
+): Promise<{ pdfRecordId: string; version: number }> {
+  const res = await fetch(
+    `/api/attendance/batch/${encodeURIComponent(batchId)}/date/${encodeURIComponent(date)}/pdf/generate`,
+    { method: "POST", headers: authHeaders() }
+  );
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.message ?? "Failed to generate attendance PDF");
+  return json;
+}
+
+export async function getAttendancePdfUrlApi(
+  batchId: string,
+  date: string
+): Promise<string> {
+  const res = await fetch(
+    `/api/attendance/batch/${encodeURIComponent(batchId)}/date/${encodeURIComponent(date)}/pdf/url`,
+    { headers: authHeaders() }
+  );
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.message ?? "Failed to get attendance PDF URL");
+  return json.presignedUrl;
+}

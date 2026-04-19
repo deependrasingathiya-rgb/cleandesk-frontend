@@ -995,7 +995,11 @@ const [weeklyTrend, setWeeklyTrend] = useState<WeeklyTrendDay[]>([]);
   // ── List view ──
 
   const completedBatches = batchSummaries.filter(s => s.is_marked);
-  const pendingBatches   = batchSummaries.filter(s => !s.is_marked);
+  const pendingBatches   = batchSummaries.filter(s =>
+    !s.is_marked &&
+    !todayHoliday &&
+    !holidayedBatchIds.has(s.batch_id)
+  );
 
   const totalStudents = batchSummaries.reduce((a, s) => a + s.total_students, 0);
   const totalPresent  = batchSummaries.reduce((a, s) => a + s.present_count, 0);

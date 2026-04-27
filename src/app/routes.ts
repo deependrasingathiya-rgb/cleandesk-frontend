@@ -31,6 +31,7 @@ import { MyFee } from "./pages/Student/MyFee";
 import { StudentAnnouncements } from "./pages/Student/StudentAnnouncements";
 import { Notifications } from "./pages/Notifications";
 import { Login } from "./pages/Login";
+import { PrivacyPolicy } from "./pages/PrivacyPolicy";
 import { ForgotPassword } from "./pages/ForgotPassword";
 import { ResetPassword } from "./pages/ResetPassword";
 import { clearToken, getToken, parseToken, isTokenExpired, ROLE_ROUTES } from "./auth";
@@ -78,6 +79,10 @@ export const router = createBrowserRouter([
   {
     path: "/reset-password",
     Component: ResetPassword,
+  },
+  {
+    path: "/privacy",
+    Component: PrivacyPolicy,
   },
 
   // ── Admin (role_id: 1) ───────────────────────────────────────────────────────

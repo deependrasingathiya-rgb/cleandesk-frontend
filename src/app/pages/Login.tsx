@@ -367,6 +367,9 @@ export function Login() {
             <br />
             Contact them if you've lost access.
           </p>
+          <p className="text-center mt-3" style={{ fontSize: "12px", color: "#cbd5e1" }}>
+            <a href="/privacy" style={{ color: "#0d9488" }}>Privacy Policy</a>
+          </p>
         </div>
         </div>
       </div>

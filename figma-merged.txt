@@ -183,6 +183,7 @@ or initiating processes. They communicate interactivity and should have clear, a
 
 // ===== FILE: src\app\api-url.ts =====
 
+//src/app/api-url.ts
 const RAW_API_BASE = (import.meta.env.VITE_API_URL ?? "").trim();
 
 function normalizeApiBaseUrl(value: string): string {
@@ -204,6 +205,7 @@ export function buildApiUrl(path: string): string {
 
 // ===== FILE: src\app\api.ts =====
 
+//src/app/api.ts
 import { handleUnauthorizedSession } from "./auth";
 import { buildApiUrl } from "./api-url";
 
@@ -284,8 +286,24 @@ async function withUnauthorizedHandling(
 
 export async function apiFetch(path: string, options?: RequestInit) {
   const url = buildApiUrl(path);
-  const optionsWithCredentials: RequestInit = { credentials: "include", ...options };
-  return withUnauthorizedHandling(fetch(url, optionsWithCredentials), optionsWithCredentials);
+  const { getToken } = await import("./auth");
+  const token = getToken();
+
+  const headers = new Headers(options?.headers);
+  if (token && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const optionsWithCredentials: RequestInit = {
+    credentials: "include",
+    ...options,
+    headers,
+  };
+
+  return withUnauthorizedHandling(
+    _fetch(url, optionsWithCredentials),
+    optionsWithCredentials
+  );
 }
 
 // ── Intercept ALL fetch("/api/...") calls globally ──────────────────────────
@@ -293,9 +311,18 @@ const _fetch = window.fetch.bind(window);
 window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   if (typeof input === "string" && input.startsWith("/api/")) {
     const url = buildApiUrl(input);
+    const token = localStorage.getItem("auth_token");
 
-    // Always include credentials so the HttpOnly refresh token cookie is sent
-    const initWithCredentials: RequestInit = { credentials: "include", ...init };
+    const headers = new Headers(init?.headers);
+    if (token && !headers.has("Authorization")) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+
+    const initWithCredentials: RequestInit = {
+      credentials: "include",
+      ...init,
+      headers,
+    };
 
     return withUnauthorizedHandling(_fetch(url, initWithCredentials), initWithCredentials);
   }
@@ -431,20 +458,35 @@ function redirectToLogin(): void {
  */
 export async function refreshAccessToken(): Promise<string | null> {
   try {
-    const res = await fetch(buildApiUrl("/api/refresh"), {
+    const url = buildApiUrl("/api/refresh");
+    console.log("[refreshAccessToken] calling:", url);
+
+    const res = await fetch(url, {
       method: "POST",
       credentials: "include",
     });
 
-    if (!res.ok) return null;
+    console.log("[refreshAccessToken] response status:", res.status);
+
+    if (!res.ok) {
+      const body = await res.text();
+      console.log("[refreshAccessToken] FAIL body:", body);
+      return null;
+    }
 
     const data = await res.json();
+    console.log("[refreshAccessToken] response data keys:", Object.keys(data));
+
     if (data.token) {
       saveToken(data.token);
+      console.log("[refreshAccessToken] SUCCESS: new token saved");
       return data.token;
     }
+
+    console.log("[refreshAccessToken] FAIL: no token in response", data);
     return null;
-  } catch {
+  } catch (err) {
+    console.log("[refreshAccessToken] EXCEPTION:", err);
     return null;
   }
 }
@@ -839,6 +881,7 @@ export function RequireRole({ roleId }: { roleId: number }) {
 
 // ===== FILE: src\app\components\layout\Shell.tsx =====
 
+//src/app/components/layout/Shell.tsx
 import { Outlet } from "react-router";
 import { Sidebar } from "./Sidebar";
 import { SidebarProvider, useSidebarCollapsed } from "./SidebarContext";
@@ -1296,6 +1339,7 @@ export function Sidebar() {
 
 // ===== FILE: src\app\components\layout\SidebarContext.tsx =====
 
+//src/app/components/layout/SidebarContext.tsx
 import { createContext, useContext, useState } from "react";
 
 type SidebarContextType = {
@@ -8520,12 +8564,14 @@ if (loading) {
 
 // src/app/pages/Attendance.tsx
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { fetchWeeklyAttendanceTrend, type WeeklyTrendDay } from "../../Lib/api/attendance";
 import {
   fetchAttendanceBatchSummaryApi,
   fetchAttendanceBatchDetailApi,
   markBatchAttendanceApi,
+  generateAttendancePdfApi,
+  getAttendancePdfUrlApi,
   updateBatchAttendanceApi,
   type BatchSummaryItem,
   type StudentDetailItem,
@@ -8542,7 +8588,6 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
-  ChevronDown,
   ArrowLeft,
   CalendarDays,
   Clock,
@@ -8583,6 +8628,10 @@ function getYesterdayIso(): string {
 }
 const TODAY = getTodayIso();
 const YESTERDAY = getYesterdayIso();
+
+// Mirrors ATTENDANCE_CREATE_WINDOW_DAYS = 1 from backend
+// Only today and yesterday are valid for creating new attendance
+const EARLIEST_MARKABLE_DATE = YESTERDAY;
 
 function formatDisplayDate(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
@@ -8699,16 +8748,19 @@ function CalendarPicker({
           const iso = `${yr}-${pad(mo + 1)}-${pad(day)}`;
           const isSelected = iso === value;
           const isToday = iso === TODAY;
+          const isDisabled = iso > TODAY || iso < EARLIEST_MARKABLE_DATE;
           return (
             <button
               key={iso}
-              onClick={() => { onChange(iso); onClose(); }}
+              onClick={() => { if (!isDisabled) { onChange(iso); onClose(); } }}
+              disabled={isDisabled}
               className="w-8 h-8 rounded-md mx-auto flex items-center justify-center transition-all"
               style={{
                 fontSize: "12.5px",
                 fontWeight: isSelected ? 700 : 500,
                 backgroundColor: isSelected ? "#0d9488" : isToday ? "#f0fdfa" : "transparent",
-                color: isSelected ? "white" : isToday ? "#0d9488" : "#374151",
+                color: isSelected ? "white" : isDisabled ? "#d1d5db" : isToday ? "#0d9488" : "#374151",
+                cursor: isDisabled ? "not-allowed" : "pointer",
               }}
             >
               {day}
@@ -9004,6 +9056,59 @@ function MarkAttendancePage({
   );
 }
 
+function AttendancePdfButton({ batchId, date }: { batchId: string; date: string }) {
+  const [state, setState] = useState<"idle" | "generating" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleClick() {
+    setState("generating");
+    setError(null);
+    try {
+      await generateAttendancePdfApi(batchId, date);
+      const url = await getAttendancePdfUrlApi(batchId, date);
+      window.open(url, "_blank", "noopener,noreferrer");
+      setState("idle");
+    } catch (err: any) {
+      setError(err.message ?? "Failed to generate PDF.");
+      setState("error");
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        onClick={handleClick}
+        disabled={state === "generating"}
+        className="flex items-center gap-2 px-4 py-2 rounded-xl border transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        style={{
+          fontSize: "13px",
+          fontWeight: 600,
+          borderColor: state === "error" ? "#fca5a5" : "#99f6e4",
+          color: state === "error" ? "#dc2626" : "#0d9488",
+          backgroundColor: state === "error" ? "#fef2f2" : "#f0fdfa",
+        }}
+      >
+        {state === "generating" ? (
+          <>
+            <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+            </svg>
+            Generating…
+          </>
+        ) : (
+          <>
+            <ClipboardList size={13} strokeWidth={2} />
+            {state === "error" ? "Retry PDF" : "Download Attendance PDF"}
+          </>
+        )}
+      </button>
+      {state === "error" && error && (
+        <p style={{ fontSize: "11.5px", color: "#dc2626" }}>{error}</p>
+      )}
+    </div>
+  );
+}
+
 // ─── Batch Attendance Summary Page ────────────────────────────────────────────
 
 function BatchSummaryPage({
@@ -9103,7 +9208,7 @@ function BatchSummaryPage({
                   <Pencil size={13} strokeWidth={2} />
                   Modify Attendance
                 </button>
-               
+                <AttendancePdfButton batchId={batchId} date={date} />
               </div>
             ) : null
           ) : (
@@ -9301,9 +9406,7 @@ type ViewState =
 
 export function Attendance({ canManage = true }: { canManage?: boolean }) {
   const [selectedDate, setSelectedDate] = useState(TODAY);
-  const [showCalendar, setShowCalendar] = useState(false);
   const [view, setView] = useState<ViewState>({ type: "list" });
-  const calendarRef = useRef<HTMLDivElement>(null);
 
   // Live batch summary state
   const [batchSummaries, setBatchSummaries] = useState<BatchSummaryItem[]>([]);
@@ -9355,16 +9458,7 @@ const [weeklyTrend, setWeeklyTrend] = useState<WeeklyTrendDay[]>([]);
     loadSummary(selectedDate);
   }, [selectedDate, loadSummary]);
 
-  // Close calendar on outside click
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (calendarRef.current && !calendarRef.current.contains(e.target as Node)) {
-        setShowCalendar(false);
-      }
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  // Calendar outside-click handler removed with calendar picker
 
   function getSummary(batchId: string): BatchSummaryItem | undefined {
     return batchSummaries.find(s => s.batch_id === batchId);
@@ -9465,7 +9559,11 @@ const [weeklyTrend, setWeeklyTrend] = useState<WeeklyTrendDay[]>([]);
   // ── List view ──
 
   const completedBatches = batchSummaries.filter(s => s.is_marked);
-  const pendingBatches   = batchSummaries.filter(s => !s.is_marked);
+  const pendingBatches   = batchSummaries.filter(s =>
+    !s.is_marked &&
+    !todayHoliday &&
+    !holidayedBatchIds.has(s.batch_id)
+  );
 
   const totalStudents = batchSummaries.reduce((a, s) => a + s.total_students, 0);
   const totalPresent  = batchSummaries.reduce((a, s) => a + s.present_count, 0);
@@ -9516,29 +9614,7 @@ const [weeklyTrend, setWeeklyTrend] = useState<WeeklyTrendDay[]>([]);
               {d === TODAY ? "Today" : "Yesterday"}
             </button>
           ))}
-          <div ref={calendarRef} className="relative">
-            <button
-              onClick={() => setShowCalendar(o => !o)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border shadow-sm transition-all"
-              style={{
-                fontSize: "13px", fontWeight: 500,
-                backgroundColor: selectedDate !== TODAY && selectedDate !== YESTERDAY ? "#0d9488" : "white",
-                color: selectedDate !== TODAY && selectedDate !== YESTERDAY ? "white" : "#6b7280",
-                borderColor: selectedDate !== TODAY && selectedDate !== YESTERDAY ? "#0d9488" : "#f3f4f6",
-              }}
-            >
-              <CalendarDays size={14} />
-              {selectedDate !== TODAY && selectedDate !== YESTERDAY ? formatDisplayDate(selectedDate) : "Choose Date"}
-              <ChevronDown size={13} style={{ transform: showCalendar ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
-            </button>
-            {showCalendar && (
-              <CalendarPicker
-                value={selectedDate}
-                onChange={(d) => { setSelectedDate(d); }}
-                onClose={() => setShowCalendar(false)}
-              />
-            )}
-          </div>
+          {/* Calendar removed: only today/yesterday are valid for attendance marking */}
         </div>
       </div>
 
@@ -9890,6 +9966,7 @@ const [weeklyTrend, setWeeklyTrend] = useState<WeeklyTrendDay[]>([]);
     </div>
   );
 }
+
 
 // ===== FILE: src\app\pages\Batches.tsx =====
 
@@ -12480,7 +12557,7 @@ function BatchDrillDown({
                   {/* Total payable */}
                   <td className="px-5 py-3.5">
                     <span className="text-gray-700" style={{ fontSize: "13px", fontWeight: 600 }}>
-                      {inr(s.total_payable)}
+                      {inr(s.net_payable)}
                     </span>
                   </td>
 
@@ -15803,8 +15880,8 @@ export function MyFee() {
 
   const isInstallmentBased = record.plan_type !== "LUMP_SUM";
   const finalDueOverdue    = record.final_due_date < today && record.fee_status !== "PAID";
-  const collectionPct      = record.total_payable > 0
-    ? Math.min(100, Math.round((record.total_collected / record.total_payable) * 100))
+  const collectionPct      = record.net_payable > 0
+    ? Math.min(100, Math.round((record.total_collected / record.net_payable) * 100))
     : 0;
 
   return (
@@ -15839,7 +15916,7 @@ export function MyFee() {
         {/* Stats grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-5 pt-5 border-t border-gray-50">
           {[
-            { label: "Total Payable",       value: inr(record.total_payable),       color: "#374151" },
+            { label: "Total Payable",       value: inr(record.net_payable),       color: "#374151" },
             { label: "Amount Paid",         value: inr(record.total_collected),     color: "#16a34a" },
             { label: "Outstanding Balance", value: inr(record.outstanding_balance), color: record.outstanding_balance > 0 ? "#dc2626" : "#16a34a" },
             { label: "Final Due Date",      value: fmtDate(record.final_due_date),  color: finalDueOverdue ? "#dc2626" : "#374151" },
@@ -15998,6 +16075,492 @@ export function MyFee() {
   );
 }
 
+// ===== FILE: src\app\pages\Student\StudentAnnouncements.tsx =====
+
+// src/app/pages/Student/StudentAnnouncements.tsx
+
+import { useState, useEffect } from "react";
+import {
+  TYPE_STYLE,
+  type AnnouncementType,
+} from "../../components/shared/AnnouncementModal";
+import {
+  fetchAnnouncementsApi,
+  type AnnouncementRecord,
+} from "../../../Lib/api/announcements";
+import {
+  Search,
+  Megaphone,
+  X,
+  Users2,
+  Calendar,
+  User,
+  Paperclip,
+  Download,
+} from "lucide-react";
+
+// ─── DB → display type map (mirrors Announcements.tsx exactly) ────────────────
+
+const DB_TYPE_MAP: Record<string, AnnouncementType> = {
+  GENERAL: "General",
+  HOLIDAY: "Holiday",
+  TEST: "Test",
+  RESULT: "Result",
+  EVENT: "Event",
+  TRIP: "Trip",
+  EXHIBITION: "Exhibition",
+  PTM: "Parent-Teacher Meet",
+  SCHEDULE_CHANGE: "Schedule Change",
+  EMERGENCY: "Emergency",
+};
+
+// ─── Local types ──────────────────────────────────────────────────────────────
+
+type AnnouncementAttachmentDisplay = {
+  id: string;
+  file_url: string;
+  name: string;
+};
+
+type Announcement = {
+  id: string;
+  type: AnnouncementType;
+  title: string;
+  body: string;
+  createdBy: string;
+  date: string;
+  audienceLabel: string;
+  attachments: AnnouncementAttachmentDisplay[];
+};
+
+// ─── Mapper (no batch lookup needed — student sees pre-scoped data) ───────────
+
+function mapRecord(record: AnnouncementRecord): Announcement {
+  const displayType: AnnouncementType =
+    DB_TYPE_MAP[record.announcement_type] ?? "General";
+
+  const audienceLabel = record.class_batch_id ? "Your Batch" : "All Batches";
+
+  const d = new Date(record.created_at);
+  const months = [
+    "Jan","Feb","Mar","Apr","May","Jun",
+    "Jul","Aug","Sep","Oct","Nov","Dec",
+  ];
+  const dateStr = `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+
+  const attachments: AnnouncementAttachmentDisplay[] = (
+    record.attachments ?? []
+  ).map((a) => ({
+    id: a.id,
+    file_url: a.file_url,
+    name: decodeURIComponent(a.file_url.split("/").pop() ?? a.id)
+      .replace(/\.[^.]+$/, "")
+      .replace(
+        /-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/,
+        ""
+      ),
+  }));
+
+  return {
+    id: record.id,
+    type: displayType,
+    title: record.announcement_title,
+    body: record.message,
+    createdBy: record.created_by,
+    date: dateStr,
+    audienceLabel,
+    attachments,
+  };
+}
+
+// ─── Detail Panel ─────────────────────────────────────────────────────────────
+
+function AnnouncementDetailPanel({
+  announcement,
+  onClose,
+}: {
+  announcement: Announcement;
+  onClose: () => void;
+}) {
+  const ts = TYPE_STYLE[announcement.type];
+  return (
+    <div
+      className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 h-fit sticky top-8 flex-1"
+      style={{ minWidth: "0" }}
+    >
+      {/* Panel top bar */}
+      <div className="flex items-start justify-between gap-3 mb-5">
+        <div className="flex items-center gap-3">
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center"
+            style={{ backgroundColor: ts.bg }}
+          >
+            <Megaphone size={18} style={{ color: ts.color }} />
+          </div>
+          <span
+            className="px-2.5 py-1 rounded-full"
+            style={{
+              fontSize: "11.5px",
+              fontWeight: 700,
+              color: ts.color,
+              backgroundColor: ts.bg,
+            }}
+          >
+            {announcement.type}
+          </span>
+        </div>
+        {/* Close only — no edit, no delete */}
+        <button
+          onClick={onClose}
+          className="w-8 h-8 rounded-md flex items-center justify-center border border-gray-200 text-gray-300 hover:text-gray-600 hover:bg-gray-50 transition-all"
+          title="Close"
+        >
+          <X size={15} />
+        </button>
+      </div>
+
+      {/* Title */}
+      <h2
+        className="text-gray-900 mb-3"
+        style={{ fontSize: "18px", fontWeight: 700, lineHeight: 1.4 }}
+      >
+        {announcement.title || announcement.type}
+      </h2>
+
+      {/* Body */}
+      <p
+        className="text-gray-500 leading-relaxed mb-6"
+        style={{ fontSize: "14px", lineHeight: 1.75 }}
+      >
+        {announcement.body}
+      </p>
+
+      {/* Meta */}
+      <div className="space-y-3 pt-4 border-t border-gray-100">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-gray-400">
+            <User size={12} />
+            <span style={{ fontSize: "12.5px" }}>Posted by</span>
+          </div>
+          <span
+            className="text-gray-700"
+            style={{ fontSize: "12.5px", fontWeight: 600 }}
+          >
+            {announcement.createdBy}
+          </span>
+        </div>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-gray-400">
+            <Calendar size={12} />
+            <span style={{ fontSize: "12.5px" }}>Date</span>
+          </div>
+          <span
+            className="text-gray-700"
+            style={{ fontSize: "12.5px", fontWeight: 600 }}
+          >
+            {announcement.date}
+          </span>
+        </div>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-gray-400">
+            <Users2 size={12} />
+            <span style={{ fontSize: "12.5px" }}>Audience</span>
+          </div>
+          <span
+            className="px-2 py-0.5 rounded-md"
+            style={{
+              fontSize: "11.5px",
+              fontWeight: 600,
+              backgroundColor:
+                announcement.audienceLabel === "All Batches"
+                  ? "#f0fdfa"
+                  : "#f3f4f6",
+              color:
+                announcement.audienceLabel === "All Batches"
+                  ? "#0d9488"
+                  : "#374151",
+            }}
+          >
+            {announcement.audienceLabel}
+          </span>
+        </div>
+
+        {announcement.attachments.length > 0 && (
+          <div className="pt-3 mt-1 border-t border-gray-50">
+            <div className="flex items-center gap-1.5 text-gray-400 mb-2">
+              <Paperclip size={12} />
+              <span style={{ fontSize: "12.5px" }}>
+                Attachments ({announcement.attachments.length})
+              </span>
+            </div>
+            <div className="space-y-1.5">
+              {announcement.attachments.map((att) => (
+                <a
+                  key={att.id}
+                  href={att.file_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-gray-100 hover:border-teal-200 hover:bg-teal-50 transition-all group"
+                  style={{ textDecoration: "none" }}
+                >
+                  <div
+                    className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0"
+                    style={{ backgroundColor: "#f0fdfa" }}
+                  >
+                    <Paperclip size={11} color="#0d9488" strokeWidth={2} />
+                  </div>
+                  <span
+                    className="flex-1 text-gray-700 truncate group-hover:text-teal-700 transition-colors"
+                    style={{ fontSize: "12px", fontWeight: 500 }}
+                  >
+                    {att.name}
+                  </span>
+                  <Download
+                    size={11}
+                    className="text-gray-300 group-hover:text-teal-500 flex-shrink-0"
+                  />
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+// ─── StudentAnnouncements ─────────────────────────────────────────────────────
+
+export function StudentAnnouncements() {
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<AnnouncementType | "All">("All");
+  const [selected, setSelected] = useState<Announcement | null>(null);
+
+  // ── Load on mount ──
+  useEffect(() => {
+    async function load() {
+      try {
+        setLoading(true);
+        const records = await fetchAnnouncementsApi();
+        setAnnouncements(records.map(mapRecord));
+      } catch (err: any) {
+        setLoadError(err.message ?? "Failed to load announcements");
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  const filtered = announcements.filter((a) => {
+    const matchSearch =
+      a.title.toLowerCase().includes(search.toLowerCase()) ||
+      a.type.toLowerCase().includes(search.toLowerCase()) ||
+      a.body.toLowerCase().includes(search.toLowerCase());
+    const matchType = typeFilter === "All" || a.type === typeFilter;
+    return matchSearch && matchType;
+  });
+
+  // Filter pill options — only types present in the student's actual data
+  const typeOptions: (AnnouncementType | "All")[] = [
+    "All",
+    ...Array.from(new Set(announcements.map((a) => a.type))).filter(
+      (t): t is AnnouncementType => t in TYPE_STYLE
+    ),
+  ];
+
+  // ── Loading / error states ──
+  if (loading) {
+    return (
+      <div
+        className="p-8 max-w-[1200px] mx-auto flex items-center justify-center"
+        style={{ minHeight: "300px" }}
+      >
+        <p className="text-gray-400" style={{ fontSize: "14px" }}>
+          Loading announcements…
+        </p>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div
+        className="p-8 max-w-[1200px] mx-auto flex items-center justify-center"
+        style={{ minHeight: "300px" }}
+      >
+        <p className="text-red-400" style={{ fontSize: "14px" }}>
+          {loadError}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-8 max-w-[1200px] mx-auto">
+      {/* Page header */}
+      <div className="mb-8">
+        <h1
+          className="text-gray-900"
+          style={{ fontSize: "24px", fontWeight: 700, letterSpacing: "-0.02em" }}
+        >
+          Announcements
+        </h1>
+        <p className="text-gray-400 mt-1" style={{ fontSize: "14px" }}>
+          {announcements.length} announcement
+          {announcements.length !== 1 ? "s" : ""} for you
+        </p>
+      </div>
+
+      {/* Search + Type filter */}
+      <div className="flex gap-3 mb-6 flex-wrap">
+        <div className="flex-1 relative" style={{ minWidth: "260px" }}>
+          <Search
+            size={16}
+            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
+          />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search announcements…"
+            className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-300 shadow-sm"
+            style={{ fontSize: "13.5px" }}
+          />
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          {typeOptions.map((t) => {
+            const isActive = typeFilter === t;
+            const style = t !== "All" ? TYPE_STYLE[t as AnnouncementType] : null;
+            return (
+              <button
+                key={t}
+                onClick={() => setTypeFilter(t)}
+                className="px-3.5 py-2.5 rounded-xl border shadow-sm transition-all"
+                style={{
+                  fontSize: "12.5px",
+                  fontWeight: 600,
+                  backgroundColor: isActive
+                    ? (style?.color ?? "#0d9488")
+                    : "white",
+                  color: isActive ? "white" : (style?.color ?? "#6b7280"),
+                  borderColor: isActive
+                    ? (style?.color ?? "#0d9488")
+                    : "#f3f4f6",
+                }}
+              >
+                {t}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Two-column layout */}
+      <div className="flex gap-6 items-start">
+        {/* List */}
+        <div
+          className={`space-y-3 transition-all duration-300 ${
+            selected ? "w-[52%]" : "w-full"
+          }`}
+        >
+          {filtered.length === 0 && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
+              <p className="text-gray-300" style={{ fontSize: "14px" }}>
+                No announcements found.
+              </p>
+            </div>
+          )}
+          {filtered.map((ann) => {
+            const ts = TYPE_STYLE[ann.type];
+            const isSelected = selected?.id === ann.id;
+            return (
+              <div
+                key={ann.id}
+                onClick={() => setSelected(isSelected ? null : ann)}
+                className={`bg-white rounded-2xl p-5 shadow-sm border transition-all cursor-pointer group ${
+                  isSelected
+                    ? "border-teal-300 shadow-md"
+                    : "border-gray-100 hover:border-teal-200 hover:shadow-md"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <h3
+                    className="text-gray-800 group-hover:text-teal-700 transition-colors leading-snug"
+                    style={{ fontSize: "15px", fontWeight: 650 }}
+                  >
+                    {ann.title || ann.type}
+                  </h3>
+                  <span
+                    className="flex-shrink-0 px-2.5 py-0.5 rounded-full"
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: 700,
+                      color: ts.color,
+                      backgroundColor: ts.bg,
+                    }}
+                  >
+                    {ann.type}
+                  </span>
+                </div>
+                <p
+                  className="text-gray-400 mb-4 leading-relaxed"
+                  style={{ fontSize: "13px" }}
+                >
+                  {ann.body.slice(0, 120)}
+                  {ann.body.length > 120 ? "…" : ""}
+                </p>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-6 h-6 rounded-full flex items-center justify-center"
+                      style={{ backgroundColor: "#f0fdfa" }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "10px",
+                          fontWeight: 700,
+                          color: "#0d9488",
+                        }}
+                      >
+                        {ann.createdBy.charAt(0)}
+                      </span>
+                    </div>
+                    <span className="text-gray-400" style={{ fontSize: "12.5px" }}>
+                      {ann.createdBy}
+                    </span>
+                    <span className="text-gray-200">·</span>
+                    <span className="text-gray-400" style={{ fontSize: "12.5px" }}>
+                      {ann.date}
+                    </span>
+                  </div>
+                  <span
+                    className="text-gray-400 truncate max-w-[140px]"
+                    style={{ fontSize: "12px" }}
+                  >
+                    → {ann.audienceLabel}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Detail panel — read-only, no edit/delete controls */}
+        {selected && (
+          <AnnouncementDetailPanel
+            announcement={selected}
+            onClose={() => setSelected(null)}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+
 // ===== FILE: src\app\pages\Student\StudentDashboard.tsx =====
 
 // src/app/pages/student/StudentDashboard.tsx
@@ -16029,6 +16592,10 @@ import {
   type StudentDashboardData,
   type TodayAttendanceStatus,
 } from "../../../Lib/api/student-dashboard";
+import {
+  fetchStudentResults,
+  type StudentResultsData,
+} from "../../../Lib/api/student-results";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -16239,6 +16806,7 @@ function SectionHeader({
 export function StudentDashboard() {
   const navigate = useNavigate();
   const [data, setData] = useState<StudentDashboardData | null>(null);
+  const [resultsData, setResultsData] = useState<StudentResultsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [feeRecord, setFeeRecord]   = useState<StudentOwnFeeRecord | null | undefined>(undefined);
@@ -16249,9 +16817,20 @@ export function StudentDashboard() {
     setLoading(true);
     setFeeLoading(true);
 
-    fetchStudentDashboard()
-      .then((d) => { if (!cancelled) { setData(d); setLoading(false); } })
-      .catch((err) => { if (!cancelled) { setError(err.message ?? "Failed to load dashboard"); setLoading(false); } });
+    Promise.all([fetchStudentDashboard(), fetchStudentResults()])
+      .then(([d, r]) => {
+        if (!cancelled) {
+          setData(d);
+          setResultsData(r);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err.message ?? "Failed to load dashboard");
+          setLoading(false);
+        }
+      });
 
     fetchOwnFeeRecordApi()
       .then((rec) => { if (!cancelled) { setFeeRecord(rec); setFeeLoading(false); } })
@@ -16297,11 +16876,8 @@ export function StudentDashboard() {
 
   const { profile, today_attendance, attendance_stats, recent_marks, recent_announcements } = data;
 
-  // Derived values for the performance card
-  const avgPct =
-    recent_marks.length > 0
-      ? Math.round(recent_marks.reduce((acc, m) => acc + m.percentage, 0) / recent_marks.length)
-      : null;
+  // Use overall_pct from results endpoint (same source as Marks page) to avoid discrepancy
+  const avgPct = resultsData?.overall_pct ?? null;
   const aGradeCount = recent_marks.filter((m) => m.percentage >= 80).length;
 
   return (
@@ -16550,7 +17126,7 @@ export function StudentDashboard() {
                 <div className="flex items-center gap-5 pt-4 border-t border-gray-50 flex-wrap">
                   <div>
                     <p className="text-gray-900" style={{ fontSize: "15px", fontWeight: 700 }}>
-                      ₹{Number(feeRecord.total_payable).toLocaleString("en-IN")}
+                      ₹{Number(feeRecord.net_payable).toLocaleString("en-IN")}
                     </p>
                     <p className="text-gray-400" style={{ fontSize: "11.5px" }}>Total payable</p>
                   </div>
@@ -16593,13 +17169,13 @@ export function StudentDashboard() {
                 </div>
 
                 {/* Progress bar */}
-                {feeRecord.total_payable > 0 && (
+                {feeRecord.net_payable > 0 && (
                   <div className="mt-4">
                     <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: "#f3f4f6" }}>
                       <div
                         className="h-full rounded-full transition-all"
                         style={{
-                          width: `${Math.min(100, Math.round((feeRecord.total_collected / feeRecord.total_payable) * 100))}%`,
+                          width: `${Math.min(100, Math.round((feeRecord.total_collected / feeRecord.net_payable) * 100))}%`,
                           backgroundColor: feeRecord.fee_status === "PAID" ? "#16a34a" : "#0d9488",
                         }}
                       />
@@ -18145,6 +18721,11 @@ import {
 import { updateStudentFeeRecordApi } from "../../Lib/api/student-fee-record-update";
 import { getSession, ROLES } from "../../app/auth";
 import {
+  getUserProfileApi,
+  updateUserProfileApi,
+  type UserProfile,
+} from "../../Lib/api/profile";
+import {
   LineChart,
   Line,
   XAxis,
@@ -19236,7 +19817,7 @@ setShowEditFeeModal,
 
         <div className="grid grid-cols-4 gap-4 pt-5 border-t border-gray-50">
           {[
-            { label: "Total Payable",        value: `₹${(Number(fr.total_payable) - Number(fr.discount_amount)).toLocaleString("en-IN")}`,        color: "#374151" },
+            { label: "Total Payable",        value: `₹${Number(fr.net_payable).toLocaleString("en-IN")}`,        color: "#374151" },
             { label: "Total Collected",      value: `₹${Number(fr.total_collected).toLocaleString("en-IN")}`,      color: "#16a34a" },
             { label: "Outstanding Balance",  value: `₹${Number(fr.outstanding_balance).toLocaleString("en-IN")}`,  color: Number(fr.outstanding_balance) > 0 ? "#dc2626" : "#16a34a" },
             { label: "Final Due Date",       value: new Date(fr.final_due_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }), color: fr.final_due_date < today && fr.fee_status !== "PAID" ? "#dc2626" : "#374151" },
@@ -19263,14 +19844,16 @@ setShowEditFeeModal,
 
       {/* ── Action buttons ── */}
       <div className="flex items-center gap-3 mb-5">
-        <button
-          onClick={() => setShowPaymentModal(true)}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
-          style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
-        >
-          <Plus size={15} strokeWidth={2.5} />
-          Record Payment
-        </button>
+        {fr.fee_status !== "PAID" && (
+          <button
+            onClick={() => setShowPaymentModal(true)}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
+            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+          >
+            <Plus size={15} strokeWidth={2.5} />
+            Record Payment
+          </button>
+        )}
         {isAdmin && (
           <button
             onClick={() => setShowEditFeeModal(true)}
@@ -19471,7 +20054,7 @@ setShowEditFeeModal,
           currentDiscount={Number(fr.discount_amount)}
           currentDiscountReason={fr.discount_reason}
           currentInstallments={fr.installments ?? []}
-          totalPayable={Number(fr.total_payable)}
+          totalPayable={Number(fr.gross_fee)}
           onClose={() => setShowEditFeeModal(false)}
           onSuccess={() => { setShowEditFeeModal(false); onRefresh(); }}
         />
@@ -19495,6 +20078,249 @@ setShowEditFeeModal,
         />
       )}
     </>
+  );
+}
+
+// ─── Edit Profile Modal ────────────────────────────────────────────────────────
+
+function EditProfileModal({
+  userId,
+  profile,
+  onClose,
+  onSuccess,
+}: {
+  userId: string;
+  profile: UserProfile;
+  onClose: () => void;
+  onSuccess: (updated: UserProfile) => void;
+}) {
+  const [fullName, setFullName]               = useState(profile.full_name);
+  const [email, setEmail]                     = useState(profile.email ?? "");
+  const [mobile, setMobile]                   = useState(profile.mobile ?? "");
+  const [alternateMobile, setAlternateMobile] = useState(profile.alternate_mobile ?? "");
+  const [address, setAddress]                 = useState(profile.address ?? "");
+  const [guardianName, setGuardianName]       = useState(profile.guardian_name ?? "");
+  const [schoolName, setSchoolName]           = useState(profile.school_name ?? "");
+  const [educationBoard, setEducationBoard]   = useState(profile.education_board ?? "");
+
+  const [errors, setErrors]         = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [apiError, setApiError]     = useState<string | null>(null);
+
+  const BOARDS = ["CBSE", "ICSE", "State Board", "IB", "IGCSE", "Other"];
+
+  async function handleSubmit() {
+    const e: Record<string, string> = {};
+    if (!fullName.trim()) e.fullName = "Full name is required.";
+    if (mobile && !/^\d{10}$/.test(mobile.trim())) e.mobile = "Must be 10 digits.";
+    if (alternateMobile && !/^\d{10}$/.test(alternateMobile.trim())) e.alternateMobile = "Must be 10 digits.";
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) e.email = "Invalid email.";
+    if (Object.keys(e).length) { setErrors(e); return; }
+
+    setSubmitting(true);
+    setApiError(null);
+    try {
+      await updateUserProfileApi(userId, {
+        full_name:        fullName.trim(),
+        email:            email.trim() || undefined,
+        mobile:           mobile.trim() || undefined,
+        address:          address.trim() || undefined,
+        guardian_name:    guardianName.trim() || undefined,
+        alternate_mobile: alternateMobile.trim() || undefined,
+        school_name:      schoolName.trim() || undefined,
+        education_board:  educationBoard || undefined,
+      });
+      // Return updated profile shape to parent so UI refreshes without re-fetch
+      onSuccess({
+        ...profile,
+        full_name:        fullName.trim(),
+        email:            email.trim() || null,
+        mobile:           mobile.trim() || null,
+        address:          address.trim() || null,
+        guardian_name:    guardianName.trim() || null,
+        alternate_mobile: alternateMobile.trim() || null,
+        school_name:      schoolName.trim() || null,
+        education_board:  educationBoard || null,
+      });
+    } catch (err: any) {
+      setApiError(err.message ?? "Failed to update profile.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function field(
+    label: string,
+    value: string,
+    onChange: (v: string) => void,
+    key: string,
+    placeholder = "",
+    type = "text"
+  ) {
+    return (
+      <div>
+        <label className="block text-gray-700 mb-1.5" style={{ fontSize: "13px", fontWeight: 600 }}>
+          {label}
+        </label>
+        <input
+          type={type}
+          value={value}
+          onChange={(e) => {
+            onChange(e.target.value);
+            setErrors((er) => { const c = { ...er }; delete c[key]; return c; });
+          }}
+          placeholder={placeholder}
+          className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all"
+          style={{ fontSize: "13.5px", borderColor: errors[key] ? "#fca5a5" : undefined }}
+        />
+        {errors[key] && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors[key]}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-6"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-[580px] flex flex-col" style={{ maxHeight: "90vh" }}>
+        {/* Header */}
+        <div className="flex items-start justify-between px-7 pt-7 pb-5 border-b border-gray-100 flex-shrink-0">
+          <div>
+            <h2 className="text-gray-900" style={{ fontSize: "18px", fontWeight: 700 }}>Edit Profile</h2>
+            <p className="text-gray-400 mt-0.5" style={{ fontSize: "13px" }}>Changes are saved immediately.</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-md flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto px-7 py-6 flex-1 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            {field("Full Name *", fullName, setFullName, "fullName", "e.g. Akshaye Khanna")}
+            {field("Email", email, setEmail, "email", "e.g. akshaye@email.com", "email")}
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            {field("Mobile", mobile, setMobile, "mobile", "10-digit number")}
+            {field("Alternate Mobile", alternateMobile, setAlternateMobile, "alternateMobile", "10-digit number")}
+          </div>
+          {field("Address", address, setAddress, "address", "e.g. 12, MG Road, Mumbai")}
+
+          <div className="border-t border-gray-100 pt-4">
+            <p className="text-gray-500 mb-3" style={{ fontSize: "12px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              Student Details
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              {field("Guardian Name", guardianName, setGuardianName, "guardianName", "e.g. Ramesh Khanna")}
+              {field("School Name", schoolName, setSchoolName, "schoolName", "e.g. DPS Mumbai")}
+            </div>
+            <div className="mt-4">
+              <label className="block text-gray-700 mb-1.5" style={{ fontSize: "13px", fontWeight: 600 }}>
+                Education Board
+              </label>
+              <select
+                value={educationBoard}
+                onChange={(e) => setEducationBoard(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white"
+                style={{ fontSize: "13.5px" }}
+              >
+                <option value="">Select board</option>
+                {BOARDS.map((b) => <option key={b} value={b}>{b}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {apiError && (
+            <div className="flex items-center gap-2 px-3 py-3 rounded-xl" style={{ backgroundColor: "#fef2f2", border: "1px solid #fecaca" }}>
+              <AlertCircle size={14} style={{ color: "#dc2626" }} strokeWidth={2} />
+              <p style={{ fontSize: "12.5px", color: "#dc2626" }}>{apiError}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex gap-3 px-7 py-5 border-t border-gray-100 flex-shrink-0">
+          <button onClick={onClose} disabled={submitting}
+            className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
+            style={{ fontSize: "13.5px", fontWeight: 600 }}>Cancel</button>
+          <button onClick={handleSubmit} disabled={submitting}
+            className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}>
+            {submitting ? "Saving…" : "Save Changes"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Full Profile Panel ────────────────────────────────────────────────────────
+
+function FullProfilePanel({
+  profile,
+  onEdit,
+}: {
+  profile: UserProfile;
+  onEdit: () => void;
+}) {
+  const bc = profile.education_board
+    ? profile.education_board === "CBSE"
+      ? { color: "#2563eb", bg: "#eff6ff" }
+      : profile.education_board === "ICSE"
+      ? { color: "#7c3aed", bg: "#f5f3ff" }
+      : { color: "#d97706", bg: "#fffbeb" }
+    : null;
+
+  function Row({ label, value }: { label: string; value: string | null | undefined }) {
+    return (
+      <div className="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0">
+        <span className="text-gray-400" style={{ fontSize: "12.5px", fontWeight: 500 }}>{label}</span>
+        <span className="text-gray-700" style={{ fontSize: "13px", fontWeight: 600 }}>
+          {value || <span className="text-gray-300 font-normal">—</span>}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-5 pt-5 border-t border-gray-100">
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-gray-500" style={{ fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>
+          Full Profile
+        </p>
+        <button
+          onClick={onEdit}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:border-teal-300 hover:text-teal-700 hover:bg-teal-50 transition-all"
+          style={{ fontSize: "12px", fontWeight: 600 }}
+        >
+          <Pencil size={12} strokeWidth={2.5} />
+          Edit
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-x-10">
+        <div>
+          <Row label="Login ID"        value={profile.login_identifier} />
+          <Row label="Email"           value={profile.email} />
+          <Row label="Mobile"          value={profile.mobile} />
+          <Row label="Alt. Mobile"     value={profile.alternate_mobile} />
+          <Row label="Address"         value={profile.address} />
+        </div>
+        <div>
+          <Row label="Guardian"        value={profile.guardian_name} />
+          <Row label="School"          value={profile.school_name} />
+          <div className="flex items-center justify-between py-2.5 border-b border-gray-50">
+            <span className="text-gray-400" style={{ fontSize: "12.5px", fontWeight: 500 }}>Board</span>
+            {bc && profile.education_board
+              ? <span className="px-2 py-0.5 rounded-full" style={{ fontSize: "12px", fontWeight: 600, color: bc.color, backgroundColor: bc.bg }}>
+                  {profile.education_board}
+                </span>
+              : <span className="text-gray-300" style={{ fontSize: "13px" }}>—</span>}
+          </div>
+          <Row label="Member Since"    value={new Date(profile.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })} />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -19532,8 +20358,23 @@ const [activeTab, setActiveTab] = useState<"results" | "fee">(initialTab);
   // Cancel payment
   const [cancellingPaymentId, setCancellingPaymentId] = useState<string | null>(null);
 
+  // Full profile
+  const [fullProfile, setFullProfile]           = useState<UserProfile | null>(null);
+  const [loadingProfile, setLoadingProfile]     = useState(false);
+  const [showFullProfile, setShowFullProfile]   = useState(false);
+  const [showEditProfile, setShowEditProfile]   = useState(false);
+
   const session = getSession();
   const isAdmin = session?.payload.role_id === ROLES.ADMIN;
+
+  useEffect(() => {
+    if (!showFullProfile || !studentId || fullProfile) return;
+    setLoadingProfile(true);
+    getUserProfileApi(studentId)
+      .then(setFullProfile)
+      .catch(() => {}) // silently fail — hero card still shows basic info
+      .finally(() => setLoadingProfile(false));
+  }, [showFullProfile, studentId]);
 
   useEffect(() => {
     if (activeTab !== "fee" || !studentId) return;
@@ -19656,7 +20497,9 @@ const [activeTab, setActiveTab] = useState<"results" | "fee">(initialTab);
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 flex-wrap mb-1">
-              <h1 className="text-gray-900" style={{ fontSize: "22px", fontWeight: 800, letterSpacing: "-0.02em" }}>{studentName}</h1>
+              <h1 className="text-gray-900" style={{ fontSize: "22px", fontWeight: 800, letterSpacing: "-0.02em" }}>
+                {fullProfile?.full_name ?? studentName}
+              </h1>
               <span className="px-2.5 py-0.5 rounded-full"
                 style={{ fontSize: "11.5px", fontWeight: 600, color: "#0d9488", backgroundColor: "#f0fdfa" }}>
                 Student
@@ -19671,16 +20514,22 @@ const [activeTab, setActiveTab] = useState<"results" | "fee">(initialTab);
               )}
             </div>
             <div className="flex items-center gap-5 mt-2 flex-wrap">
-              {studentMeta?.mobile && (
+              {(fullProfile?.mobile ?? studentMeta?.mobile) && (
                 <div className="flex items-center gap-1.5 text-gray-500" style={{ fontSize: "13px" }}>
                   <Phone size={13} strokeWidth={2} className="text-gray-400" />
-                  {studentMeta.mobile}
+                  {fullProfile?.mobile ?? studentMeta?.mobile}
                 </div>
               )}
               {studentMeta?.batch && (
                 <div className="flex items-center gap-1.5 text-gray-500" style={{ fontSize: "13px" }}>
                   <Users2 size={13} strokeWidth={2} className="text-gray-400" />
                   {studentMeta.batch}
+                </div>
+              )}
+              {fullProfile?.school_name && (
+                <div className="flex items-center gap-1.5 text-gray-500" style={{ fontSize: "13px" }}>
+                  <School size={13} strokeWidth={2} className="text-gray-400" />
+                  {fullProfile.school_name}
                 </div>
               )}
               {studentMeta && (
@@ -19691,8 +20540,48 @@ const [activeTab, setActiveTab] = useState<"results" | "fee">(initialTab);
               )}
             </div>
           </div>
+          {/* View Full Profile toggle */}
+          {isAdmin && (
+            <button
+              onClick={() => setShowFullProfile((v) => !v)}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-gray-200 text-gray-500 hover:border-teal-300 hover:text-teal-700 hover:bg-teal-50 transition-all flex-shrink-0"
+              style={{ fontSize: "13px", fontWeight: 600 }}
+            >
+              {showFullProfile ? <X size={13} strokeWidth={2.5} /> : <ChevronRight size={13} strokeWidth={2.5} />}
+              {showFullProfile ? "Close" : "Full Profile"}
+            </button>
+          )}
         </div>
+
+        {/* Expanded full profile */}
+        {showFullProfile && (
+          loadingProfile
+            ? <div className="mt-5 pt-5 border-t border-gray-100 flex items-center gap-2 text-gray-400">
+                <Loader2 size={15} className="animate-spin" />
+                <span style={{ fontSize: "13px" }}>Loading profile…</span>
+              </div>
+            : fullProfile
+            ? <FullProfilePanel
+                profile={fullProfile}
+                onEdit={() => setShowEditProfile(true)}
+              />
+            : null
+        )}
       </div>
+
+      {/* ── Edit Profile Modal ── */}
+      {showEditProfile && fullProfile && (
+        <EditProfileModal
+          userId={studentId!}
+          profile={fullProfile}
+          onClose={() => setShowEditProfile(false)}
+          onSuccess={(updated) => {
+            setFullProfile(updated);
+            setStudentName(updated.full_name);
+            setShowEditProfile(false);
+          }}
+        />
+      )}
 
       {/* ── Tab bar ── */}
       <div className="flex gap-1 p-1 rounded-xl mb-6 w-fit" style={{ backgroundColor: "#f3f4f6" }}>
@@ -20035,7 +20924,7 @@ type EducationBoard = "CBSE" | "ICSE" | "Maharashtra State Board";
 type Student = {
   id: string;
   name: string;
-  fatherName: string;
+  guardianName: string;
   mobile: string;
   alternateMobile: string;
   batch: string;
@@ -20050,7 +20939,7 @@ function mapRowToStudent(row: StudentRow): Student {
   return {
     id: row.id,
     name: row.name ?? "—",
-    fatherName: "",
+    guardianName: "",
     mobile: row.mobile ?? "",
     alternateMobile: "",
     batch: row.batch ?? "",
@@ -20071,21 +20960,23 @@ const BOARD_OPTIONS: EducationBoard[] = ["CBSE", "ICSE", "Maharashtra State Boar
 
 type EnrollForm = {
   name: string;
-  fatherName: string;
+  guardianName: string;
   batch: string;
   academicYearId: string;
   school: string;
   mobile: string;
   alternateMobile: string;
+  email: string;
+  address: string;
   board: EducationBoard | "";
   discountAmount: string;
   discountReason: string;
 };
 
 const emptyForm: EnrollForm = {
-  name: "", fatherName: "", batch: "", academicYearId: "",
-  school: "", mobile: "", alternateMobile: "", board: "",
-  discountAmount: "", discountReason: "",
+  name: "", guardianName: "", batch: "", academicYearId: "",
+  school: "", mobile: "", alternateMobile: "", email: "", address: "",
+  board: "", discountAmount: "", discountReason: "",
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -20219,8 +21110,8 @@ function EnrollStudentForm({ onBack, onSubmit }: {
     else if (!/^\d{10}$/.test(form.mobile)) e.mobile = "Enter a valid 10-digit number.";
     if (!form.school.trim()) e.school = "School name is required.";
     if (!form.board) e.board = "Education board is required.";
-    if (form.alternateMobile && !/^\d{10}$/.test(form.alternateMobile))
-      e.alternateMobile = "Enter a valid 10-digit number.";
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
+      e.email = "Enter a valid email address.";
     if (!form.academicYearId) e.academicYearId = "Academic year is required.";
     if (!form.batch) e.batch = "Batch selection is required.";
 
@@ -20244,9 +21135,11 @@ function EnrollStudentForm({ onBack, onSubmit }: {
       const discountNum = parseFloat(form.discountAmount) || 0;
       const result = await enrollStudentApi({
         full_name: form.name.trim(),
-        father_name: form.fatherName.trim() || undefined,
+        guardian_name: form.guardianName.trim() || undefined,
         mobile: form.mobile.trim(),
         alternate_mobile: form.alternateMobile.trim() || undefined,
+        email: form.email.trim() || undefined,
+        address: form.address.trim() || undefined,
         school_name: form.school.trim(),
         education_board: form.board,
         academic_year_id: form.academicYearId,
@@ -20265,7 +21158,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
           const feeRec = await getStudentFeeRecordApi(result.id);
           if (feeRec) {
             setFeeRecordId(feeRec.id);
-            setAdvanceAmount(String(feeRec.total_payable));
+            setAdvanceAmount(String(feeRec.net_payable));
             setAdvanceStep(true);
             return; // Don't show success screen yet — show advance payment first
           }
@@ -20537,8 +21430,8 @@ function EnrollStudentForm({ onBack, onSubmit }: {
             {errors.name && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.name}</p>}
           </div>
           <div>
-            <FieldLabel>Father's Name</FieldLabel>
-            <TextInput value={form.fatherName} onChange={set("fatherName")} placeholder="e.g. Rajesh Patel" />
+            <FieldLabel>Parent / Guardian's Name</FieldLabel>
+            <TextInput value={form.guardianName} onChange={set("guardianName")} placeholder="e.g. Rajesh Patel" />
           </div>
         </div>
 
@@ -20552,6 +21445,18 @@ function EnrollStudentForm({ onBack, onSubmit }: {
             <FieldLabel>Alternate Mobile Number</FieldLabel>
             <TextInput value={form.alternateMobile} onChange={set("alternateMobile")} placeholder="Optional" type="tel" />
             {errors.alternateMobile && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.alternateMobile}</p>}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-5 mb-6">
+          <div>
+            <FieldLabel>Email Address</FieldLabel>
+            <TextInput value={form.email} onChange={set("email")} placeholder="e.g. sneha@example.com" type="email" />
+            {errors.email && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.email}</p>}
+          </div>
+          <div>
+            <FieldLabel>Address</FieldLabel>
+            <TextInput value={form.address} onChange={set("address")} placeholder="e.g. 12, MG Road, Mumbai" />
           </div>
         </div>
 
@@ -20943,7 +21848,7 @@ function StudentProfile({ student, onBack, onDeactivate }: {
           {[
             { icon: BookOpen, label: "Education Board", value: student.board,
               badge: true, color: bc.color, bg: bc.bg },
-            { icon: CalendarDays, label: "Father's Name", value: student.fatherName || "—" },
+            { icon: CalendarDays, label: "Parent / Guardian", value: student.guardianName || "—" },
           ].map(({ icon: Icon, label, value, badge, color, bg }: any) => (
             <div key={label}>
               <div className="flex items-center gap-1.5 mb-1">
@@ -25309,7 +26214,7 @@ export function Teachers() {
 
 // src/app/pages/Tests.tsx
 
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   createTestApi,
   fetchTestsApi,
@@ -25325,6 +26230,7 @@ import {
   type TestStudyMaterial,
 } from "../../Lib/api/tests";
 import { fetchBatchesDetailedApi } from "../../Lib/api/class-batches";
+import { getToken } from "../../app/auth";
 import { fetchSubjectCatalogApi, addSubjectApi } from "../../Lib/api/subjects";
 import {
   Search,
@@ -26485,6 +27391,79 @@ function MarksEntryView({
 
 // ─── Test Detail View ──────────────────────────────────────────────────────────
 
+function DownloadPdfButton({ testId }: { testId: string }) {
+  const [state, setState] = React.useState<"idle" | "generating" | "error">("idle");
+  const [error, setError] = React.useState<string | null>(null);
+
+  async function handleClick() {
+    setState("generating");
+    setError(null);
+    try {
+      const token = getToken();
+      if (!token) throw new Error("Not authenticated");
+
+      const genRes = await fetch(`/api/tests/${testId}/results/pdf/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ triggerReason: "manual" }),
+      });
+      if (!genRes.ok) {
+        const body = await genRes.json().catch(() => ({}));
+        throw new Error(body.message ?? `Generate failed (${genRes.status})`);
+      }
+
+      const urlRes = await fetch(`/api/tests/${testId}/results/pdf/url`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!urlRes.ok) {
+        const body = await urlRes.json().catch(() => ({}));
+        throw new Error(body.message ?? `URL fetch failed (${urlRes.status})`);
+      }
+
+      const { presignedUrl } = await urlRes.json();
+      window.open(presignedUrl, "_blank", "noopener,noreferrer");
+      setState("idle");
+    } catch (err: any) {
+      setError(err.message ?? "Failed to download PDF.");
+      setState("error");
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        onClick={handleClick}
+        disabled={state === "generating"}
+        className="flex items-center gap-2 px-4 py-2 rounded-xl border transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        style={{
+          fontSize: "13px",
+          fontWeight: 600,
+          borderColor: state === "error" ? "#fca5a5" : "#bfdbfe",
+          color: state === "error" ? "#dc2626" : "#1d4ed8",
+          backgroundColor: state === "error" ? "#fef2f2" : "#eff6ff",
+        }}
+      >
+        {state === "generating" ? (
+          <>
+            <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+            </svg>
+            Generating…
+          </>
+        ) : (
+          <>
+            <FileText size={13} strokeWidth={2} />
+            {state === "error" ? "Retry PDF" : "Download Results PDF"}
+          </>
+        )}
+      </button>
+      {state === "error" && error && (
+        <p style={{ fontSize: "11.5px", color: "#dc2626" }}>{error}</p>
+      )}
+    </div>
+  );
+}
+
 function TestDetail({
   test,
   onBack,
@@ -26601,6 +27580,8 @@ function TestDetail({
                   <UploadCloud size={13} strokeWidth={2} />
                   Upload Material
                 </button>
+
+                <DownloadPdfButton testId={test.id} />
               </>
             )}
 
@@ -28208,7 +29189,7 @@ export function Users() {
 
 // ===== FILE: src\app\routes.ts =====
 
-// src/app/routes.ts
+// src/app/routes.ts(frontend)
 
 import { createElement } from "react";
 import { MyBatches } from "./pages/Teacher/MyBatches";
@@ -28238,6 +29219,7 @@ import { ManagementDashboard } from "./pages/Management/ManagementDashboard";
 import { StudentDashboard } from "./pages/Student/StudentDashboard";
 import { StudentMarks } from "./pages/Student/StudentMarks";
 import { MyFee } from "./pages/Student/MyFee";
+import { StudentAnnouncements } from "./pages/Student/StudentAnnouncements";
 import { Notifications } from "./pages/Notifications";
 import { Login } from "./pages/Login";
 import { ForgotPassword } from "./pages/ForgotPassword";
@@ -28272,9 +29254,7 @@ function ManagementPeopleRoute() {
 function StudentStudyMaterialsRoute() {
   return createElement(StudyMaterials, { canManage: false });
 }
-function StudentAnnouncementsRoute() {
-  return createElement(Announcements, { canManage: false });
-}
+
 
 export const router = createBrowserRouter([
   // ── Public ──────────────────────────────────────────────────────────────────
@@ -28382,7 +29362,7 @@ element: createElement(ErrorBoundary, { section: "My Attendance", children: crea
 element: createElement(ErrorBoundary, { section: "My Results", children: createElement(StudentMarks) }),
       },
       { path: "study-materials", Component: StudentStudyMaterialsRoute },
-      { path: "announcements", Component: StudentAnnouncementsRoute },
+      { path: "announcements", Component: StudentAnnouncements },
       { path: "fee", Component: MyFee },
       { path: "notifications", Component: Notifications },
       { path: "profile", Component: Profile },
@@ -28873,6 +29853,32 @@ export async function updateBatchAttendanceApi(
   }
 }
 
+export async function generateAttendancePdfApi(
+  batchId: string,
+  date: string
+): Promise<{ pdfRecordId: string; version: number }> {
+  const res = await fetch(
+    `/api/attendance/batch/${encodeURIComponent(batchId)}/date/${encodeURIComponent(date)}/pdf/generate`,
+    { method: "POST", headers: authHeaders() }
+  );
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.message ?? "Failed to generate attendance PDF");
+  return json;
+}
+
+export async function getAttendancePdfUrlApi(
+  batchId: string,
+  date: string
+): Promise<string> {
+  const res = await fetch(
+    `/api/attendance/batch/${encodeURIComponent(batchId)}/date/${encodeURIComponent(date)}/pdf/url`,
+    { headers: authHeaders() }
+  );
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.message ?? "Failed to get attendance PDF URL");
+  return json.presignedUrl;
+}
+
 // ===== FILE: src\Lib\api\class-batches.ts =====
 
 // src/Lib/api/class-batches.ts
@@ -29165,7 +30171,7 @@ export type BatchDrillDownStudent = {
   student_name: string;
   login_identifier: string;
   fee_status: string;
-  total_payable: number;
+  net_payable: number;
   outstanding_balance: number;
   total_collected: number;
   last_payment_date: string | null;
@@ -29283,7 +30289,7 @@ export async function updateFeeStructureApi(
 
 export async function getStudentFeeRecordApi(
   studentUserId: string
-): Promise<{ id: string; total_payable: number; discount_amount: number; fee_status: string } | null> {
+): Promise<{ id: string; gross_fee: number; net_payable: number; discount_amount: number; fee_status: string } | null> {
   const res = await fetch(
     `/api/students/${encodeURIComponent(studentUserId)}/fee-record`,
     { headers: authHeaders() }
@@ -29537,6 +30543,68 @@ export async function fetchMyProfile(): Promise<MyProfile> {
   return data.profile as MyProfile;
 }
 
+// ─── Admin: fetch/update any user's profile ────────────────────────────────────
+
+export type UserProfile = {
+  full_name: string;
+  guardian_name: string | null;
+  mobile: string | null;
+  alternate_mobile: string | null;
+  school_name: string | null;
+  education_board: string | null;
+  email: string | null;
+  address: string | null;
+  created_at: string;
+  role_id: number;
+  role_name: string | null;
+  login_identifier: string;
+  is_active: boolean;
+};
+
+export type UpdateUserProfilePayload = {
+  full_name?: string;
+  email?: string;
+  mobile?: string;
+  address?: string;
+  guardian_name?: string;
+  alternate_mobile?: string;
+  school_name?: string;
+  education_board?: string;
+};
+
+export async function getUserProfileApi(userId: string): Promise<UserProfile> {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+
+  const res = await fetch(`/api/users/${userId}/profile`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Failed to fetch user profile");
+  return data.profile as UserProfile;
+}
+
+export async function updateUserProfileApi(
+  userId: string,
+  payload: UpdateUserProfilePayload
+): Promise<void> {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+
+  const res = await fetch(`/api/users/${userId}/profile`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Failed to update user profile");
+}
+
 // ===== FILE: src\Lib\api\student-attendance.ts =====
 
 // src/Lib/api/student-attendance.ts
@@ -29744,7 +30812,8 @@ export type StudentOwnPayment = {
 
 export type StudentOwnFeeRecord = {
   id: string;
-  total_payable: number;
+  gross_fee: number;
+  net_payable: number;
   discount_amount: number;
   discount_reason: string | null;
   total_collected: number;
@@ -29786,7 +30855,8 @@ function authHeaders(): HeadersInit {
 
 export type FeeRecord = {
   id: string;
-  total_payable: number;
+  gross_fee: number;
+  net_payable: number;
   installments?: InstallmentRow[];
   discount_amount: number;
   discount_reason: string | null;
@@ -30000,13 +31070,17 @@ import { ROLES } from "../../app/auth";
 
 export type EnrollStudentPayload = {
   full_name: string;
-  father_name?: string;
+  guardian_name?: string;
   mobile: string;
   alternate_mobile?: string;
   school_name: string;
   education_board: string;
   academic_year_id: string;
   class_batch_id?: string;
+  email?: string;
+  address?: string;
+  discount_amount?: number;
+  discount_reason?: string;
 };
 
 export type EnrolledStudent = {

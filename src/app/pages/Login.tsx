@@ -160,13 +160,18 @@ function LeftPanel() {
           admins, teachers, and students.
         </p>
       </div>
-      <div className="flex items-center gap-2">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="rounded-full" style={{
-            width: i === 1 ? "24px" : "8px", height: "8px",
-            backgroundColor: i === 1 ? "#0d9488" : "#99f6e4",
-          }} />
-        ))}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="rounded-full" style={{
+              width: i === 1 ? "24px" : "8px", height: "8px",
+              backgroundColor: i === 1 ? "#0d9488" : "#99f6e4",
+            }} />
+          ))}
+        </div>
+        <a href="/privacy" style={{ fontSize: "12px", color: "#0d9488" }}>
+          Privacy Policy
+        </a>
       </div>
     </div>
   );
@@ -610,6 +615,14 @@ export function Login() {
             />
           )}
         </div>
+      </div>
+
+      {/* Privacy Policy link */}
+      <div className="flex lg:hidden justify-center py-2"
+        style={{ backgroundColor: "#f0fdfa", borderTop: "1px solid #ccfbf1" }}>
+        <a href="/privacy" style={{ fontSize: "12px", color: "#0d9488" }}>
+          Privacy Policy
+        </a>
       </div>
 
       <BottomMobileDots />

@@ -502,138 +502,120 @@ function ReceiptModal({
   receipt: ReceiptData;
   onClose: () => void;
 }) {
-  const printId = "cleandesk-receipt-printable";
+  function buildReceiptHtml(): string {
+    const formattedDate = new Date(receipt.date).toLocaleDateString("en-IN", {
+      day: "numeric", month: "long", year: "numeric",
+    });
+    const formattedAmount = `₹${Number(receipt.amount).toLocaleString("en-IN")}`;
+    const formattedMode = receipt.paymentMode.replace(/_/g, " ");
 
-  function handlePrint() {
-    const content = document.getElementById(printId);
-    if (!content) return;
-    const printWindow = window.open("", "_blank", "width=700,height=600");
-    if (!printWindow) return;
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Receipt ${receipt.receiptNumber}</title>
-          <style>
-            * { box-sizing: border-box; margin: 0; padding: 0; }
-            body { font-family: 'Segoe UI', Arial, sans-serif; background: #fff; color: #111; }
-            .receipt { max-width: 480px; margin: 40px auto; padding: 36px; border: 1px solid #e5e7eb; border-radius: 12px; }
-            .header { text-align: center; margin-bottom: 28px; border-bottom: 2px solid #0d9488; padding-bottom: 20px; }
-            .institute { font-size: 20px; font-weight: 800; color: #0d9488; letter-spacing: -0.02em; }
-            .receipt-label { font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.1em; margin-top: 6px; }
-            .receipt-number { font-size: 15px; font-weight: 700; color: #374151; margin-top: 4px; font-family: monospace; }
-            .amount-block { text-align: center; margin: 24px 0; padding: 20px; background: #f0fdfa; border-radius: 10px; border: 1px solid #ccfbf1; }
-            .amount-label { font-size: 11px; font-weight: 600; color: #0d9488; text-transform: uppercase; letter-spacing: 0.08em; }
-            .amount-value { font-size: 36px; font-weight: 800; color: #0d9488; margin-top: 4px; }
-            .rows { margin-top: 24px; }
-            .row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f3f4f6; }
-            .row:last-child { border-bottom: none; }
-            .row-label { font-size: 12px; color: #6b7280; font-weight: 500; }
-            .row-value { font-size: 13px; color: #111827; font-weight: 600; text-align: right; max-width: 60%; }
-            .footer { margin-top: 28px; text-align: center; border-top: 1px dashed #e5e7eb; padding-top: 16px; }
-            .footer p { font-size: 11px; color: #9ca3af; }
-            .mode-badge { display: inline-block; padding: 2px 10px; border-radius: 20px; background: #eff6ff; color: #2563eb; font-size: 12px; font-weight: 600; }
-            @media print {
-              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-              .receipt { border: none; margin: 0; padding: 20px; }
-            }
-          </style>
-        </head>
-        <body>
-          ${content.innerHTML}
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => { printWindow.print(); }, 300);
+    const rows: { label: string; value: string }[] = [
+      { label: "Billed To",      value: receipt.studentName },
+      { label: "Login ID",       value: receipt.loginIdentifier },
+      { label: "Batch",          value: receipt.batchName },
+      { label: "Payment Date",   value: formattedDate },
+      { label: "Payment Mode",   value: formattedMode },
+      ...(receipt.paymentReference ? [{ label: "Reference / UTR", value: receipt.paymentReference }] : []),
+      { label: "Collected By",   value: receipt.collectedBy ?? "—" },
+      ...(receipt.note ? [{ label: "Note", value: receipt.note }] : []),
+    ];
+
+    const rowsHtml = rows.map(({ label, value }) => `
+      <tr>
+        <td style="padding:10px 0;border-bottom:1px solid #e5e7eb;font-size:12px;color:#6b7280;font-weight:500;width:40%;vertical-align:top;">${label}</td>
+        <td style="padding:10px 0;border-bottom:1px solid #e5e7eb;font-size:13px;color:#111827;font-weight:600;text-align:right;vertical-align:top;">${value}</td>
+      </tr>`).join("");
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Times New Roman',Times,serif;background:#fff;color:#111827;}
+    @page{size:A4;margin:0;}
+    @media print{
+      body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    }
+  </style>
+</head>
+<body>
+<div style="max-width:640px;margin:0 auto;padding:48px 56px;position:relative;min-height:100vh;">
+
+  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-30deg);font-size:64px;font-weight:900;color:rgba(0,0,0,0.04);white-space:nowrap;pointer-events:none;font-family:'Times New Roman',Times,serif;letter-spacing:-1px;user-select:none;z-index:0;">
+    ${receipt.instituteName}
+  </div>
+
+  <div style="position:relative;z-index:1;">
+
+    <div style="border-bottom:2px solid #111827;padding-bottom:20px;margin-bottom:24px;">
+      <p style="font-size:26px;font-weight:900;color:#111827;letter-spacing:-0.5px;font-family:'Times New Roman',Times,serif;line-height:1.1;">${receipt.instituteName}</p>
+      <p style="font-size:11px;color:#6b7280;margin-top:4px;letter-spacing:0.08em;font-family:Arial,sans-serif;">OFFICIAL PAYMENT RECEIPT</p>
+    </div>
+
+    <div style="text-align:right;margin-bottom:32px;">
+      <p style="font-size:12px;color:#6b7280;font-family:Arial,sans-serif;">Receipt No.</p>
+      <p style="font-size:14px;font-weight:700;color:#111827;font-family:'Courier New',monospace;margin-top:2px;">${receipt.receiptNumber}</p>
+      <p style="font-size:12px;color:#6b7280;margin-top:8px;font-family:Arial,sans-serif;">${formattedDate}</p>
+    </div>
+
+    <div style="border:1.5px solid #d1d5db;border-radius:4px;padding:24px 28px;margin-bottom:32px;background:#fafafa;">
+      <p style="font-size:11px;color:#6b7280;letter-spacing:0.1em;font-family:Arial,sans-serif;margin-bottom:6px;">AMOUNT RECEIVED</p>
+      <p style="font-size:38px;font-weight:900;color:#111827;letter-spacing:-1px;font-family:'Times New Roman',Times,serif;line-height:1;">${formattedAmount}</p>
+    </div>
+
+    <table style="width:100%;border-collapse:collapse;margin-bottom:40px;">
+      ${rowsHtml}
+    </table>
+
+    <div style="border-top:1px dashed #d1d5db;padding-top:16px;margin-top:8px;">
+      <p style="font-size:12px;color:#374151;font-family:Arial,sans-serif;">Thank you for your payment. Please retain this receipt for your records.</p>
+      <p style="font-size:10px;color:#9ca3af;margin-top:20px;font-family:Arial,sans-serif;">This is a computer-generated receipt. Powered by Cleandesk.</p>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>`;
   }
 
-  const formattedDate = new Date(receipt.date).toLocaleDateString("en-IN", {
-    day: "numeric", month: "long", year: "numeric",
-  });
-  const formattedAmount = `₹${Number(receipt.amount).toLocaleString("en-IN")}`;
-  const formattedMode = receipt.paymentMode.replace(/_/g, " ");
+  function handlePrint() {
+    const printWindow = window.open("", "_blank", "width=700,height=900");
+    if (!printWindow) return;
+    printWindow.document.write(buildReceiptHtml());
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => { printWindow.print(); }, 400);
+  }
 
   return (
     <div
       className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-6"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[480px]">
-        {/* Modal header — not part of print */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[580px] flex flex-col" style={{ maxHeight: "90vh" }}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="text-gray-900" style={{ fontSize: "16px", fontWeight: 700 }}>Payment Receipt</h2>
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrint}
               className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-white hover:opacity-90 transition-all"
-              style={{ backgroundColor: "#0d9488", fontSize: "13px", fontWeight: 600 }}
+              style={{ backgroundColor: "#374151", fontSize: "13px", fontWeight: 600 }}
             >
               <Printer size={14} strokeWidth={2.5} />
-              Print
+              Print / Save PDF
             </button>
             <button onClick={onClose} className="w-8 h-8 rounded-md flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors">
               <X size={16} />
             </button>
           </div>
         </div>
-
-        {/* Receipt body — this is what gets printed */}
-        <div className="px-6 py-5">
-          <div id={printId}>
-            <div className="receipt" style={{ maxWidth: "100%", padding: "28px", border: "1px solid #e5e7eb", borderRadius: "12px" }}>
-
-              {/* Header */}
-              <div className="header" style={{ textAlign: "center", marginBottom: "24px", borderBottom: "2px solid #0d9488", paddingBottom: "18px" }}>
-                <p className="institute" style={{ fontSize: "20px", fontWeight: 800, color: "#0d9488", letterSpacing: "-0.02em" }}>
-                  {receipt.instituteName}
-                </p>
-                <p className="receipt-label" style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.1em", marginTop: "6px" }}>
-                  Payment Receipt
-                </p>
-                <p className="receipt-number" style={{ fontSize: "14px", fontWeight: 700, color: "#374151", marginTop: "3px", fontFamily: "monospace" }}>
-                  {receipt.receiptNumber}
-                </p>
-              </div>
-
-              {/* Amount */}
-              <div style={{ textAlign: "center", margin: "20px 0", padding: "18px", backgroundColor: "#f0fdfa", borderRadius: "10px", border: "1px solid #ccfbf1" }}>
-                <p style={{ fontSize: "11px", fontWeight: 600, color: "#0d9488", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                  Amount Received
-                </p>
-                <p style={{ fontSize: "34px", fontWeight: 800, color: "#0d9488", marginTop: "4px" }}>
-                  {formattedAmount}
-                </p>
-              </div>
-
-              {/* Details rows */}
-              <div style={{ marginTop: "20px" }}>
-                {[
-                  { label: "Student Name",   value: receipt.studentName },
-                  { label: "Login ID",       value: receipt.loginIdentifier },
-                  { label: "Batch",          value: receipt.batchName },
-                  { label: "Payment Date",   value: formattedDate },
-                  { label: "Payment Mode",   value: formattedMode },
-                  ...(receipt.paymentReference ? [{ label: "Reference / UTR", value: receipt.paymentReference }] : []),
-                  { label: "Collected By",   value: receipt.collectedBy ?? "—" },
-                  ...(receipt.note ? [{ label: "Note", value: receipt.note }] : []),
-                ].map(({ label, value }) => (
-                  <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "9px 0", borderBottom: "1px solid #f3f4f6" }}>
-                    <span style={{ fontSize: "12px", color: "#6b7280", fontWeight: 500 }}>{label}</span>
-                    <span style={{ fontSize: "13px", color: "#111827", fontWeight: 600, textAlign: "right", maxWidth: "58%" }}>{value}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Footer */}
-              <div style={{ marginTop: "24px", textAlign: "center", borderTop: "1px dashed #e5e7eb", paddingTop: "16px" }}>
-                <p style={{ fontSize: "11px", color: "#9ca3af" }}>Thank you for your payment.</p>
-                <p style={{ fontSize: "10px", color: "#d1d5db", marginTop: "4px" }}>This is a computer-generated receipt.</p>
-              </div>
-
-            </div>
-          </div>
+        <div className="flex-1 overflow-auto px-6 py-5">
+          <iframe
+            srcDoc={buildReceiptHtml()}
+            style={{ width: "100%", height: "520px", border: "1px solid #e5e7eb", borderRadius: "8px" }}
+            title="Receipt Preview"
+          />
         </div>
       </div>
     </div>

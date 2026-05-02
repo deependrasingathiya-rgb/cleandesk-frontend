@@ -12,7 +12,6 @@ import {
   ClipboardList,
   CheckSquare,
   Megaphone,
-  BookOpen,
   ChevronRight,
   Star,
   TrendingUp,
@@ -48,7 +47,6 @@ const adminNavItems: NavItemDef[] = [
   { label: "Attendance",      icon: CheckSquare,     path: "/attendance" },
   { label: "Fee Management",  icon: Wallet,          path: "/fee-management" },
   { label: "Announcements",   icon: Megaphone,       path: "/announcements" },
-  { label: "Study Materials", icon: BookOpen,        path: "/study-materials" },
   { label: "Notifications",   icon: Bell,            path: "/notifications" },
 ];
 
@@ -58,7 +56,6 @@ const teacherNavItems: NavItemDef[] = [
   { label: "Attendance",      icon: CheckSquare,     path: "/teacher/attendance" },
   { label: "Tests",           icon: ClipboardList,   path: "/teacher/tests" },
   { label: "Announcements",   icon: Megaphone,       path: "/teacher/announcements" },
-  { label: "Study Materials", icon: BookOpen,        path: "/teacher/study-materials" },
   { label: "Notifications",   icon: Bell,            path: "/teacher/notifications" },
 ];
 
@@ -70,7 +67,6 @@ const managementNavItems: NavItemDef[] = [
   { label: "Tests",           icon: ClipboardList,   path: "/management/tests" },
   { label: "Attendance",      icon: CheckSquare,     path: "/management/attendance" },
   { label: "Fee Management",  icon: Wallet,          path: "/management/fee-management" },
-  { label: "Study Material",  icon: BookOpen,        path: "/management/study-materials" },
   { label: "Announcements",   icon: Megaphone,       path: "/management/announcements" },
   { label: "Notifications",   icon: Bell,            path: "/management/notifications" },
 ];
@@ -80,7 +76,6 @@ const studentNavItems: NavItemDef[] = [
   { label: "Attendance",     icon: CheckSquare,     path: "/student/attendance" },
   { label: "Performance",    icon: Star,            path: "/student/results" },
   { label: "My Fee",         icon: Wallet,          path: "/student/fee" },
-  { label: "Study Material", icon: BookOpen,        path: "/student/study-materials" },
   { label: "Announcements",  icon: Megaphone,       path: "/student/announcements" },
   { label: "Notifications",  icon: Bell,            path: "/student/notifications" },
 ];
@@ -126,7 +121,7 @@ const ROLE_CONFIG: {
   admin: {
     navItems: adminNavItems,
     mainEnd: 9,
-    secondaryEnd: 12,
+    secondaryEnd: 11,
     menuLabel: "Main Menu",
     accountLabel: "Resources",
     portalLabel: "Institute Portal",
@@ -135,8 +130,8 @@ const ROLE_CONFIG: {
   },
   teacher: {
     navItems: teacherNavItems,
-    mainEnd: 6,
-    secondaryEnd: 7,
+    mainEnd: 5,
+    secondaryEnd: 6,
     menuLabel: "My Menu",
     accountLabel: "Account",
     portalLabel: "Teacher Portal",
@@ -145,8 +140,8 @@ const ROLE_CONFIG: {
   },
   management: {
     navItems: managementNavItems,
-    mainEnd: 9,
-    secondaryEnd: 10,
+    mainEnd: 8,
+    secondaryEnd: 9,
     menuLabel: "Management",
     accountLabel: "Account",
     portalLabel: "Management Portal",
@@ -155,8 +150,8 @@ const ROLE_CONFIG: {
   },
   student: {
     navItems: studentNavItems,
-    mainEnd: 6,
-    secondaryEnd: 7,
+    mainEnd: 5,
+    secondaryEnd: 6,
     menuLabel: "My Portal",
     accountLabel: "Account",
     portalLabel: "Student Portal",

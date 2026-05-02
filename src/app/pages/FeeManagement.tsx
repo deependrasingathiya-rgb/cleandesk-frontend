@@ -180,7 +180,10 @@ function BatchDrillDown({
               return (
                 <tr
                   key={s.student_user_id}
-                  onClick={() => navigate(`/management/students/${s.student_user_id}?from=fee-management&tab=fee&batchId=${encodeURIComponent(batchId)}&batchName=${encodeURIComponent(batchName)}`)}
+                  onClick={() => {
+                    const base = window.location.pathname.startsWith("/management") ? "/management" : "";
+                    navigate(`${base}/students/${s.student_user_id}?from=fee-management&tab=fee&batchId=${encodeURIComponent(batchId)}&batchName=${encodeURIComponent(batchName)}`);
+                  }}
                   className="border-t border-gray-50 hover:bg-teal-50 transition-colors cursor-pointer group"
                 >
                   {/* Student name */}

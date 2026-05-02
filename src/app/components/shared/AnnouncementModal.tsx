@@ -1,19 +1,13 @@
 // src/app/components/shared/AnnouncementModal.tsx
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import {
   X,
   ChevronDown,
   CheckCircle2,
-  Paperclip,
-  FileText,
-  Image,
-  Video,
-  File,
 } from "lucide-react";
 import { createAnnouncementApi } from "../../../Lib/api/announcements";
 import { fetchBatchesDetailedApi } from "../../../Lib/api/class-batches";
-import { uploadStudyMaterialApi } from "../../../Lib/api/study-materials";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -59,42 +53,7 @@ const TYPE_TO_DB: Record<AnnouncementType, string> = {
   "Emergency":           "EMERGENCY",
 };
 
-// ─── File helpers ──────────────────────────────────────────────────────────────
 
-type AttachedFile = {
-  file: File;
-  name: string;
-  size: string;
-  fileType: "pdf" | "image" | "video" | "other";
-};
-
-function detectFileType(filename: string): AttachedFile["fileType"] {
-  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
-  if (["pdf"].includes(ext)) return "pdf";
-  if (["jpg", "jpeg", "png", "gif", "webp", "svg"].includes(ext)) return "image";
-  if (["mp4", "mov", "avi", "mkv", "webm"].includes(ext)) return "video";
-  return "other";
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function getFileIcon(type: AttachedFile["fileType"]) {
-  if (type === "pdf")   return FileText;
-  if (type === "image") return Image;
-  if (type === "video") return Video;
-  return File;
-}
-
-function getFileColor(type: AttachedFile["fileType"]) {
-  if (type === "pdf")   return { color: "#ea580c", bg: "#fff7ed" };
-  if (type === "image") return { color: "#2563eb", bg: "#eff6ff" };
-  if (type === "video") return { color: "#7c3aed", bg: "#f5f3ff" };
-  return { color: "#6b7280", bg: "#f9fafb" };
-}
 
 // ─── Form state ────────────────────────────────────────────────────────────────
 
@@ -262,13 +221,11 @@ export function AnnouncementModal({
 }: AnnouncementModalProps) {
   const [form, setForm] = useState<AnnouncementFormState>(emptyForm);
   const [errors, setErrors] = useState<Partial<Record<keyof AnnouncementFormState, string>>>({});
-  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [batchOptions, setBatchOptions] = useState<BatchOption[]>(preloadedBatchOptions ?? []);
   const [loadingBatches, setLoadingBatches] = useState(!preloadedBatchOptions);
   const [submitting, setSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (preloadedBatchOptions) return;
@@ -280,21 +237,6 @@ export function AnnouncementModal({
 
   const set = <K extends keyof AnnouncementFormState>(key: K) =>
     (val: AnnouncementFormState[K]) => setForm((f) => ({ ...f, [key]: val }));
-
-  function addFiles(fileList: FileList | null) {
-    if (!fileList) return;
-    const newFiles: AttachedFile[] = Array.from(fileList).map((f) => ({
-      file: f,
-      name: f.name,
-      size: formatFileSize(f.size),
-      fileType: detectFileType(f.name),
-    }));
-    setAttachedFiles((prev) => [...prev, ...newFiles]);
-  }
-
-  function removeFile(index: number) {
-    setAttachedFiles((prev) => prev.filter((_, i) => i !== index));
-  }
 
   function validate() {
     const e: Partial<Record<keyof AnnouncementFormState, string>> = {};
@@ -333,16 +275,6 @@ export function AnnouncementModal({
 
       const announcementId = created.id;
 
-      // 2. Upload each attachment sequentially linked to this announcement
-      if (attachedFiles.length > 0) {
-        for (const attached of attachedFiles) {
-          await uploadStudyMaterialApi({
-            file:                    attached.file,
-            linked_announcement_id:  announcementId,
-          });
-        }
-      }
-
       setSaved(true);
       setTimeout(() => {
         onSuccess(announcementId);
@@ -371,11 +303,7 @@ export function AnnouncementModal({
           <p className="text-gray-900" style={{ fontSize: "18px", fontWeight: 700 }}>
             Announcement Published!
           </p>
-          {attachedFiles.length > 0 && (
-            <p className="text-gray-400 mt-1" style={{ fontSize: "13px" }}>
-              {attachedFiles.length} attachment{attachedFiles.length > 1 ? "s" : ""} uploaded.
-            </p>
-          )}
+          
         </div>
       </div>
     );
@@ -508,64 +436,7 @@ export function AnnouncementModal({
             </p>
           </div>
 
-          {/* Attachments */}
-          <div>
-            <label className="block text-gray-700 mb-1.5" style={{ fontSize: "13px", fontWeight: 600 }}>
-              Attachments
-              <span className="text-gray-400 ml-1.5" style={{ fontWeight: 400, fontSize: "12px" }}>
-                (optional — PDFs, images, videos, docs)
-              </span>
-            </label>
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => { e.preventDefault(); addFiles(e.dataTransfer.files); }}
-              className="border-2 border-dashed border-gray-200 rounded-xl p-5 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-teal-300 hover:bg-teal-50 transition-all"
-            >
-              <Paperclip size={18} className="text-gray-400" strokeWidth={2} />
-              <p className="text-gray-500" style={{ fontSize: "13px", fontWeight: 500 }}>
-                Click to browse or drag files here
-              </p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept="*/*"
-                className="hidden"
-                onChange={(e) => addFiles(e.target.files)}
-              />
-            </div>
-
-            {attachedFiles.length > 0 && (
-              <div className="mt-3 space-y-2">
-                {attachedFiles.map((f, i) => {
-                  const FileIcon = getFileIcon(f.fileType);
-                  const fc = getFileColor(f.fileType);
-                  return (
-                    <div key={i} className="flex items-center gap-3 px-4 py-2.5 rounded-xl border border-gray-100 bg-white">
-                      <div
-                        className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0"
-                        style={{ backgroundColor: fc.bg }}
-                      >
-                        <FileIcon size={14} style={{ color: fc.color }} strokeWidth={2} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-gray-700 truncate" style={{ fontSize: "13px", fontWeight: 500 }}>{f.name}</p>
-                        <p className="text-gray-400" style={{ fontSize: "11.5px" }}>{f.size}</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeFile(i)}
-                        className="w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors flex-shrink-0"
-                      >
-                        <X size={13} strokeWidth={2.5} />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+          
 
           {/* Preview pill */}
           {form.type && typeStyle && (
@@ -605,11 +476,7 @@ export function AnnouncementModal({
             className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
             style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
           >
-            {submitting
-              ? attachedFiles.length > 0
-                ? "Publishing & Uploading…"
-                : "Publishing…"
-              : "Publish"}
+            {submitting ? "Publishing…" : "Publish"}
           </button>
         </div>
       </div>

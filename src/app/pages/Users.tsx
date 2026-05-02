@@ -25,7 +25,7 @@ type UserRole = "Admin" | "Management" | "Teacher" | "Student";
 
 type User = {
   id: string;
-  loginIdentifier: string;
+  phoneNumber: string | null;
   name: string | null;
   role: UserRole;
   active: boolean;
@@ -42,7 +42,7 @@ const ROLE_ID_TO_LABEL: Record<number, UserRole> = {
 function mapApiUser(u: UserListItem): User {
   return {
     id: u.id,
-    loginIdentifier: u.login_identifier,
+    phoneNumber: u.phone_number ?? null,
     name: u.full_name ?? null,
     role: ROLE_ID_TO_LABEL[u.role_id] ?? "Student",
     active: u.is_active,
@@ -124,7 +124,7 @@ function CreateUserModal({
       setCreated(result);
       onCreated({
         id: result.id,
-        loginIdentifier: result.login_identifier,
+        phoneNumber: mobile.trim() || null,
         name: fullName.trim(),
         role,
         active: true,
@@ -164,25 +164,11 @@ function CreateUserModal({
           </div>
 
           <div className="space-y-3 mb-6">
-            {[
-              { label: "Login Identifier", value: created.login_identifier },
-              { label: "Temporary Password", value: created.temporary_password },
-            ].map(({ label, value }) => (
-              <div key={label}>
-                <p className="text-gray-400 mb-1.5" style={{ fontSize: "11.5px", fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>
-                  {label}
-                </p>
-                <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl border border-gray-100" style={{ backgroundColor: "#f9fafb" }}>
-                  <span className="text-gray-800 font-mono" style={{ fontSize: "13.5px" }}>{value}</span>
-                  <button
-                    onClick={() => handleCopy(`${created.login_identifier}\n${created.temporary_password}`)}
-                    className="text-gray-400 hover:text-teal-600 transition-colors flex-shrink-0"
-                  >
-                    {copied ? <Check size={14} /> : <Copy size={14} />}
-                  </button>
-                </div>
-              </div>
-            ))}
+            <div className="px-4 py-3 rounded-xl border border-gray-100" style={{ backgroundColor: "#f0fdfa" }}>
+              <p className="text-teal-700" style={{ fontSize: "13px", fontWeight: 500 }}>
+                User created successfully. They can now log in using their registered mobile number via WhatsApp OTP.
+              </p>
+            </div>
           </div>
 
           <button
@@ -375,7 +361,7 @@ function DeactivateModal({ user, onClose, onConfirm }: {
               Deactivate User?
             </h2>
             <p className="text-gray-500 mt-1" style={{ fontSize: "13px", lineHeight: 1.5 }}>
-              <span className="font-semibold text-gray-700">{user.loginIdentifier}</span> will lose access to the system. This can be reversed later.
+              <span className="font-semibold text-gray-700">{user.name ?? user.phoneNumber ?? "This user"}</span> will lose access to the system. This can be reversed later.
             </p>
           </div>
         </div>
@@ -414,8 +400,8 @@ function UserProfilePanel({ user, onClose, onDeactivate, onReactivate, currentUs
   const RoleIcon = rc.icon;
   const isCurrentUser = currentUserId === user.id;
   const initials = user.name
-                ? user.name.split(" ").map((p) => p[0]?.toUpperCase() ?? "").join("").slice(0, 2)
-                : user.loginIdentifier.split("@")[0].split(".").map((p) => p[0]?.toUpperCase() ?? "").join("").slice(0, 2);
+    ? user.name.split(" ").map((p) => p[0]?.toUpperCase() ?? "").join("").slice(0, 2)
+    : (user.phoneNumber ?? "U").slice(-2);
 
   return (
     <>
@@ -458,10 +444,10 @@ function UserProfilePanel({ user, onClose, onDeactivate, onReactivate, currentUs
               </div>
               <div>
                 <p className="text-gray-900" style={{ fontSize: "16px", fontWeight: 700, letterSpacing: "-0.01em" }}>
-                  {user.name ?? user.loginIdentifier.split("@")[0].split(".").map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(" ")}
+                  {user.name ?? user.phoneNumber ?? "Unknown User"}
                 </p>
                 <p className="text-gray-400 mt-0.5" style={{ fontSize: "12.5px" }}>
-                  {user.loginIdentifier}
+                  {user.phoneNumber}
                 </p>
               </div>
             </div>
@@ -470,15 +456,15 @@ function UserProfilePanel({ user, onClose, onDeactivate, onReactivate, currentUs
           {/* Info Cards */}
           <div className="px-6 py-5 space-y-4">
 
-            {/* Login Identifier */}
+            {/* Phone Number */}
             <div>
               <p className="text-gray-400 uppercase mb-2" style={{ fontSize: "10px", fontWeight: 600, letterSpacing: "0.08em" }}>
-                Login Identifier
+                Phone Number
               </p>
               <div className="flex items-center gap-3 p-3 rounded-xl" style={{ backgroundColor: "#f9fafb", border: "1px solid #f3f4f6" }}>
                 <UsersIcon size={14} className="text-gray-400" strokeWidth={2} />
                 <span className="text-gray-700" style={{ fontSize: "13.5px", fontWeight: 500 }}>
-                  {user.loginIdentifier}
+                  {user.phoneNumber ?? "—"}
                 </span>
               </div>
             </div>
@@ -621,7 +607,7 @@ export function Users() {
   const filtered = visibleUsers.filter((u) => {
     const matchRole   = roleFilter === "All" || u.role === roleFilter;
     const matchSearch =
-      u.loginIdentifier.toLowerCase().includes(search.toLowerCase()) ||
+      (u.phoneNumber ?? "").toLowerCase().includes(search.toLowerCase()) ||
       (u.name ?? "").toLowerCase().includes(search.toLowerCase());
     return matchRole && matchSearch;
   });
@@ -717,7 +703,7 @@ export function Users() {
           <input
             value={search}
             onChange={(e) => handleFilterChange(() => setSearch(e.target.value))}
-            placeholder="Search by login identifier…"
+            placeholder="Search by name or phone number…"
             className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-300 shadow-sm transition-all"
             style={{ fontSize: "13.5px" }}
           />
@@ -747,7 +733,7 @@ export function Users() {
         <table className="w-full">
           <thead>
             <tr style={{ backgroundColor: "#f9fafb" }}>
-              {["Login Identifier", "Name", "Role", "Status", "Created Date", ""].map((col) => (
+              {["Phone Number", "Name", "Role", "Status", "Created Date", ""].map((col) => (
                 <th
                   key={col}
                   className="text-left px-6 py-3 text-gray-400"
@@ -763,8 +749,8 @@ export function Users() {
               const rc = roleConfig[user.role];
               const RoleIcon = rc.icon;
               const initials = user.name
-    ? user.name.split(" ").map((p) => p[0]?.toUpperCase() ?? "").join("").slice(0, 2)
-    : user.loginIdentifier.split("@")[0].split(".").map((p) => p[0]?.toUpperCase() ?? "").join("").slice(0, 2);
+                ? user.name.split(" ").map((p) => p[0]?.toUpperCase() ?? "").join("").slice(0, 2)
+                : (user.phoneNumber ?? "U").slice(-2);
 
               return (
                 <tr
@@ -787,7 +773,7 @@ export function Users() {
                         className="text-gray-700 group-hover:text-teal-700 transition-colors"
                         style={{ fontSize: "13.5px", fontWeight: 500 }}
                       >
-                        {user.loginIdentifier}
+                        {user.phoneNumber ?? "—"}
                       </span>
                     </div>
                   </td>

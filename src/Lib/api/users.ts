@@ -1,7 +1,7 @@
 // src/Lib/api/users.ts
 
 import { getToken } from "../../app/auth";
-import { ROLES, type RoleId } from "../../app/auth";
+import { type RoleId } from "../../app/auth";
 
 export type CreateUserPayload = {
   full_name: string;
@@ -13,17 +13,16 @@ export type CreateUserPayload = {
 
 export type CreatedUser = {
   id: string;
-  login_identifier: string;
   institute_id: string;
   role_id: RoleId;
-  temporary_password: string;
+  phone_number: string | null;
 };
 
 export type UserRoleId = 1 | 2 | 3 | 4;
 
 export type UserListItem = {
   id: string;
-  login_identifier: string;
+  phone_number: string | null;
   role_id: UserRoleId;
   is_active: boolean;
   created_at: string;
@@ -96,6 +95,5 @@ export async function createUserApi(
 
   return {
     ...data.user,
-    temporary_password: data.temporary_password,
   };
 }

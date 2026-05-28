@@ -3,11 +3,16 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
-  "scripts": {
-    "build": "vite build",
-    "dev": "vite",
-    "merge": "node merge-figma.cjs"
-  },
+ "scripts": {
+  "dev": "vite",
+  "build": "vite build",
+  "build:cleandesk": "vite build --mode cleandesk",
+  "build:gurukul": "vite build --mode gurukul",
+  "build:all": "npm run build:cleandesk && npm run build:gurukul",
+  "preview:cleandesk": "vite preview --mode cleandesk",
+  "preview:gurukul": "vite preview --mode gurukul",
+  "merge": "node merge-figma.cjs"
+},
   "dependencies": {
     "@emotion/react": "11.14.0",
     "@emotion/styled": "11.14.1",

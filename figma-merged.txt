@@ -927,7 +927,6 @@ import {
   ClipboardList,
   CheckSquare,
   Megaphone,
-  BookOpen,
   ChevronRight,
   Star,
   TrendingUp,
@@ -963,7 +962,6 @@ const adminNavItems: NavItemDef[] = [
   { label: "Attendance",      icon: CheckSquare,     path: "/attendance" },
   { label: "Fee Management",  icon: Wallet,          path: "/fee-management" },
   { label: "Announcements",   icon: Megaphone,       path: "/announcements" },
-  { label: "Study Materials", icon: BookOpen,        path: "/study-materials" },
   { label: "Notifications",   icon: Bell,            path: "/notifications" },
 ];
 
@@ -973,7 +971,6 @@ const teacherNavItems: NavItemDef[] = [
   { label: "Attendance",      icon: CheckSquare,     path: "/teacher/attendance" },
   { label: "Tests",           icon: ClipboardList,   path: "/teacher/tests" },
   { label: "Announcements",   icon: Megaphone,       path: "/teacher/announcements" },
-  { label: "Study Materials", icon: BookOpen,        path: "/teacher/study-materials" },
   { label: "Notifications",   icon: Bell,            path: "/teacher/notifications" },
 ];
 
@@ -985,7 +982,6 @@ const managementNavItems: NavItemDef[] = [
   { label: "Tests",           icon: ClipboardList,   path: "/management/tests" },
   { label: "Attendance",      icon: CheckSquare,     path: "/management/attendance" },
   { label: "Fee Management",  icon: Wallet,          path: "/management/fee-management" },
-  { label: "Study Material",  icon: BookOpen,        path: "/management/study-materials" },
   { label: "Announcements",   icon: Megaphone,       path: "/management/announcements" },
   { label: "Notifications",   icon: Bell,            path: "/management/notifications" },
 ];
@@ -995,7 +991,6 @@ const studentNavItems: NavItemDef[] = [
   { label: "Attendance",     icon: CheckSquare,     path: "/student/attendance" },
   { label: "Performance",    icon: Star,            path: "/student/results" },
   { label: "My Fee",         icon: Wallet,          path: "/student/fee" },
-  { label: "Study Material", icon: BookOpen,        path: "/student/study-materials" },
   { label: "Announcements",  icon: Megaphone,       path: "/student/announcements" },
   { label: "Notifications",  icon: Bell,            path: "/student/notifications" },
 ];
@@ -1041,7 +1036,7 @@ const ROLE_CONFIG: {
   admin: {
     navItems: adminNavItems,
     mainEnd: 9,
-    secondaryEnd: 12,
+    secondaryEnd: 11,
     menuLabel: "Main Menu",
     accountLabel: "Resources",
     portalLabel: "Institute Portal",
@@ -1050,8 +1045,8 @@ const ROLE_CONFIG: {
   },
   teacher: {
     navItems: teacherNavItems,
-    mainEnd: 6,
-    secondaryEnd: 7,
+    mainEnd: 5,
+    secondaryEnd: 6,
     menuLabel: "My Menu",
     accountLabel: "Account",
     portalLabel: "Teacher Portal",
@@ -1060,8 +1055,8 @@ const ROLE_CONFIG: {
   },
   management: {
     navItems: managementNavItems,
-    mainEnd: 9,
-    secondaryEnd: 10,
+    mainEnd: 8,
+    secondaryEnd: 9,
     menuLabel: "Management",
     accountLabel: "Account",
     portalLabel: "Management Portal",
@@ -1070,8 +1065,8 @@ const ROLE_CONFIG: {
   },
   student: {
     navItems: studentNavItems,
-    mainEnd: 6,
-    secondaryEnd: 7,
+    mainEnd: 5,
+    secondaryEnd: 6,
     menuLabel: "My Portal",
     accountLabel: "Account",
     portalLabel: "Student Portal",
@@ -1437,20 +1432,14 @@ export function TeacherShell() {
 
 // src/app/components/shared/AnnouncementModal.tsx
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import {
   X,
   ChevronDown,
   CheckCircle2,
-  Paperclip,
-  FileText,
-  Image,
-  Video,
-  File,
 } from "lucide-react";
 import { createAnnouncementApi } from "../../../Lib/api/announcements";
 import { fetchBatchesDetailedApi } from "../../../Lib/api/class-batches";
-import { uploadStudyMaterialApi } from "../../../Lib/api/study-materials";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -1496,42 +1485,7 @@ const TYPE_TO_DB: Record<AnnouncementType, string> = {
   "Emergency":           "EMERGENCY",
 };
 
-// ─── File helpers ──────────────────────────────────────────────────────────────
 
-type AttachedFile = {
-  file: File;
-  name: string;
-  size: string;
-  fileType: "pdf" | "image" | "video" | "other";
-};
-
-function detectFileType(filename: string): AttachedFile["fileType"] {
-  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
-  if (["pdf"].includes(ext)) return "pdf";
-  if (["jpg", "jpeg", "png", "gif", "webp", "svg"].includes(ext)) return "image";
-  if (["mp4", "mov", "avi", "mkv", "webm"].includes(ext)) return "video";
-  return "other";
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function getFileIcon(type: AttachedFile["fileType"]) {
-  if (type === "pdf")   return FileText;
-  if (type === "image") return Image;
-  if (type === "video") return Video;
-  return File;
-}
-
-function getFileColor(type: AttachedFile["fileType"]) {
-  if (type === "pdf")   return { color: "#ea580c", bg: "#fff7ed" };
-  if (type === "image") return { color: "#2563eb", bg: "#eff6ff" };
-  if (type === "video") return { color: "#7c3aed", bg: "#f5f3ff" };
-  return { color: "#6b7280", bg: "#f9fafb" };
-}
 
 // ─── Form state ────────────────────────────────────────────────────────────────
 
@@ -1699,13 +1653,11 @@ export function AnnouncementModal({
 }: AnnouncementModalProps) {
   const [form, setForm] = useState<AnnouncementFormState>(emptyForm);
   const [errors, setErrors] = useState<Partial<Record<keyof AnnouncementFormState, string>>>({});
-  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [batchOptions, setBatchOptions] = useState<BatchOption[]>(preloadedBatchOptions ?? []);
   const [loadingBatches, setLoadingBatches] = useState(!preloadedBatchOptions);
   const [submitting, setSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (preloadedBatchOptions) return;
@@ -1717,21 +1669,6 @@ export function AnnouncementModal({
 
   const set = <K extends keyof AnnouncementFormState>(key: K) =>
     (val: AnnouncementFormState[K]) => setForm((f) => ({ ...f, [key]: val }));
-
-  function addFiles(fileList: FileList | null) {
-    if (!fileList) return;
-    const newFiles: AttachedFile[] = Array.from(fileList).map((f) => ({
-      file: f,
-      name: f.name,
-      size: formatFileSize(f.size),
-      fileType: detectFileType(f.name),
-    }));
-    setAttachedFiles((prev) => [...prev, ...newFiles]);
-  }
-
-  function removeFile(index: number) {
-    setAttachedFiles((prev) => prev.filter((_, i) => i !== index));
-  }
 
   function validate() {
     const e: Partial<Record<keyof AnnouncementFormState, string>> = {};
@@ -1770,16 +1707,6 @@ export function AnnouncementModal({
 
       const announcementId = created.id;
 
-      // 2. Upload each attachment sequentially linked to this announcement
-      if (attachedFiles.length > 0) {
-        for (const attached of attachedFiles) {
-          await uploadStudyMaterialApi({
-            file:                    attached.file,
-            linked_announcement_id:  announcementId,
-          });
-        }
-      }
-
       setSaved(true);
       setTimeout(() => {
         onSuccess(announcementId);
@@ -1808,11 +1735,7 @@ export function AnnouncementModal({
           <p className="text-gray-900" style={{ fontSize: "18px", fontWeight: 700 }}>
             Announcement Published!
           </p>
-          {attachedFiles.length > 0 && (
-            <p className="text-gray-400 mt-1" style={{ fontSize: "13px" }}>
-              {attachedFiles.length} attachment{attachedFiles.length > 1 ? "s" : ""} uploaded.
-            </p>
-          )}
+          
         </div>
       </div>
     );
@@ -1945,64 +1868,7 @@ export function AnnouncementModal({
             </p>
           </div>
 
-          {/* Attachments */}
-          <div>
-            <label className="block text-gray-700 mb-1.5" style={{ fontSize: "13px", fontWeight: 600 }}>
-              Attachments
-              <span className="text-gray-400 ml-1.5" style={{ fontWeight: 400, fontSize: "12px" }}>
-                (optional — PDFs, images, videos, docs)
-              </span>
-            </label>
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => { e.preventDefault(); addFiles(e.dataTransfer.files); }}
-              className="border-2 border-dashed border-gray-200 rounded-xl p-5 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-teal-300 hover:bg-teal-50 transition-all"
-            >
-              <Paperclip size={18} className="text-gray-400" strokeWidth={2} />
-              <p className="text-gray-500" style={{ fontSize: "13px", fontWeight: 500 }}>
-                Click to browse or drag files here
-              </p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept="*/*"
-                className="hidden"
-                onChange={(e) => addFiles(e.target.files)}
-              />
-            </div>
-
-            {attachedFiles.length > 0 && (
-              <div className="mt-3 space-y-2">
-                {attachedFiles.map((f, i) => {
-                  const FileIcon = getFileIcon(f.fileType);
-                  const fc = getFileColor(f.fileType);
-                  return (
-                    <div key={i} className="flex items-center gap-3 px-4 py-2.5 rounded-xl border border-gray-100 bg-white">
-                      <div
-                        className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0"
-                        style={{ backgroundColor: fc.bg }}
-                      >
-                        <FileIcon size={14} style={{ color: fc.color }} strokeWidth={2} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-gray-700 truncate" style={{ fontSize: "13px", fontWeight: 500 }}>{f.name}</p>
-                        <p className="text-gray-400" style={{ fontSize: "11.5px" }}>{f.size}</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeFile(i)}
-                        className="w-7 h-7 rounded-md flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors flex-shrink-0"
-                      >
-                        <X size={13} strokeWidth={2.5} />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+          
 
           {/* Preview pill */}
           {form.type && typeStyle && (
@@ -2042,11 +1908,7 @@ export function AnnouncementModal({
             className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
             style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
           >
-            {submitting
-              ? attachedFiles.length > 0
-                ? "Publishing & Uploading…"
-                : "Publishing…"
-              : "Publish"}
+            {submitting ? "Publishing…" : "Publish"}
           </button>
         </div>
       </div>
@@ -12528,7 +12390,10 @@ function BatchDrillDown({
               return (
                 <tr
                   key={s.student_user_id}
-                  onClick={() => navigate(`/management/students/${s.student_user_id}?from=fee-management&tab=fee&batchId=${encodeURIComponent(batchId)}&batchName=${encodeURIComponent(batchName)}`)}
+                  onClick={() => {
+                    const base = window.location.pathname.startsWith("/management") ? "/management" : "";
+                    navigate(`${base}/students/${s.student_user_id}?from=fee-management&tab=fee&batchId=${encodeURIComponent(batchId)}&batchName=${encodeURIComponent(batchName)}`);
+                  }}
                   className="border-t border-gray-50 hover:bg-teal-50 transition-colors cursor-pointer group"
                 >
                   {/* Student name */}
@@ -13119,96 +12984,142 @@ export function ForgotPassword() {
 
 // src/app/pages/Login.tsx
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
-
-import { saveToken, parseToken, ROLE_ROUTES } from "../auth";
+import { saveToken, parseToken, ROLE_ROUTES, ROLE_LABELS } from "../auth";
 import { apiFetch } from "../api";
 import loginIllustration from "../../assets/login-illustration.png";
 import loginDoodle from "../../assets/login-page-background-doogle.png";
 
-// ─── Login Page ───────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-export function Login() {
-  const navigate = useNavigate();
-  const [loginIdentifier, setLoginIdentifier] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+type UserProfile = {
+  user_id: string;
+  role_id: number;
+  institute_id: string;
+  full_name: string | null;
+};
 
-  async function handleLogin() {
-    setError(null);
+type Step = "phone" | "otp" | "profile";
 
-    if (!loginIdentifier.trim() || !password.trim()) {
-      setError("Please enter both your login ID and password.");
-      return;
-    }
+// ─── Shared visual primitives ─────────────────────────────────────────────────
 
-    setLoading(true);
-
-    try {
-      const res = await apiFetch("/api/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          login_identifier: loginIdentifier.trim(),
-          password,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error ?? "Invalid credentials. Please try again.");
-        setLoading(false);
-        return;
-      }
-
-      const token: string = data.token;
-      saveToken(token);
-
-      const payload = parseToken(token);
-      if (!payload) {
-        setError("Received an invalid session token. Please try again.");
-        setLoading(false);
-        return;
-      }
-
-      const route = ROLE_ROUTES[payload.role_id];
-      if (!route) {
-        setError("Your account role is not recognized. Contact your administrator.");
-        setLoading(false);
-        return;
-      }
-
-      navigate(route);
-    } catch {
-      setError("Unable to reach the server. Please check your connection.");
-      setLoading(false);
-    }
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "Enter") handleLogin();
-  }
-
+function ErrorBox({ message }: { message: string }) {
   return (
     <div
-      className="min-h-screen flex flex-col lg:flex-row"
-      style={{ backgroundColor: "#f8fafc" }}
+      className="flex items-start gap-2.5 px-3.5 py-3 rounded-xl"
+      style={{ backgroundColor: "#fef2f2", border: "1px solid #fecaca" }}
     >
-      {/* ── Top Banner — Mobile/Tablet only ── */}
-      <div
-        className="flex lg:hidden items-center gap-3 px-6 py-4"
-        style={{ backgroundColor: "#f0fdfa", borderBottom: "1px solid #ccfbf1" }}
-      >
-        <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-          style={{ backgroundColor: "#0d9488" }}
-        >
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#dc2626"
+        strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+        className="flex-shrink-0 mt-0.5">
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="8" x2="12" y2="12" />
+        <line x1="12" y1="16" x2="12.01" y2="16" />
+      </svg>
+      <p style={{ fontSize: "13px", color: "#dc2626", lineHeight: 1.45 }}>{message}</p>
+    </div>
+  );
+}
+
+function TealButton({
+  onClick,
+  loading,
+  loadingLabel,
+  label,
+  disabled,
+}: {
+  onClick: () => void;
+  loading: boolean;
+  loadingLabel: string;
+  label: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={loading || disabled}
+      className="w-full py-3 rounded-xl text-white font-semibold transition-all hover:opacity-90 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+      style={{ backgroundColor: "#0d9488", fontSize: "14.5px", fontWeight: 600, minHeight: "48px" }}
+    >
+      {loading ? (
+        <>
+          <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24"
+            fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round" />
+          </svg>
+          {loadingLabel}
+        </>
+      ) : label}
+    </button>
+  );
+}
+
+function TextInput({
+  value,
+  onChange,
+  onKeyDown,
+  placeholder,
+  type = "text",
+  autoFocus = false,
+  prefix,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onKeyDown?: (e: React.KeyboardEvent) => void;
+  placeholder: string;
+  type?: string;
+  autoFocus?: boolean;
+  prefix?: string;
+}) {
+  return (
+    <div className="flex items-center rounded-xl overflow-hidden"
+      style={{ border: "1.5px solid #e5e7eb", backgroundColor: "white" }}>
+      {prefix && (
+        <span style={{
+          padding: "0 12px",
+          fontSize: "14px",
+          fontWeight: 600,
+          color: "#374151",
+          borderRight: "1.5px solid #e5e7eb",
+          lineHeight: "48px",
+          whiteSpace: "nowrap",
+          backgroundColor: "#f9fafb",
+        }}>
+          {prefix}
+        </span>
+      )}
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={onKeyDown}
+        placeholder={placeholder}
+        autoFocus={autoFocus}
+        className="flex-1 px-4 py-3 text-gray-800 placeholder-gray-300 focus:outline-none"
+        style={{ fontSize: "14px", backgroundColor: "transparent", minHeight: "48px" }}
+        onFocus={(e) => {
+          const wrapper = e.currentTarget.closest(".flex") as HTMLElement | null;
+          if (wrapper) wrapper.style.borderColor = "#0d9488";
+        }}
+        onBlur={(e) => {
+          const wrapper = e.currentTarget.closest(".flex") as HTMLElement | null;
+          if (wrapper) wrapper.style.borderColor = "#e5e7eb";
+        }}
+      />
+    </div>
+  );
+}
+
+// ─── Left Panel (shared across all steps) ────────────────────────────────────
+
+function LeftPanel() {
+  return (
+    <div className="hidden lg:flex flex-col justify-between p-12 flex-shrink-0"
+      style={{ width: "520px", backgroundColor: "#f0fdfa" }}>
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+          style={{ backgroundColor: "#0d9488" }}>
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
             <path d="M9 2L2 6v6l7 4 7-4V6L9 2z" stroke="white" strokeWidth="1.8" strokeLinejoin="round" />
             <path d="M9 2v14M2 6l7 4 7-4" stroke="white" strokeWidth="1.8" strokeLinejoin="round" />
@@ -13218,299 +13129,490 @@ export function Login() {
           CleanDesk
         </span>
       </div>
-
-      {/* ── Left Panel — Illustration (desktop only) ── */}
-      <div
-        className="hidden lg:flex flex-col justify-between p-12 flex-shrink-0"
-        style={{ width: "520px", backgroundColor: "#f0fdfa" }}
-      >
-        {/* Logo */}
-        <div className="flex items-center gap-3">
-          <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ backgroundColor: "#0d9488" }}
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <path
-                d="M9 2L2 6v6l7 4 7-4V6L9 2z"
-                stroke="white"
-                strokeWidth="1.8"
-                strokeLinejoin="round"
-              />
-              <path d="M9 2v14M2 6l7 4 7-4" stroke="white" strokeWidth="1.8" strokeLinejoin="round" />
-            </svg>
-          </div>
-          <span
-            style={{
-              fontSize: "18px",
-              fontWeight: 700,
-              color: "#0d9488",
-              letterSpacing: "-0.02em",
-            }}
-          >
-            CleanDesk
-          </span>
-        </div>
-
-        {/* Illustration + tagline */}
-        <div className="flex flex-col items-center text-center">
-          <img
-            src={loginIllustration}
-            alt="Teachers and admins managing their institute"
-            style={{ width: "100%", maxWidth: "440px", height: "auto", marginBottom: "32px" }}
-            draggable={false}
-          />
-          <p
-            style={{
-              fontSize: "22px",
-              fontWeight: 700,
-              color: "#0f172a",
-              letterSpacing: "-0.02em",
-              lineHeight: 1.3,
-            }}
-          >
-            Everything your institute needs,
-            <br />
-            <span style={{ color: "#0d9488" }}>in one place.</span>
-          </p>
-          <p
-            className="mt-3"
-            style={{ fontSize: "13.5px", color: "#64748b", lineHeight: 1.65, maxWidth: "320px" }}
-          >
-            Attendance, tests, results, announcements — managed cleanly for
-            admins, teachers, and students.
-          </p>
-        </div>
-
-        {/* Bottom decoration */}
+      <div className="flex flex-col items-center text-center">
+        <img src={loginIllustration} alt="CleanDesk"
+          style={{ width: "100%", maxWidth: "440px", height: "auto", marginBottom: "32px" }}
+          draggable={false} />
+        <p style={{ fontSize: "22px", fontWeight: 700, color: "#0f172a",
+          letterSpacing: "-0.02em", lineHeight: 1.3 }}>
+          Everything your institute needs,<br />
+          <span style={{ color: "#0d9488" }}>in one place.</span>
+        </p>
+        <p className="mt-3" style={{ fontSize: "13.5px", color: "#64748b",
+          lineHeight: 1.65, maxWidth: "320px" }}>
+          Attendance, tests, results, announcements — managed cleanly for
+          admins, teachers, and students.
+        </p>
+      </div>
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="rounded-full"
-              style={{
-                width: i === 1 ? "24px" : "8px",
-                height: "8px",
-                backgroundColor: i === 1 ? "#0d9488" : "#99f6e4",
-              }}
-            />
+            <div key={i} className="rounded-full" style={{
+              width: i === 1 ? "24px" : "8px", height: "8px",
+              backgroundColor: i === 1 ? "#0d9488" : "#99f6e4",
+            }} />
           ))}
         </div>
-      </div>
-
-      {/* ── Right Panel — Login Form ── */}
-      <div
-        className="flex-1 flex items-center justify-center p-6 relative"
-        style={{
-          backgroundImage: `url(${loginDoodle})`,
-          backgroundSize: "600px",
-          backgroundRepeat: "repeat",
-          backgroundPosition: "center",
-        }}
-      >
-        <div className="absolute inset-0" style={{ backgroundColor: "rgba(255,255,255,0.92)" }} />
-        <div className="relative z-10 w-full" style={{ maxWidth: "400px" }}>
-        <div className="w-full" style={{ maxWidth: "400px" }}>
-
-          {/* Heading */}
-          <div className="mb-8">
-            <h1
-              style={{
-                fontSize: "26px",
-                fontWeight: 700,
-                color: "#0f172a",
-                letterSpacing: "-0.025em",
-                lineHeight: 1.2,
-              }}
-            >
-              Welcome back
-            </h1>
-            <p className="mt-1.5" style={{ fontSize: "14px", color: "#94a3b8" }}>
-              Sign in to your CleanDesk account
-            </p>
-          </div>
-
-          {/* Form */}
-          <div className="space-y-4">
-
-            {/* Login Identifier */}
-            <div>
-              <label
-                className="block mb-1.5"
-                style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}
-              >
-                Login ID
-              </label>
-              <input
-                type="text"
-                value={loginIdentifier}
-                onChange={(e) => { setLoginIdentifier(e.target.value); setError(null); }}
-                onKeyDown={handleKeyDown}
-                placeholder="e.g. adm-abc12345"
-                autoComplete="username"
-                className="w-full rounded-xl px-4 py-3 text-gray-800 placeholder-gray-300 transition-all focus:outline-none"
-                style={{
-                  fontSize: "14px",
-                  border: "1.5px solid #e5e7eb",
-                  backgroundColor: "white",
-                }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = "#0d9488")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "#e5e7eb")}
-              />
-            </div>
-
-            {/* Password */}
-            <div>
-              <label
-                className="block mb-1.5"
-                style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}
-              >
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => { setPassword(e.target.value); setError(null); }}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Enter your password"
-                  autoComplete="current-password"
-                  className="w-full rounded-xl px-4 py-3 text-gray-800 placeholder-gray-300 transition-all focus:outline-none pr-11"
-                  style={{
-                    fontSize: "14px",
-                    border: "1.5px solid #e5e7eb",
-                    backgroundColor: "white",
-                  }}
-                  onFocus={(e) => (e.currentTarget.style.borderColor = "#0d9488")}
-                  onBlur={(e) => (e.currentTarget.style.borderColor = "#e5e7eb")}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((s) => !s)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                  tabIndex={-1}
-                >
-                  {showPassword ? (
-                    // Eye-off
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
-                      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-                      <line x1="1" y1="1" x2="23" y2="23" />
-                    </svg>
-                  ) : (
-                    // Eye
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                      <circle cx="12" cy="12" r="3" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-            </div>
-
-
-{/* Forgot password */}
-            <div className="flex justify-end" style={{ marginTop: "-8px" }}>
-              <a href="/forgot-password" style={{ fontSize: "13px", color: "#0d9488", fontWeight: 500 }}>
-                Forgot password?
-              </a>
-            </div>
-
-            {/* Error message */}
-            {error && (
-              <div
-                className="flex items-start gap-2.5 px-3.5 py-3 rounded-xl"
-                style={{ backgroundColor: "#fef2f2", border: "1px solid #fecaca" }}
-              >
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#dc2626"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="flex-shrink-0 mt-0.5"
-                >
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="12" y1="8" x2="12" y2="12" />
-                  <line x1="12" y1="16" x2="12.01" y2="16" />
-                </svg>
-                <p style={{ fontSize: "13px", color: "#dc2626", lineHeight: 1.45 }}>
-                  {error}
-                </p>
-              </div>
-            )}
-
-            {/* Submit */}
-          <button
-            onClick={handleLogin}
-            disabled={loading}
-            className="w-full py-3 rounded-xl text-white font-semibold transition-all hover:opacity-90 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            style={{
-              backgroundColor: "#0d9488",
-              fontSize: "14.5px",
-              fontWeight: 600,
-              marginTop: "4px",
-              minHeight: "48px",
-            }}
-          >
-              {loading ? (
-                <>
-                  <svg
-                    className="animate-spin"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                  >
-                    <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round" />
-                  </svg>
-                  Signing in…
-                </>
-              ) : (
-                "Sign In"
-              )}
-            </button>
-          </div>
-
-          {/* Footer note */}
-          <p
-            className="text-center mt-8"
-            style={{ fontSize: "12.5px", color: "#9ca3af", lineHeight: 1.6 }}
-          >
-            Your login ID was assigned by your institute administrator.
-            <br />
-            Contact them if you've lost access.
-          </p>
-        </div>
-        </div>
-      </div>
-
-      {/* ── Bottom strip — Mobile only (mirrors left panel's dots) ── */}
-      <div
-        className="flex lg:hidden items-center justify-center gap-2 py-4"
-        style={{ backgroundColor: "#f0fdfa", borderTop: "1px solid #ccfbf1" }}
-      >
-        {[1, 2, 3].map((i) => (
-          <div
-            key={i}
-            className="rounded-full"
-            style={{
-              width: i === 1 ? "24px" : "8px",
-              height: "8px",
-              backgroundColor: i === 1 ? "#0d9488" : "#99f6e4",
-            }}
-          />
-        ))}
+        <a href="/privacy" style={{ fontSize: "12px", color: "#0d9488" }}>
+          Privacy Policy
+        </a>
       </div>
     </div>
   );
 }
 
+function TopMobileBar() {
+  return (
+    <div className="flex lg:hidden items-center gap-3 px-6 py-4"
+      style={{ backgroundColor: "#f0fdfa", borderBottom: "1px solid #ccfbf1" }}>
+      <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+        style={{ backgroundColor: "#0d9488" }}>
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <path d="M9 2L2 6v6l7 4 7-4V6L9 2z" stroke="white" strokeWidth="1.8" strokeLinejoin="round" />
+          <path d="M9 2v14M2 6l7 4 7-4" stroke="white" strokeWidth="1.8" strokeLinejoin="round" />
+        </svg>
+      </div>
+      <span style={{ fontSize: "18px", fontWeight: 700, color: "#0d9488", letterSpacing: "-0.02em" }}>
+        CleanDesk
+      </span>
+    </div>
+  );
+}
+
+function BottomMobileDots() {
+  return (
+    <div className="flex lg:hidden items-center justify-center gap-2 py-4"
+      style={{ backgroundColor: "#f0fdfa", borderTop: "1px solid #ccfbf1" }}>
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="rounded-full" style={{
+          width: i === 1 ? "24px" : "8px", height: "8px",
+          backgroundColor: i === 1 ? "#0d9488" : "#99f6e4",
+        }} />
+      ))}
+    </div>
+  );
+}
+
+// ─── Step 1: Phone ────────────────────────────────────────────────────────────
+
+function PhoneStep({
+  onOtpSent,
+}: {
+  onOtpSent: (phone: string) => void;
+}) {
+  const [phone, setPhone] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  function handlePhoneChange(v: string) {
+    if (/^\d{0,10}$/.test(v)) { setPhone(v); setError(null); }
+  }
+
+  async function handleSend() {
+    if (phone.length !== 10) {
+      setError("Please enter a valid 10-digit mobile number.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await apiFetch("/api/auth/otp/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone_number: phone }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error ?? "Failed to send OTP. Please try again.");
+        setLoading(false);
+        return;
+      }
+      onOtpSent(phone);
+    } catch {
+      setError("Unable to reach the server. Please check your connection.");
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h1 style={{ fontSize: "26px", fontWeight: 700, color: "#0f172a",
+          letterSpacing: "-0.025em", lineHeight: 1.2 }}>
+          Welcome back
+        </h1>
+        <p className="mt-1.5" style={{ fontSize: "14px", color: "#94a3b8" }}>
+          Enter your registered mobile number
+        </p>
+      </div>
+      <div>
+        <label className="block mb-1.5"
+          style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
+          Mobile Number
+        </label>
+        <TextInput
+          value={phone}
+          onChange={handlePhoneChange}
+          onKeyDown={(e) => e.key === "Enter" && handleSend()}
+          placeholder="10-digit mobile number"
+          type="tel"
+          autoFocus
+          prefix="+91"
+        />
+      </div>
+      {error && <ErrorBox message={error} />}
+      <TealButton
+        onClick={handleSend}
+        loading={loading}
+        loadingLabel="Sending OTP…"
+        label="Send OTP"
+      />
+      <p className="text-center" style={{ fontSize: "12.5px", color: "#9ca3af" }}>
+        You will receive a 6-digit OTP on WhatsApp
+      </p>
+    </div>
+  );
+}
+
+// ─── Step 2: OTP ──────────────────────────────────────────────────────────────
+
+function OtpStep({
+  phone,
+  onVerified,
+  onBack,
+}: {
+  phone: string;
+  onVerified: (token: string, profiles: UserProfile[]) => void;
+  onBack: () => void;
+}) {
+  const [otp, setOtp] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [cooldown, setCooldown] = useState(60);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    timerRef.current = setInterval(() => {
+      setCooldown((c) => {
+        if (c <= 1) { clearInterval(timerRef.current!); return 0; }
+        return c - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timerRef.current!);
+  }, []);
+
+  function handleOtpChange(v: string) {
+    if (/^\d{0,6}$/.test(v)) { setOtp(v); setError(null); }
+  }
+
+  async function handleVerify() {
+    if (otp.length !== 6) {
+      setError("Please enter the 6-digit OTP.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await apiFetch("/api/auth/otp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone_number: phone, otp }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Invalid OTP. Please try again.");
+        setLoading(false);
+        return;
+      }
+      onVerified(data.selection_token, data.profiles);
+    } catch {
+      setError("Unable to reach the server. Please check your connection.");
+      setLoading(false);
+    }
+  }
+
+  async function handleResend() {
+    if (cooldown > 0) return;
+    setError(null);
+    try {
+      await apiFetch("/api/auth/otp/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone_number: phone }),
+      });
+      setCooldown(60);
+      timerRef.current = setInterval(() => {
+        setCooldown((c) => {
+          if (c <= 1) { clearInterval(timerRef.current!); return 0; }
+          return c - 1;
+        });
+      }, 1000);
+    } catch {
+      setError("Failed to resend OTP.");
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <button onClick={onBack} className="flex items-center gap-1 mb-3"
+          style={{ fontSize: "13px", color: "#0d9488", fontWeight: 500 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+          Back
+        </button>
+        <h1 style={{ fontSize: "26px", fontWeight: 700, color: "#0f172a",
+          letterSpacing: "-0.025em", lineHeight: 1.2 }}>
+          Enter OTP
+        </h1>
+        <p className="mt-1.5" style={{ fontSize: "14px", color: "#94a3b8" }}>
+          Sent to +91-{phone} via WhatsApp
+        </p>
+      </div>
+      <div>
+        <label className="block mb-1.5"
+          style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
+          Verification Code
+        </label>
+        <TextInput
+          value={otp}
+          onChange={handleOtpChange}
+          onKeyDown={(e) => e.key === "Enter" && handleVerify()}
+          placeholder="6-digit code"
+          type="tel"
+          autoFocus
+        />
+      </div>
+      {error && <ErrorBox message={error} />}
+      <TealButton
+        onClick={handleVerify}
+        loading={loading}
+        loadingLabel="Verifying…"
+        label="Verify OTP"
+      />
+      <div className="text-center">
+        {cooldown > 0 ? (
+          <span style={{ fontSize: "13px", color: "#9ca3af" }}>
+            Resend in {cooldown}s
+          </span>
+        ) : (
+          <button onClick={handleResend}
+            style={{ fontSize: "13px", color: "#0d9488", fontWeight: 500 }}>
+            Resend OTP
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Step 3: Profile Selector ─────────────────────────────────────────────────
+
+function ProfileStep({
+  profiles,
+  selectionToken,
+  onBack,
+}: {
+  profiles: UserProfile[];
+  selectionToken: string;
+  onBack: () => void;
+}) {
+  const navigate = useNavigate();
+  const [error, setError] = useState<string | null>(null);
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+
+  async function handleSelect(userId: string) {
+    setLoadingId(userId);
+    setError(null);
+    try {
+      const res = await apiFetch("/api/auth/select-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ selection_token: selectionToken, user_id: userId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Failed to select profile. Please try again.");
+        setLoadingId(null);
+        return;
+      }
+      saveToken(data.token);
+      const payload = parseToken(data.token);
+      if (!payload) {
+        setError("Received an invalid session. Please try again.");
+        setLoadingId(null);
+        return;
+      }
+      navigate(ROLE_ROUTES[payload.role_id] ?? "/login");
+    } catch {
+      setError("Unable to reach the server.");
+      setLoadingId(null);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <button onClick={onBack} className="flex items-center gap-1 mb-3"
+          style={{ fontSize: "13px", color: "#0d9488", fontWeight: 500 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+          Back
+        </button>
+        <h1 style={{ fontSize: "26px", fontWeight: 700, color: "#0f172a",
+          letterSpacing: "-0.025em", lineHeight: 1.2 }}>
+          Select your profile
+        </h1>
+        <p className="mt-1.5" style={{ fontSize: "14px", color: "#94a3b8" }}>
+          Multiple accounts found for this number
+        </p>
+      </div>
+      {error && <ErrorBox message={error} />}
+      <div className="space-y-3">
+        {profiles.map((profile) => {
+          const roleLabel = ROLE_LABELS[profile.role_id as keyof typeof ROLE_LABELS] ?? "User";
+          const initials = (profile.full_name ?? "U")
+            .split(" ").map((w) => w[0]?.toUpperCase() ?? "").slice(0, 2).join("");
+          const isLoading = loadingId === profile.user_id;
+          return (
+            <button
+              key={profile.user_id}
+              onClick={() => handleSelect(profile.user_id)}
+              disabled={loadingId !== null}
+              className="w-full flex items-center gap-4 rounded-xl p-4 text-left transition-all hover:shadow-sm disabled:opacity-60"
+              style={{ border: "1.5px solid #e5e7eb", backgroundColor: "white" }}
+              onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#0d9488")}
+              onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#e5e7eb")}
+            >
+              <div className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0"
+                style={{ backgroundColor: "#f0fdfa" }}>
+                <span style={{ fontSize: "16px", fontWeight: 700, color: "#0d9488" }}>
+                  {initials}
+                </span>
+              </div>
+              <div className="flex-1">
+                <p style={{ fontSize: "15px", fontWeight: 600, color: "#111827" }}>
+                  {profile.full_name ?? "User"}
+                </p>
+                <p style={{ fontSize: "13px", color: "#6b7280" }}>{roleLabel}</p>
+              </div>
+              {isLoading ? (
+                <svg className="animate-spin flex-shrink-0" width="16" height="16"
+                  viewBox="0 0 24 24" fill="none" stroke="#0d9488" strokeWidth="2.5">
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round" />
+                </svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                  stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 18l6-6-6-6" />
+                </svg>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Login Page ──────────────────────────────────────────────────────────
+
+
+export function Login() {
+  const navigate = useNavigate();
+  const [step, setStep] = useState<Step>("phone");
+  const [phone, setPhone] = useState("");
+  const [selectionToken, setSelectionToken] = useState("");
+  const [profiles, setProfiles] = useState<UserProfile[]>([]);
+
+  function handleOtpSent(p: string) {
+    setPhone(p);
+    setStep("otp");
+  }
+
+  function handleVerified(token: string, profs: UserProfile[]) {
+    if (profs.length === 1) {
+      // Auto select — go straight to app
+      handleAutoSelect(token, profs[0]);
+    } else {
+      setSelectionToken(token);
+      setProfiles(profs);
+      setStep("profile");
+    }
+  }
+
+  async function handleAutoSelect(token: string, profile: UserProfile) {
+    try {
+      const res = await apiFetch("/api/auth/select-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ selection_token: token, user_id: profile.user_id }),
+      });
+      const data = await res.json();
+      if (!res.ok) return;
+      saveToken(data.token);
+      const payload = parseToken(data.token);
+      if (!payload) return;
+      navigate(ROLE_ROUTES[payload.role_id] ?? "/login");
+    } catch {
+      // fall through to profile step as fallback
+      setSelectionToken(token);
+      setProfiles([profile]);
+      setStep("profile");
+    }
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col lg:flex-row" style={{ backgroundColor: "#f8fafc" }}>
+      <TopMobileBar />
+      <LeftPanel />
+
+      {/* Right panel */}
+      <div className="flex-1 flex items-center justify-center p-6 relative"
+        style={{
+          backgroundImage: `url(${loginDoodle})`,
+          backgroundSize: "600px",
+          backgroundRepeat: "repeat",
+          backgroundPosition: "center",
+        }}>
+        <div className="absolute inset-0" style={{ backgroundColor: "rgba(255,255,255,0.92)" }} />
+        <div className="relative z-10 w-full" style={{ maxWidth: "400px" }}>
+          {step === "phone" && (
+            <PhoneStep onOtpSent={handleOtpSent} />
+          )}
+          {step === "otp" && (
+            <OtpStep
+              phone={phone}
+              onVerified={handleVerified}
+              onBack={() => setStep("phone")}
+            />
+          )}
+          {step === "profile" && (
+            <ProfileStep
+              profiles={profiles}
+              selectionToken={selectionToken}
+              onBack={() => setStep("otp")}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* Privacy Policy link */}
+      <div className="flex lg:hidden justify-center py-2"
+        style={{ backgroundColor: "#f0fdfa", borderTop: "1px solid #ccfbf1" }}>
+        <a href="/privacy" style={{ fontSize: "12px", color: "#0d9488" }}>
+          Privacy Policy
+        </a>
+      </div>
+
+      <BottomMobileDots />
+    </div>
+  );
+}
 
 // ===== FILE: src\app\pages\Management\ManagementDashboard.tsx =====
 
@@ -13884,6 +13986,97 @@ export function Notifications() {
             ))}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ===== FILE: src\app\pages\PrivacyPolicy.tsx =====
+
+// src/app/pages/PrivacyPolicy.tsx
+
+export function PrivacyPolicy() {
+  const sections = [
+    {
+      title: "1. Information We Collect",
+      body: "CleanDesk collects information necessary to provide institute management services. This includes names, phone numbers, roles (admin, teacher, student, management), attendance records, test results, fee information, and announcements. Data is collected directly from institute administrators during onboarding.",
+    },
+    {
+      title: "2. How We Use Your Information",
+      body: "We use collected information solely to operate the CleanDesk platform — managing attendance, tests, results, announcements, fee records, and communication within your institute. We do not use your data for advertising or share it with third parties for marketing purposes.",
+    },
+    {
+      title: "3. WhatsApp Communication",
+      body: "CleanDesk uses WhatsApp Business API to send one-time passwords (OTPs) for authentication. Phone numbers are used only for this purpose. We do not send promotional messages via WhatsApp.",
+    },
+    {
+      title: "4. Data Storage and Security",
+      body: "All data is stored securely on encrypted servers. Access is restricted to authorized institute administrators and CleanDesk system personnel. We implement industry-standard security practices to protect your data.",
+    },
+    {
+      title: "5. Data Sharing",
+      body: "We do not sell, trade, or share your personal data with third parties except as required by law or as necessary to operate the platform (e.g., WhatsApp Business API for OTP delivery).",
+    },
+    {
+      title: "6. Data Retention",
+      body: "Data is retained for the duration of your institute's subscription with CleanDesk. Upon termination, data is deleted within 90 days unless required to be retained by applicable law.",
+    },
+    {
+      title: "7. Your Rights",
+      body: "Users may request access to, correction of, or deletion of their personal data by contacting their institute administrator or reaching us at cleandeskedu@gmail.com.",
+    },
+    {
+      title: "8. Contact Us",
+      body: "For any privacy-related questions or concerns, please contact us at cleandeskedu@gmail.com.",
+    },
+  ];
+
+  return (
+    <div className="min-h-screen" style={{ backgroundColor: "#f8fafc" }}>
+
+      <div style={{ backgroundColor: "#f0fdfa", borderBottom: "1px solid #ccfbf1" }}>
+        <div className="flex items-center gap-3 px-8 py-4" style={{ maxWidth: "800px", margin: "0 auto" }}>
+          <div
+            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ backgroundColor: "#0d9488" }}
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <path d="M9 2L2 6v6l7 4 7-4V6L9 2z" stroke="white" strokeWidth="1.8" strokeLinejoin="round" />
+              <path d="M9 2v14M2 6l7 4 7-4" stroke="white" strokeWidth="1.8" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <span style={{ fontSize: "18px", fontWeight: 700, color: "#0d9488", letterSpacing: "-0.02em" }}>
+            CleanDesk
+          </span>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: "800px", margin: "0 auto", padding: "48px 32px" }}>
+
+        <h1 style={{ fontSize: "28px", fontWeight: 700, color: "#0f172a", marginBottom: "8px" }}>
+          Privacy Policy
+        </h1>
+        <p style={{ fontSize: "13px", color: "#94a3b8", marginBottom: "40px" }}>
+          Last updated: April 2026
+        </p>
+
+        {sections.map((section) => (
+          <div key={section.title} style={{ marginBottom: "32px" }}>
+            <h2 style={{ fontSize: "16px", fontWeight: 600, color: "#0f172a", marginBottom: "8px" }}>
+              {section.title}
+            </h2>
+            <p style={{ fontSize: "14px", color: "#475569", lineHeight: 1.75 }}>
+              {section.body}
+            </p>
+          </div>
+        ))}
+
+        <div style={{ marginTop: "48px", paddingTop: "24px", borderTop: "1px solid #e5e7eb" }}>
+          <a href="/login" style={{ fontSize: "13px", color: "#0d9488", fontWeight: 500 }}>
+            Back to Login
+          </a>
+        </div>
+
       </div>
     </div>
   );
@@ -19173,138 +19366,120 @@ function ReceiptModal({
   receipt: ReceiptData;
   onClose: () => void;
 }) {
-  const printId = "cleandesk-receipt-printable";
+  function buildReceiptHtml(): string {
+    const formattedDate = new Date(receipt.date).toLocaleDateString("en-IN", {
+      day: "numeric", month: "long", year: "numeric",
+    });
+    const formattedAmount = `₹${Number(receipt.amount).toLocaleString("en-IN")}`;
+    const formattedMode = receipt.paymentMode.replace(/_/g, " ");
 
-  function handlePrint() {
-    const content = document.getElementById(printId);
-    if (!content) return;
-    const printWindow = window.open("", "_blank", "width=700,height=600");
-    if (!printWindow) return;
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Receipt ${receipt.receiptNumber}</title>
-          <style>
-            * { box-sizing: border-box; margin: 0; padding: 0; }
-            body { font-family: 'Segoe UI', Arial, sans-serif; background: #fff; color: #111; }
-            .receipt { max-width: 480px; margin: 40px auto; padding: 36px; border: 1px solid #e5e7eb; border-radius: 12px; }
-            .header { text-align: center; margin-bottom: 28px; border-bottom: 2px solid #0d9488; padding-bottom: 20px; }
-            .institute { font-size: 20px; font-weight: 800; color: #0d9488; letter-spacing: -0.02em; }
-            .receipt-label { font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.1em; margin-top: 6px; }
-            .receipt-number { font-size: 15px; font-weight: 700; color: #374151; margin-top: 4px; font-family: monospace; }
-            .amount-block { text-align: center; margin: 24px 0; padding: 20px; background: #f0fdfa; border-radius: 10px; border: 1px solid #ccfbf1; }
-            .amount-label { font-size: 11px; font-weight: 600; color: #0d9488; text-transform: uppercase; letter-spacing: 0.08em; }
-            .amount-value { font-size: 36px; font-weight: 800; color: #0d9488; margin-top: 4px; }
-            .rows { margin-top: 24px; }
-            .row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f3f4f6; }
-            .row:last-child { border-bottom: none; }
-            .row-label { font-size: 12px; color: #6b7280; font-weight: 500; }
-            .row-value { font-size: 13px; color: #111827; font-weight: 600; text-align: right; max-width: 60%; }
-            .footer { margin-top: 28px; text-align: center; border-top: 1px dashed #e5e7eb; padding-top: 16px; }
-            .footer p { font-size: 11px; color: #9ca3af; }
-            .mode-badge { display: inline-block; padding: 2px 10px; border-radius: 20px; background: #eff6ff; color: #2563eb; font-size: 12px; font-weight: 600; }
-            @media print {
-              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-              .receipt { border: none; margin: 0; padding: 20px; }
-            }
-          </style>
-        </head>
-        <body>
-          ${content.innerHTML}
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => { printWindow.print(); }, 300);
+    const rows: { label: string; value: string }[] = [
+      { label: "Billed To",      value: receipt.studentName },
+      { label: "Login ID",       value: receipt.loginIdentifier },
+      { label: "Batch",          value: receipt.batchName },
+      { label: "Payment Date",   value: formattedDate },
+      { label: "Payment Mode",   value: formattedMode },
+      ...(receipt.paymentReference ? [{ label: "Reference / UTR", value: receipt.paymentReference }] : []),
+      { label: "Collected By",   value: receipt.collectedBy ?? "—" },
+      ...(receipt.note ? [{ label: "Note", value: receipt.note }] : []),
+    ];
+
+    const rowsHtml = rows.map(({ label, value }) => `
+      <tr>
+        <td style="padding:10px 0;border-bottom:1px solid #e5e7eb;font-size:12px;color:#6b7280;font-weight:500;width:40%;vertical-align:top;">${label}</td>
+        <td style="padding:10px 0;border-bottom:1px solid #e5e7eb;font-size:13px;color:#111827;font-weight:600;text-align:right;vertical-align:top;">${value}</td>
+      </tr>`).join("");
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Times New Roman',Times,serif;background:#fff;color:#111827;}
+    @page{size:A4;margin:0;}
+    @media print{
+      body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    }
+  </style>
+</head>
+<body>
+<div style="max-width:640px;margin:0 auto;padding:48px 56px;position:relative;min-height:100vh;">
+
+  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-30deg);font-size:64px;font-weight:900;color:rgba(0,0,0,0.04);white-space:nowrap;pointer-events:none;font-family:'Times New Roman',Times,serif;letter-spacing:-1px;user-select:none;z-index:0;">
+    ${receipt.instituteName}
+  </div>
+
+  <div style="position:relative;z-index:1;">
+
+    <div style="border-bottom:2px solid #111827;padding-bottom:20px;margin-bottom:24px;">
+      <p style="font-size:26px;font-weight:900;color:#111827;letter-spacing:-0.5px;font-family:'Times New Roman',Times,serif;line-height:1.1;">${receipt.instituteName}</p>
+      <p style="font-size:11px;color:#6b7280;margin-top:4px;letter-spacing:0.08em;font-family:Arial,sans-serif;">OFFICIAL PAYMENT RECEIPT</p>
+    </div>
+
+    <div style="text-align:right;margin-bottom:32px;">
+      <p style="font-size:12px;color:#6b7280;font-family:Arial,sans-serif;">Receipt No.</p>
+      <p style="font-size:14px;font-weight:700;color:#111827;font-family:'Courier New',monospace;margin-top:2px;">${receipt.receiptNumber}</p>
+      <p style="font-size:12px;color:#6b7280;margin-top:8px;font-family:Arial,sans-serif;">${formattedDate}</p>
+    </div>
+
+    <div style="border:1.5px solid #d1d5db;border-radius:4px;padding:24px 28px;margin-bottom:32px;background:#fafafa;">
+      <p style="font-size:11px;color:#6b7280;letter-spacing:0.1em;font-family:Arial,sans-serif;margin-bottom:6px;">AMOUNT RECEIVED</p>
+      <p style="font-size:38px;font-weight:900;color:#111827;letter-spacing:-1px;font-family:'Times New Roman',Times,serif;line-height:1;">${formattedAmount}</p>
+    </div>
+
+    <table style="width:100%;border-collapse:collapse;margin-bottom:40px;">
+      ${rowsHtml}
+    </table>
+
+    <div style="border-top:1px dashed #d1d5db;padding-top:16px;margin-top:8px;">
+      <p style="font-size:12px;color:#374151;font-family:Arial,sans-serif;">Thank you for your payment. Please retain this receipt for your records.</p>
+      <p style="font-size:10px;color:#9ca3af;margin-top:20px;font-family:Arial,sans-serif;">This is a computer-generated receipt. Powered by Cleandesk.</p>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>`;
   }
 
-  const formattedDate = new Date(receipt.date).toLocaleDateString("en-IN", {
-    day: "numeric", month: "long", year: "numeric",
-  });
-  const formattedAmount = `₹${Number(receipt.amount).toLocaleString("en-IN")}`;
-  const formattedMode = receipt.paymentMode.replace(/_/g, " ");
+  function handlePrint() {
+    const printWindow = window.open("", "_blank", "width=700,height=900");
+    if (!printWindow) return;
+    printWindow.document.write(buildReceiptHtml());
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => { printWindow.print(); }, 400);
+  }
 
   return (
     <div
       className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-6"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[480px]">
-        {/* Modal header — not part of print */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[580px] flex flex-col" style={{ maxHeight: "90vh" }}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="text-gray-900" style={{ fontSize: "16px", fontWeight: 700 }}>Payment Receipt</h2>
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrint}
               className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-white hover:opacity-90 transition-all"
-              style={{ backgroundColor: "#0d9488", fontSize: "13px", fontWeight: 600 }}
+              style={{ backgroundColor: "#374151", fontSize: "13px", fontWeight: 600 }}
             >
               <Printer size={14} strokeWidth={2.5} />
-              Print
+              Print / Save PDF
             </button>
             <button onClick={onClose} className="w-8 h-8 rounded-md flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors">
               <X size={16} />
             </button>
           </div>
         </div>
-
-        {/* Receipt body — this is what gets printed */}
-        <div className="px-6 py-5">
-          <div id={printId}>
-            <div className="receipt" style={{ maxWidth: "100%", padding: "28px", border: "1px solid #e5e7eb", borderRadius: "12px" }}>
-
-              {/* Header */}
-              <div className="header" style={{ textAlign: "center", marginBottom: "24px", borderBottom: "2px solid #0d9488", paddingBottom: "18px" }}>
-                <p className="institute" style={{ fontSize: "20px", fontWeight: 800, color: "#0d9488", letterSpacing: "-0.02em" }}>
-                  {receipt.instituteName}
-                </p>
-                <p className="receipt-label" style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.1em", marginTop: "6px" }}>
-                  Payment Receipt
-                </p>
-                <p className="receipt-number" style={{ fontSize: "14px", fontWeight: 700, color: "#374151", marginTop: "3px", fontFamily: "monospace" }}>
-                  {receipt.receiptNumber}
-                </p>
-              </div>
-
-              {/* Amount */}
-              <div style={{ textAlign: "center", margin: "20px 0", padding: "18px", backgroundColor: "#f0fdfa", borderRadius: "10px", border: "1px solid #ccfbf1" }}>
-                <p style={{ fontSize: "11px", fontWeight: 600, color: "#0d9488", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                  Amount Received
-                </p>
-                <p style={{ fontSize: "34px", fontWeight: 800, color: "#0d9488", marginTop: "4px" }}>
-                  {formattedAmount}
-                </p>
-              </div>
-
-              {/* Details rows */}
-              <div style={{ marginTop: "20px" }}>
-                {[
-                  { label: "Student Name",   value: receipt.studentName },
-                  { label: "Login ID",       value: receipt.loginIdentifier },
-                  { label: "Batch",          value: receipt.batchName },
-                  { label: "Payment Date",   value: formattedDate },
-                  { label: "Payment Mode",   value: formattedMode },
-                  ...(receipt.paymentReference ? [{ label: "Reference / UTR", value: receipt.paymentReference }] : []),
-                  { label: "Collected By",   value: receipt.collectedBy ?? "—" },
-                  ...(receipt.note ? [{ label: "Note", value: receipt.note }] : []),
-                ].map(({ label, value }) => (
-                  <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "9px 0", borderBottom: "1px solid #f3f4f6" }}>
-                    <span style={{ fontSize: "12px", color: "#6b7280", fontWeight: 500 }}>{label}</span>
-                    <span style={{ fontSize: "13px", color: "#111827", fontWeight: 600, textAlign: "right", maxWidth: "58%" }}>{value}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Footer */}
-              <div style={{ marginTop: "24px", textAlign: "center", borderTop: "1px dashed #e5e7eb", paddingTop: "16px" }}>
-                <p style={{ fontSize: "11px", color: "#9ca3af" }}>Thank you for your payment.</p>
-                <p style={{ fontSize: "10px", color: "#d1d5db", marginTop: "4px" }}>This is a computer-generated receipt.</p>
-              </div>
-
-            </div>
-          </div>
+        <div className="flex-1 overflow-auto px-6 py-5">
+          <iframe
+            srcDoc={buildReceiptHtml()}
+            style={{ width: "100%", height: "520px", border: "1px solid #e5e7eb", borderRadius: "8px" }}
+            title="Receipt Preview"
+          />
         </div>
       </div>
     </div>
@@ -28261,7 +28436,7 @@ type UserRole = "Admin" | "Management" | "Teacher" | "Student";
 
 type User = {
   id: string;
-  loginIdentifier: string;
+  phoneNumber: string | null;
   name: string | null;
   role: UserRole;
   active: boolean;
@@ -28278,7 +28453,7 @@ const ROLE_ID_TO_LABEL: Record<number, UserRole> = {
 function mapApiUser(u: UserListItem): User {
   return {
     id: u.id,
-    loginIdentifier: u.login_identifier,
+    phoneNumber: u.phone_number ?? null,
     name: u.full_name ?? null,
     role: ROLE_ID_TO_LABEL[u.role_id] ?? "Student",
     active: u.is_active,
@@ -28360,7 +28535,7 @@ function CreateUserModal({
       setCreated(result);
       onCreated({
         id: result.id,
-        loginIdentifier: result.login_identifier,
+        phoneNumber: mobile.trim() || null,
         name: fullName.trim(),
         role,
         active: true,
@@ -28400,25 +28575,11 @@ function CreateUserModal({
           </div>
 
           <div className="space-y-3 mb-6">
-            {[
-              { label: "Login Identifier", value: created.login_identifier },
-              { label: "Temporary Password", value: created.temporary_password },
-            ].map(({ label, value }) => (
-              <div key={label}>
-                <p className="text-gray-400 mb-1.5" style={{ fontSize: "11.5px", fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>
-                  {label}
-                </p>
-                <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl border border-gray-100" style={{ backgroundColor: "#f9fafb" }}>
-                  <span className="text-gray-800 font-mono" style={{ fontSize: "13.5px" }}>{value}</span>
-                  <button
-                    onClick={() => handleCopy(`${created.login_identifier}\n${created.temporary_password}`)}
-                    className="text-gray-400 hover:text-teal-600 transition-colors flex-shrink-0"
-                  >
-                    {copied ? <Check size={14} /> : <Copy size={14} />}
-                  </button>
-                </div>
-              </div>
-            ))}
+            <div className="px-4 py-3 rounded-xl border border-gray-100" style={{ backgroundColor: "#f0fdfa" }}>
+              <p className="text-teal-700" style={{ fontSize: "13px", fontWeight: 500 }}>
+                User created successfully. They can now log in using their registered mobile number via WhatsApp OTP.
+              </p>
+            </div>
           </div>
 
           <button
@@ -28611,7 +28772,7 @@ function DeactivateModal({ user, onClose, onConfirm }: {
               Deactivate User?
             </h2>
             <p className="text-gray-500 mt-1" style={{ fontSize: "13px", lineHeight: 1.5 }}>
-              <span className="font-semibold text-gray-700">{user.loginIdentifier}</span> will lose access to the system. This can be reversed later.
+              <span className="font-semibold text-gray-700">{user.name ?? user.phoneNumber ?? "This user"}</span> will lose access to the system. This can be reversed later.
             </p>
           </div>
         </div>
@@ -28650,8 +28811,8 @@ function UserProfilePanel({ user, onClose, onDeactivate, onReactivate, currentUs
   const RoleIcon = rc.icon;
   const isCurrentUser = currentUserId === user.id;
   const initials = user.name
-                ? user.name.split(" ").map((p) => p[0]?.toUpperCase() ?? "").join("").slice(0, 2)
-                : user.loginIdentifier.split("@")[0].split(".").map((p) => p[0]?.toUpperCase() ?? "").join("").slice(0, 2);
+    ? user.name.split(" ").map((p) => p[0]?.toUpperCase() ?? "").join("").slice(0, 2)
+    : (user.phoneNumber ?? "U").slice(-2);
 
   return (
     <>
@@ -28694,10 +28855,10 @@ function UserProfilePanel({ user, onClose, onDeactivate, onReactivate, currentUs
               </div>
               <div>
                 <p className="text-gray-900" style={{ fontSize: "16px", fontWeight: 700, letterSpacing: "-0.01em" }}>
-                  {user.name ?? user.loginIdentifier.split("@")[0].split(".").map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(" ")}
+                  {user.name ?? user.phoneNumber ?? "Unknown User"}
                 </p>
                 <p className="text-gray-400 mt-0.5" style={{ fontSize: "12.5px" }}>
-                  {user.loginIdentifier}
+                  {user.phoneNumber}
                 </p>
               </div>
             </div>
@@ -28706,15 +28867,15 @@ function UserProfilePanel({ user, onClose, onDeactivate, onReactivate, currentUs
           {/* Info Cards */}
           <div className="px-6 py-5 space-y-4">
 
-            {/* Login Identifier */}
+            {/* Phone Number */}
             <div>
               <p className="text-gray-400 uppercase mb-2" style={{ fontSize: "10px", fontWeight: 600, letterSpacing: "0.08em" }}>
-                Login Identifier
+                Phone Number
               </p>
               <div className="flex items-center gap-3 p-3 rounded-xl" style={{ backgroundColor: "#f9fafb", border: "1px solid #f3f4f6" }}>
                 <UsersIcon size={14} className="text-gray-400" strokeWidth={2} />
                 <span className="text-gray-700" style={{ fontSize: "13.5px", fontWeight: 500 }}>
-                  {user.loginIdentifier}
+                  {user.phoneNumber ?? "—"}
                 </span>
               </div>
             </div>
@@ -28857,7 +29018,7 @@ export function Users() {
   const filtered = visibleUsers.filter((u) => {
     const matchRole   = roleFilter === "All" || u.role === roleFilter;
     const matchSearch =
-      u.loginIdentifier.toLowerCase().includes(search.toLowerCase()) ||
+      (u.phoneNumber ?? "").toLowerCase().includes(search.toLowerCase()) ||
       (u.name ?? "").toLowerCase().includes(search.toLowerCase());
     return matchRole && matchSearch;
   });
@@ -28953,7 +29114,7 @@ export function Users() {
           <input
             value={search}
             onChange={(e) => handleFilterChange(() => setSearch(e.target.value))}
-            placeholder="Search by login identifier…"
+            placeholder="Search by name or phone number…"
             className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-300 shadow-sm transition-all"
             style={{ fontSize: "13.5px" }}
           />
@@ -28983,7 +29144,7 @@ export function Users() {
         <table className="w-full">
           <thead>
             <tr style={{ backgroundColor: "#f9fafb" }}>
-              {["Login Identifier", "Name", "Role", "Status", "Created Date", ""].map((col) => (
+              {["Phone Number", "Name", "Role", "Status", "Created Date", ""].map((col) => (
                 <th
                   key={col}
                   className="text-left px-6 py-3 text-gray-400"
@@ -28999,8 +29160,8 @@ export function Users() {
               const rc = roleConfig[user.role];
               const RoleIcon = rc.icon;
               const initials = user.name
-    ? user.name.split(" ").map((p) => p[0]?.toUpperCase() ?? "").join("").slice(0, 2)
-    : user.loginIdentifier.split("@")[0].split(".").map((p) => p[0]?.toUpperCase() ?? "").join("").slice(0, 2);
+                ? user.name.split(" ").map((p) => p[0]?.toUpperCase() ?? "").join("").slice(0, 2)
+                : (user.phoneNumber ?? "U").slice(-2);
 
               return (
                 <tr
@@ -29023,7 +29184,7 @@ export function Users() {
                         className="text-gray-700 group-hover:text-teal-700 transition-colors"
                         style={{ fontSize: "13.5px", fontWeight: 500 }}
                       >
-                        {user.loginIdentifier}
+                        {user.phoneNumber ?? "—"}
                       </span>
                     </div>
                   </td>
@@ -29222,8 +29383,7 @@ import { MyFee } from "./pages/Student/MyFee";
 import { StudentAnnouncements } from "./pages/Student/StudentAnnouncements";
 import { Notifications } from "./pages/Notifications";
 import { Login } from "./pages/Login";
-import { ForgotPassword } from "./pages/ForgotPassword";
-import { ResetPassword } from "./pages/ResetPassword";
+import { PrivacyPolicy } from "./pages/PrivacyPolicy";
 import { clearToken, getToken, parseToken, isTokenExpired, ROLE_ROUTES } from "./auth";
 
 function requireRole(roleId: number) {
@@ -29262,13 +29422,10 @@ export const router = createBrowserRouter([
     path: "/login",
     Component: Login,
   },
+  
   {
-    path: "/forgot-password",
-    Component: ForgotPassword,
-  },
-  {
-    path: "/reset-password",
-    Component: ResetPassword,
+    path: "/privacy",
+    Component: PrivacyPolicy,
   },
 
   // ── Admin (role_id: 1) ───────────────────────────────────────────────────────
@@ -31739,7 +31896,7 @@ export async function createTestApi(payload: CreateTestPayload): Promise<{ creat
 // src/Lib/api/users.ts
 
 import { getToken } from "../../app/auth";
-import { ROLES, type RoleId } from "../../app/auth";
+import { type RoleId } from "../../app/auth";
 
 export type CreateUserPayload = {
   full_name: string;
@@ -31751,17 +31908,16 @@ export type CreateUserPayload = {
 
 export type CreatedUser = {
   id: string;
-  login_identifier: string;
   institute_id: string;
   role_id: RoleId;
-  temporary_password: string;
+  phone_number: string | null;
 };
 
 export type UserRoleId = 1 | 2 | 3 | 4;
 
 export type UserListItem = {
   id: string;
-  login_identifier: string;
+  phone_number: string | null;
   role_id: UserRoleId;
   is_active: boolean;
   created_at: string;
@@ -31834,7 +31990,6 @@ export async function createUserApi(
 
   return {
     ...data.user,
-    temporary_password: data.temporary_password,
   };
 }
 

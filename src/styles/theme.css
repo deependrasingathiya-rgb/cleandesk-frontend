@@ -1,3 +1,4 @@
+
 @custom-variant dark (&:is(.dark *));
 
 :root {
@@ -18,6 +19,14 @@
   --accent-foreground: #030213;
   --destructive: #d4183d;
   --destructive-foreground: #ffffff;
+  --brand-primary: #0D9488;
+  --brand-primary-dark: #0F766E;
+  --brand-primary-light: rgba(13, 148, 136, 0.12);
+  --brand-primary-surface: #F0FDFA;
+  --semantic-success: #16A34A;
+  --semantic-error: #DC2626;
+  --semantic-warning: #D97706;
+  --semantic-info: #2563EB;
   --border: rgba(0, 0, 0, 0.1);
   --input: transparent;
   --input-background: #f3f3f5;
@@ -100,6 +109,14 @@
   --color-input-background: var(--input-background);
   --color-switch-background: var(--switch-background);
   --color-ring: var(--ring);
+  --color-brand-primary: var(--brand-primary);
+  --color-brand-primary-dark: var(--brand-primary-dark);
+  --color-brand-primary-light: var(--brand-primary-light);
+  --color-brand-primary-surface: var(--brand-primary-surface);
+  --color-semantic-success: var(--semantic-success);
+  --color-semantic-error: var(--semantic-error);
+  --color-semantic-warning: var(--semantic-warning);
+  --color-semantic-info: var(--semantic-info);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);

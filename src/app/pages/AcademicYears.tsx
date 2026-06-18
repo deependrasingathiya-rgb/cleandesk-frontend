@@ -130,7 +130,7 @@ function AcademicYearModal({
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             placeholder="e.g. 2027–2028"
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-50 transition-all"
+            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-gray-800 focus:outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary-light transition-all"
             style={{ fontSize: "14px" }}
           />
           <p className="text-gray-400 mt-2" style={{ fontSize: "12px" }}>
@@ -151,7 +151,7 @@ function AcademicYearModal({
             onClick={() => { if (label.trim()) { onSave(label.trim()); onClose(); } }}
             disabled={!label.trim()}
             className="flex-1 py-2.5 rounded-xl text-white transition-all hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+            style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
           >
             {isEdit ? "Save Changes" : "Create Academic Year"}
           </button>
@@ -206,8 +206,8 @@ function DetailPanel({
 
           {/* Year Identity */}
           <div className="flex items-center gap-4 mb-6">
-            <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ backgroundColor: "#f0fdfa" }}>
-              <CalendarDays size={26} style={{ color: "#0d9488" }} strokeWidth={1.8} />
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ backgroundColor: "var(--brand-primary-surface)" }}>
+              <CalendarDays size={26} style={{ color: "var(--brand-primary)" }} strokeWidth={1.8} />
             </div>
             <div>
               <p className="text-gray-900" style={{ fontSize: "22px", fontWeight: 750, letterSpacing: "-0.02em" }}>
@@ -272,7 +272,7 @@ function DetailPanel({
         <div className="px-6 py-4 border-t border-gray-100 flex flex-col gap-2.5">
           <button
             onClick={onEdit}
-            className="w-full py-2.5 rounded-xl border border-gray-200 text-gray-700 flex items-center justify-center gap-2 hover:border-teal-300 hover:text-teal-700 hover:bg-teal-50 transition-all"
+            className="w-full py-2.5 rounded-xl border border-gray-200 text-gray-700 flex items-center justify-center gap-2 hover:border-brand-primary hover:text-brand-primary hover:bg-brand-primary-surface transition-all"
             style={{ fontSize: "13.5px", fontWeight: 600 }}
           >
             <Edit2 size={14} strokeWidth={2.5} />
@@ -459,7 +459,7 @@ export function AcademicYears() {
         <button
           onClick={() => setModalMode("create")}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white transition-all hover:opacity-90 active:scale-95"
-          style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+          style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
         >
           <Plus size={16} strokeWidth={2.5} />
           New Academic Year
@@ -520,7 +520,7 @@ export function AcademicYears() {
             {years.map((yr) => (
               <tr
                 key={yr.id}
-                className="hover:bg-teal-50 transition-colors cursor-pointer group"
+                className="hover:bg-brand-primary-surface transition-colors cursor-pointer group"
                 onClick={() => setDetailYear(yr)}
               >
                 {/* Academic Year */}
@@ -528,9 +528,9 @@ export function AcademicYears() {
                   <div className="flex items-center gap-3">
                     <div
                       className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                      style={{ backgroundColor: "#f0fdfa" }}
+                      style={{ backgroundColor: "var(--brand-primary-surface)" }}
                     >
-                      <CalendarDays size={17} style={{ color: "#0d9488" }} strokeWidth={2} />
+                      <CalendarDays size={17} style={{ color: "var(--brand-primary)" }} strokeWidth={2} />
                     </div>
                     <div>
                       <p className="text-gray-800" style={{ fontSize: "14px", fontWeight: 650 }}>
@@ -560,7 +560,7 @@ export function AcademicYears() {
                   <div className="flex items-center gap-2">
                     <div
                       className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
-                      style={{ backgroundColor: "#0d9488" }}
+                      style={{ backgroundColor: "var(--brand-primary)" }}
                     >
                       <span className="text-white" style={{ fontSize: "9px", fontWeight: 700 }}>
                         {yr.createdByName.split(" ").filter(Boolean).map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
@@ -602,7 +602,7 @@ export function AcademicYears() {
                         setSelectedYear(yr);
                         setModalMode("edit");
                       }}
-                      className="w-8 h-8 rounded-md flex items-center justify-center border border-gray-100 text-gray-400 hover:border-teal-300 hover:text-teal-600 hover:bg-teal-50 transition-all"
+                      className="w-8 h-8 rounded-md flex items-center justify-center border border-gray-100 text-gray-400 hover:border-brand-primary hover:text-brand-primary hover:bg-brand-primary-surface transition-all"
                       title="Edit"
                     >
                       <Edit2 size={14} strokeWidth={2} />
@@ -611,7 +611,7 @@ export function AcademicYears() {
                     {/* Details chevron */}
                     <button
                       onClick={() => setDetailYear(yr)}
-                      className="w-8 h-8 rounded-md flex items-center justify-center border border-gray-100 text-gray-400 hover:border-teal-300 hover:text-teal-600 hover:bg-teal-50 transition-all"
+                      className="w-8 h-8 rounded-md flex items-center justify-center border border-gray-100 text-gray-400 hover:border-brand-primary hover:text-brand-primary hover:bg-brand-primary-surface transition-all"
                       title="View details"
                     >
                       <ChevronRight size={14} strokeWidth={2} />

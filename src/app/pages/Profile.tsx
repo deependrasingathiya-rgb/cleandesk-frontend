@@ -85,7 +85,7 @@ function InlineEditor({
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") cancel(); }}
               disabled={saving}
-              className="mt-1 w-full border border-teal-300 rounded-md px-3 py-1.5 text-gray-800 focus:outline-none focus:ring-2 focus:ring-teal-100 transition-all disabled:opacity-60"
+              className="mt-1 w-full border border-brand-primary rounded-md px-3 py-1.5 text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-primary-light transition-all disabled:opacity-60"
               style={{ fontSize: "13.5px" }}
             />
           ) : (
@@ -100,12 +100,12 @@ function InlineEditor({
               <button
                 onClick={commit}
                 disabled={saving}
-                className="w-7 h-7 rounded-md flex items-center justify-center transition-colors hover:bg-teal-50 disabled:opacity-50"
-                style={{ color: "#0d9488" }}
+                className="w-7 h-7 rounded-md flex items-center justify-center transition-colors hover:bg-brand-primary-surface disabled:opacity-50"
+                style={{ color: "var(--brand-primary)" }}
                 title="Save"
               >
                 {saving
-                  ? <div className="w-3 h-3 border border-teal-500 border-t-transparent rounded-full animate-spin" />
+                  ? <div className="w-3 h-3 border border-brand-primary border-t-transparent rounded-full animate-spin" />
                   : <Check size={14} strokeWidth={2.5} />
                 }
               </button>
@@ -123,7 +123,7 @@ function InlineEditor({
             <button
               onClick={() => { if (!disabled) { setDraft(value); setSaving_editing(true); } }}
               disabled={disabled}
-              className="w-7 h-7 rounded-md flex items-center justify-center transition-colors hover:bg-teal-50 text-gray-300 hover:text-teal-600 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-gray-300"
+              className="w-7 h-7 rounded-md flex items-center justify-center transition-colors hover:bg-brand-primary-surface text-gray-300 hover:text-brand-primary disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-gray-300"
               title={disabled ? "Cannot be edited" : "Edit"}
             >
               <Edit2 size={13} strokeWidth={2} />
@@ -217,7 +217,7 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
             <button
               onClick={onClose}
               className="mt-6 px-6 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
-              style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+              style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
             >
               Done
             </button>
@@ -239,7 +239,7 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
                       value={val}
                       onChange={(e) => { set(e.target.value); setError(""); }}
                       placeholder="••••••••"
-                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 pr-10 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-50 transition-all"
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 pr-10 text-gray-800 focus:outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary-light transition-all"
                       style={{ fontSize: "13.5px" }}
                     />
                     <button
@@ -279,7 +279,7 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
                 disabled={!canSubmit}
                 onClick={handleSubmit}
                 className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+                style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
               >
                 {submitting ? "Updating…" : "Update Password"}
               </button>
@@ -309,7 +309,7 @@ function NotifToggle({ value, onChange }: { value: boolean; onChange: (v: boolea
       type="button"
       onClick={() => onChange(!value)}
       className="relative inline-flex items-center rounded-full transition-all duration-200 flex-shrink-0"
-      style={{ width: "40px", height: "22px", backgroundColor: value ? "#0d9488" : "#e5e7eb" }}
+      style={{ width: "40px", height: "22px", backgroundColor: value ? "var(--brand-primary)" : "#e5e7eb" }}
     >
       <span
         className="inline-block rounded-full bg-white shadow transition-transform duration-200"
@@ -406,9 +406,9 @@ function NotificationModal({ onClose }: { onClose: () => void }) {
               style={{
                 fontSize: "12.5px",
                 fontWeight: 600,
-                borderColor: prefs.digestFrequency === f ? "#0d9488" : "#f3f4f6",
-                backgroundColor: prefs.digestFrequency === f ? "#f0fdfa" : "white",
-                color: prefs.digestFrequency === f ? "#0d9488" : "#9ca3af",
+                borderColor: prefs.digestFrequency === f ? "var(--brand-primary)" : "#f3f4f6",
+                backgroundColor: prefs.digestFrequency === f ? "var(--brand-primary-surface)" : "white",
+                color: prefs.digestFrequency === f ? "var(--brand-primary)" : "#9ca3af",
               }}
             >
               {f}
@@ -423,7 +423,7 @@ function NotificationModal({ onClose }: { onClose: () => void }) {
           <button
             onClick={save}
             className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all flex items-center justify-center gap-2"
-            style={{ backgroundColor: saved ? "#16a34a" : "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+            style={{ backgroundColor: saved ? "var(--semantic-success)" : "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
           >
             {saved ? <><CheckCircle2 size={15} strokeWidth={2.5} /> Saved!</> : "Save Preferences"}
           </button>
@@ -491,7 +491,7 @@ export function Profile() {
     return (
       <div className="p-8 max-w-[1000px] mx-auto flex items-center justify-center" style={{ minHeight: "60vh" }}>
         <div className="text-center">
-          <div className="w-8 h-8 border-2 border-teal-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <div className="w-8 h-8 border-2 border-brand-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
           <p className="text-gray-400" style={{ fontSize: "13.5px" }}>Loading profile…</p>
         </div>
       </div>
@@ -620,35 +620,35 @@ export function Profile() {
               {/* Change Password */}
               <div
                 onClick={() => setShowPassword(true)}
-                className="flex items-center justify-between p-3.5 rounded-xl border border-gray-100 hover:border-teal-200 hover:bg-teal-50 transition-all cursor-pointer group"
+                className="flex items-center justify-between p-3.5 rounded-xl border border-gray-100 hover:border-brand-primary hover:bg-brand-primary-surface transition-all cursor-pointer group"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-md flex items-center justify-center" style={{ backgroundColor: "#f0fdfa" }}>
-                    <Key size={15} style={{ color: "#0d9488" }} />
+                  <div className="w-8 h-8 rounded-md flex items-center justify-center" style={{ backgroundColor: "var(--brand-primary-surface)" }}>
+                    <Key size={15} style={{ color: "var(--brand-primary)" }} />
                   </div>
                   <div>
-                    <p className="text-gray-800 group-hover:text-teal-700" style={{ fontSize: "13.5px", fontWeight: 600 }}>Change Password</p>
+                    <p className="text-gray-800 group-hover:text-brand-primary" style={{ fontSize: "13.5px", fontWeight: 600 }}>Change Password</p>
                     <p className="text-gray-400" style={{ fontSize: "12px" }}>Update your account password</p>
                   </div>
                 </div>
-                <span className="text-gray-300 group-hover:text-teal-500">→</span>
+                <span className="text-gray-300 group-hover:text-brand-primary">→</span>
               </div>
 
               {/* Notification Preferences */}
               <div
                 onClick={() => setShowNotif(true)}
-                className="flex items-center justify-between p-3.5 rounded-xl border border-gray-100 hover:border-teal-200 hover:bg-teal-50 transition-all cursor-pointer group"
+                className="flex items-center justify-between p-3.5 rounded-xl border border-gray-100 hover:border-brand-primary hover:bg-brand-primary-surface transition-all cursor-pointer group"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-md flex items-center justify-center" style={{ backgroundColor: "#f0fdfa" }}>
-                    <Bell size={15} style={{ color: "#0d9488" }} />
+                  <div className="w-8 h-8 rounded-md flex items-center justify-center" style={{ backgroundColor: "var(--brand-primary-surface)" }}>
+                    <Bell size={15} style={{ color: "var(--brand-primary)" }} />
                   </div>
                   <div>
-                    <p className="text-gray-800 group-hover:text-teal-700" style={{ fontSize: "13.5px", fontWeight: 600 }}>Notification Preferences</p>
+                    <p className="text-gray-800 group-hover:text-brand-primary" style={{ fontSize: "13.5px", fontWeight: 600 }}>Notification Preferences</p>
                     <p className="text-gray-400" style={{ fontSize: "12px" }}>Manage email & push notifications</p>
                   </div>
                 </div>
-                <span className="text-gray-300 group-hover:text-teal-500">→</span>
+                <span className="text-gray-300 group-hover:text-brand-primary">→</span>
               </div>
 
             </div>

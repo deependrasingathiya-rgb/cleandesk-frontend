@@ -129,7 +129,7 @@ function BatchSelector({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-left flex items-center justify-between focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white"
+        className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-left flex items-center justify-between focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all bg-white"
         style={{ fontSize: "13.5px" }}
       >
         <span style={{ color: selected.length === 0 ? "#d1d5db" : "#1f2937" }}>
@@ -148,11 +148,11 @@ function BatchSelector({
                 key={batch}
                 type="button"
                 onClick={() => toggle(batch)}
-                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-teal-50 transition-colors text-left"
+                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-brand-primary-surface transition-colors text-left"
               >
                 <div
                   className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0 transition-all"
-                  style={{ border: isSelected ? "none" : "2px solid #d1d5db", backgroundColor: isSelected ? "#0d9488" : "transparent" }}
+                  style={{ border: isSelected ? "none" : "2px solid #d1d5db", backgroundColor: isSelected ? "var(--brand-primary)" : "transparent" }}
                 >
                   {isSelected && (
                     <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
@@ -163,7 +163,7 @@ function BatchSelector({
                 <div className="flex items-center gap-2 flex-1">
                   <span className="text-gray-700" style={{ fontSize: "13px", fontWeight: isSelected ? 600 : 400 }}>{batch}</span>
                   {isUniversal && (
-                    <span className="px-1.5 py-0.5 rounded" style={{ fontSize: "10px", fontWeight: 700, color: "#0d9488", backgroundColor: "#f0fdfa" }}>ALL</span>
+                    <span className="px-1.5 py-0.5 rounded" style={{ fontSize: "10px", fontWeight: 700, color: "var(--brand-primary)", backgroundColor: "var(--brand-primary-surface)" }}>ALL</span>
                   )}
                 </div>
               </button>
@@ -178,7 +178,7 @@ function BatchSelector({
             <span
               key={b}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-md"
-              style={{ fontSize: "12px", fontWeight: 500, backgroundColor: b === "Universal" ? "#f0fdfa" : "#f3f4f6", color: b === "Universal" ? "#0d9488" : "#374151" }}
+              style={{ fontSize: "12px", fontWeight: 500, backgroundColor: b === "Universal" ? "var(--brand-primary-surface)" : "#f3f4f6", color: b === "Universal" ? "var(--brand-primary)" : "#374151" }}
             >
               {b}
               <button type="button" onClick={() => remove(b)} className="hover:opacity-70"><X size={10} strokeWidth={2.5} /></button>
@@ -200,7 +200,7 @@ function SectionHeader({ title, actionLabel, onAction }: { title: string; action
     <div className="flex items-center justify-between mb-4">
       <h2 className="text-gray-800" style={{ fontSize: "16px", fontWeight: 650, letterSpacing: "-0.01em" }}>{title}</h2>
       {actionLabel && (
-        <button onClick={onAction} className="flex items-center gap-1.5 text-teal-600 hover:text-teal-700 transition-colors" style={{ fontSize: "13px", fontWeight: 500 }}>
+        <button onClick={onAction} className="flex items-center gap-1.5 text-brand-primary hover:text-brand-primary transition-colors" style={{ fontSize: "13px", fontWeight: 500 }}>
           {actionLabel}<ArrowRight size={14} />
         </button>
       )}
@@ -372,7 +372,7 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
           <p className="text-gray-400 mt-1" style={{ fontSize: "14px" }}>Overview of institute activity — {pageDateLabel}</p>
           {lastUpdatedLabel && <p className="text-gray-300 mt-1" style={{ fontSize: "12px" }}>Auto-refreshing every minute. Last updated at {lastUpdatedLabel}.</p>}
         </div>
-        <button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white transition-all hover:opacity-90 active:scale-95" style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}>
+        <button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white transition-all hover:opacity-90 active:scale-95" style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}>
           <Plus size={16} strokeWidth={2.5} />
           Create Announcement
         </button>
@@ -468,7 +468,7 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
               ) : upcomingTests.map((test) => (
                 <tr key={test.id} className="border-t border-gray-50">
                   <td className="px-4 py-3.5"><span className="text-gray-800" style={{ fontSize: "13.5px", fontWeight: 600 }}>{test.test_name}</span></td>
-                  <td className="px-4 py-3.5"><span className="inline-flex items-center px-2.5 py-0.5 rounded-full" style={{ fontSize: "11.5px", fontWeight: 600, backgroundColor: "#f0fdfa", color: "#0d9488" }}>{test.subject}</span></td>
+                  <td className="px-4 py-3.5"><span className="inline-flex items-center px-2.5 py-0.5 rounded-full" style={{ fontSize: "11.5px", fontWeight: 600, backgroundColor: "var(--brand-primary-surface)", color: "var(--brand-primary)" }}>{test.subject}</span></td>
                   <td className="px-4 py-3.5"><span className="text-gray-500" style={{ fontSize: "13px" }}>{test.batch_name}</span></td>
                   <td className="px-4 py-3.5"><span className="text-gray-700" style={{ fontSize: "13px", fontWeight: 500 }}>{new Date(test.test_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span></td>
                   <td className="px-4 py-3.5"><span className="text-gray-400" style={{ fontSize: "13px" }}>{test.created_by ?? "—"}</span></td>
@@ -495,8 +495,8 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
                   </div>
                   <p className="text-gray-400 mb-3 leading-relaxed" style={{ fontSize: "12.5px" }}>{ann.preview}</p>
                   <div className="flex items-center gap-2">
-                    <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: "#f0fdfa" }}>
-                      <span style={{ fontSize: "9px", fontWeight: 700, color: "#0d9488" }}>{ann.createdBy.charAt(0)}</span>
+                    <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: "var(--brand-primary-surface)" }}>
+                      <span style={{ fontSize: "9px", fontWeight: 700, color: "var(--brand-primary)" }}>{ann.createdBy.charAt(0)}</span>
                     </div>
                     <span className="text-gray-400" style={{ fontSize: "12px" }}>{ann.createdBy}</span>
                     <span className="text-gray-200">·</span>
@@ -513,9 +513,9 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-gray-800" style={{ fontSize: "16px", fontWeight: 650, letterSpacing: "-0.01em" }}>Notifications</h2>
               {unreadCount > 0 && (
-                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ backgroundColor: "#f0fdfa" }}>
-                  <Bell size={12} style={{ color: "#0d9488" }} />
-                  <span style={{ fontSize: "11px", fontWeight: 600, color: "#0d9488" }}>{unreadCount} new</span>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ backgroundColor: "var(--brand-primary-surface)" }}>
+                  <Bell size={12} style={{ color: "var(--brand-primary)" }} />
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--brand-primary)" }}>{unreadCount} new</span>
                 </div>
               )}
             </div>
@@ -552,7 +552,7 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
                         <p className="text-gray-300 mt-1" style={{ fontSize: "11px" }}>{relativeTime}</p>
                       </div>
                       {!notif.is_read && (
-                        <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5" style={{ backgroundColor: "#0d9488" }} />
+                        <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5" style={{ backgroundColor: "var(--brand-primary)" }} />
                       )}
                     </div>
                   );

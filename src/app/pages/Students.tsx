@@ -137,7 +137,7 @@ function TextInput({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all"
+      className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all"
       style={{ fontSize: "13.5px" }}
     />
   );
@@ -344,8 +344,8 @@ function EnrollStudentForm({ onBack, onSubmit }: {
     if (paymentDone) {
       return (
         <div className="p-8 max-w-[600px] mx-auto flex flex-col items-center justify-center" style={{ minHeight: "60vh" }}>
-          <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: "#f0fdfa" }}>
-            <CheckCircle2 size={32} color="#0d9488" strokeWidth={2} />
+          <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: "var(--brand-primary-surface)" }}>
+            <CheckCircle2 size={32} color="var(--brand-primary)" strokeWidth={2} />
           </div>
           <h2 className="text-gray-900 mb-1" style={{ fontSize: "20px", fontWeight: 700 }}>All Done!</h2>
           <p className="text-gray-400 text-center mb-6" style={{ fontSize: "14px" }}>
@@ -354,7 +354,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
           <button
             onClick={() => setSubmitted(true)}
             className="px-6 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
-            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+            style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
           >
             View Credentials
           </button>
@@ -401,7 +401,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
               <select
                 value={advanceMode}
                 onChange={(e) => { setAdvanceMode(e.target.value); setAdvanceErrors((er) => { const c = { ...er }; delete c.advanceMode; return c; }); }}
-                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white"
+                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all bg-white"
                 style={{ fontSize: "13.5px", color: advanceMode ? "#1f2937" : "#d1d5db" }}
               >
                 <option value="">Select mode</option>
@@ -420,7 +420,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
                 type="date"
                 value={advanceDate}
                 onChange={(e) => { setAdvanceDate(e.target.value); setAdvanceErrors((er) => { const c = { ...er }; delete c.advanceDate; return c; }); }}
-                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white"
+                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all bg-white"
                 style={{ fontSize: "13.5px" }}
               />
               {advanceErrors.advanceDate && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{advanceErrors.advanceDate}</p>}
@@ -460,7 +460,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
               onClick={handlePaymentSubmit}
               disabled={submittingPayment}
               className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-              style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+              style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
             >
               {submittingPayment ? "Recording…" : "Record Payment"}
             </button>
@@ -481,8 +481,8 @@ function EnrollStudentForm({ onBack, onSubmit }: {
   if (submitted && createdStudent) {
     return (
       <div className="p-8 max-w-[600px] mx-auto flex flex-col items-center justify-center" style={{ minHeight: "60vh" }}>
-        <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: "#f0fdfa" }}>
-          <CheckCircle2 size={32} color="#0d9488" strokeWidth={2} />
+        <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: "var(--brand-primary-surface)" }}>
+          <CheckCircle2 size={32} color="var(--brand-primary)" strokeWidth={2} />
         </div>
         <h2 className="text-gray-900 mb-2" style={{ fontSize: "20px", fontWeight: 700 }}>Student Enrolled!</h2>
         <p className="text-gray-400 text-center" style={{ fontSize: "14px" }}>
@@ -501,7 +501,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
                 <span className="text-gray-800 font-mono" style={{ fontSize: "13.5px" }}>{value}</span>
                 <button
                   onClick={handleCopy}
-                  className="text-gray-400 hover:text-teal-600 transition-colors flex-shrink-0"
+                  className="text-gray-400 hover:text-brand-primary transition-colors flex-shrink-0"
                   title="Copy credentials"
                 >
                   {copied ? <Check size={14} /> : <Copy size={14} />}
@@ -513,7 +513,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
         <button
           onClick={onBack}
           className="mt-6 px-6 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
-          style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+          style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
         >
           Done
         </button>
@@ -602,7 +602,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
             <select
               value={form.board}
               onChange={(e) => set("board")(e.target.value)}
-              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white"
+              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all bg-white"
               style={{ fontSize: "13.5px", color: form.board ? "#1f2937" : "#d1d5db" }}
             >
               <option value="" disabled>Select a board</option>
@@ -621,7 +621,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
               value={form.academicYearId}
               onChange={(e) => set("academicYearId")(e.target.value)}
               disabled={loadingData}
-              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white disabled:opacity-50"
+              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all bg-white disabled:opacity-50"
               style={{ fontSize: "13.5px", color: form.academicYearId ? "#1f2937" : "#d1d5db" }}
             >
               <option value="">{loadingData ? "Loading…" : "Select academic year"}</option>
@@ -641,7 +641,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
                 setErrors((prev) => ({ ...prev, batch: undefined }));
               }}
               disabled={loadingData || !form.academicYearId}
-              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white disabled:opacity-50"
+              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all bg-white disabled:opacity-50"
               style={{ fontSize: "13.5px", color: form.batch ? "#1f2937" : "#d1d5db" }}
             >
               <option value="">
@@ -678,7 +678,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
                 style={{ backgroundColor: "#f9fafb" }}
               >
                 <div className="px-4 py-2.5 border-b border-gray-100 flex items-center gap-2">
-                  <DollarSign size={13} style={{ color: "#0d9488" }} strokeWidth={2} />
+                  <DollarSign size={13} style={{ color: "var(--brand-primary)" }} strokeWidth={2} />
                   <p className="text-gray-500 uppercase" style={{ fontSize: "10.5px", fontWeight: 700, letterSpacing: "0.07em" }}>
                     Fee Structure
                   </p>
@@ -710,7 +710,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
                       })}
                     </span>
                     {batchFeeStructure.require_advance && (
-                      <span className="text-teal-600" style={{ fontSize: "12px", fontWeight: 500 }}>
+                      <span className="text-brand-primary" style={{ fontSize: "12px", fontWeight: 500 }}>
                         · Advance required
                       </span>
                     )}
@@ -830,7 +830,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
                         fontSize: "18px",
                         fontWeight: 800,
                         letterSpacing: "-0.02em",
-                        color: hasDiscount ? "#0d9488" : "#374151",
+                        color: hasDiscount ? "var(--brand-primary)" : "#374151",
                       }}
                     >
                       ₹{payable.toLocaleString("en-IN")}
@@ -857,7 +857,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
             onClick={handleSubmit}
             disabled={submitting || loadingData}
             className="px-6 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+            style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
           >
             {submitting ? "Enrolling…" : "Create Academic Record"}
           </button>
@@ -907,9 +907,9 @@ function StudentProfile({ student, onBack, onDeactivate }: {
           <div className="flex items-center gap-5">
             <div
               className="w-16 h-16 rounded-2xl flex items-center justify-center"
-              style={{ backgroundColor: "#f0fdfa" }}
+              style={{ backgroundColor: "var(--brand-primary-surface)" }}
             >
-              <span style={{ fontSize: "22px", fontWeight: 800, color: "#0d9488" }}>{initials}</span>
+              <span style={{ fontSize: "22px", fontWeight: 800, color: "var(--brand-primary)" }}>{initials}</span>
             </div>
             <div>
               <div className="flex items-center gap-3 mb-1">
@@ -996,17 +996,17 @@ function StudentProfile({ student, onBack, onDeactivate }: {
         {/* Attendance Summary */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
           <div className="flex items-center gap-2 mb-5">
-            <CalendarDays size={16} className="text-teal-500" />
+            <CalendarDays size={16} className="text-brand-primary" />
             <h2 className="text-gray-800" style={{ fontSize: "15px", fontWeight: 700 }}>Attendance Summary</h2>
           </div>
 
           {/* Overall */}
-          <div className="flex items-center gap-3 mb-5 p-4 rounded-xl" style={{ backgroundColor: "#f0fdfa" }}>
+          <div className="flex items-center gap-3 mb-5 p-4 rounded-xl" style={{ backgroundColor: "var(--brand-primary-surface)" }}>
             {student.attendance != null ? (
               <>
                 <div>
                   <p className="text-gray-400" style={{ fontSize: "12px", fontWeight: 500 }}>Overall Attendance</p>
-                  <p style={{ fontSize: "28px", fontWeight: 800, color: "#0d9488", lineHeight: 1.1 }}>
+                  <p style={{ fontSize: "28px", fontWeight: 800, color: "var(--brand-primary)", lineHeight: 1.1 }}>
                     {student.attendance}%
                   </p>
                 </div>
@@ -1067,7 +1067,7 @@ function StudentProfile({ student, onBack, onDeactivate }: {
         {/* Test Results Summary */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
           <div className="flex items-center gap-2 mb-5">
-            <ClipboardList size={16} className="text-teal-500" />
+            <ClipboardList size={16} className="text-brand-primary" />
             <h2 className="text-gray-800" style={{ fontSize: "15px", fontWeight: 700 }}>Test Results</h2>
           </div>
 
@@ -1249,7 +1249,7 @@ export function Students() {
         <button
           onClick={() => setView("enroll")}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
-          style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+          style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
         >
           <Plus size={16} strokeWidth={2.5} />
           Enroll Student
@@ -1277,9 +1277,9 @@ export function Students() {
               style={{
                 fontSize: "13px",
                 fontWeight: 500,
-                backgroundColor: selectedYearId === year.id ? "#0d9488" : "white",
+                backgroundColor: selectedYearId === year.id ? "var(--brand-primary)" : "white",
                 color: selectedYearId === year.id ? "white" : "#6b7280",
-                borderColor: selectedYearId === year.id ? "#0d9488" : "#f3f4f6",
+                borderColor: selectedYearId === year.id ? "var(--brand-primary)" : "#f3f4f6",
               }}
             >
               {year.label}
@@ -1289,8 +1289,8 @@ export function Students() {
                   style={{
                     fontSize: "10px",
                     fontWeight: 700,
-                    backgroundColor: selectedYearId === year.id ? "rgba(255,255,255,0.25)" : "#f0fdfa",
-                    color: selectedYearId === year.id ? "white" : "#0d9488",
+                    backgroundColor: selectedYearId === year.id ? "rgba(255,255,255,0.25)" : "var(--brand-primary-surface)",
+                    color: selectedYearId === year.id ? "white" : "var(--brand-primary)",
                   }}
                 >
                   Active
@@ -1325,7 +1325,7 @@ export function Students() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search students by name, roll no, or batch…"
-            className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-300 shadow-sm"
+            className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary shadow-sm"
             style={{ fontSize: "13.5px" }}
           />
         </div>
@@ -1355,12 +1355,12 @@ export function Students() {
                 <tr
                   key={student.id}
                   onClick={() => navigate(`/students/${student.id}`)}
-                  className="border-t border-gray-50 hover:bg-teal-50 transition-colors cursor-pointer"
+                  className="border-t border-gray-50 hover:bg-brand-primary-surface transition-colors cursor-pointer"
                 >
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: "#f0fdfa" }}>
-                        <span style={{ fontSize: "12px", fontWeight: 700, color: "#0d9488" }}>{initials}</span>
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: "var(--brand-primary-surface)" }}>
+                        <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--brand-primary)" }}>{initials}</span>
                       </div>
                       <div>
                         <p className="text-gray-800" style={{ fontSize: "13.5px", fontWeight: 600 }}>{student.name}</p>
@@ -1420,7 +1420,7 @@ export function Students() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setPage(Math.max(1, page - 1))}
-              className="w-8 h-8 rounded-md border border-gray-100 flex items-center justify-center text-gray-400 hover:border-teal-300 hover:text-teal-600 transition-colors"
+              className="w-8 h-8 rounded-md border border-gray-100 flex items-center justify-center text-gray-400 hover:border-brand-primary hover:text-brand-primary transition-colors"
             >
               <ChevronLeft size={14} />
             </button>
@@ -1431,9 +1431,9 @@ export function Students() {
                 className="w-8 h-8 rounded-md border transition-colors flex items-center justify-center"
                 style={{
                   fontSize: "13px", fontWeight: 600,
-                  borderColor: page === p ? "#0d9488" : "#f3f4f6",
+                  borderColor: page === p ? "var(--brand-primary)" : "#f3f4f6",
                   color: page === p ? "white" : "#6b7280",
-                  backgroundColor: page === p ? "#0d9488" : "white",
+                  backgroundColor: page === p ? "var(--brand-primary)" : "white",
                 }}
               >
                 {p}
@@ -1441,7 +1441,7 @@ export function Students() {
             ))}
             <button
               onClick={() => setPage(Math.min(3, page + 1))}
-              className="w-8 h-8 rounded-md border border-gray-100 flex items-center justify-center text-gray-400 hover:border-teal-300 hover:text-teal-600 transition-colors"
+              className="w-8 h-8 rounded-md border border-gray-100 flex items-center justify-center text-gray-400 hover:border-brand-primary hover:text-brand-primary transition-colors"
             >
               <ChevronRight size={14} />
             </button>

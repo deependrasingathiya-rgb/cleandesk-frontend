@@ -238,7 +238,7 @@ function LiveMaterialCard({ material }: { material: TestStudyMaterial }) {
           {type !== "other" && (
             <button
               onClick={(e) => { e.stopPropagation(); setExpanded((x) => !x); }}
-              className="px-2.5 py-1 rounded-md border border-gray-100 text-gray-400 hover:text-teal-600 hover:border-teal-200 hover:bg-teal-50 transition-all"
+              className="px-2.5 py-1 rounded-md border border-gray-100 text-gray-400 hover:text-brand-primary hover:border-brand-primary hover:bg-brand-primary-surface transition-all"
               style={{ fontSize: "11.5px", fontWeight: 600 }}
             >
               {expanded ? "Hide" : "Preview"}
@@ -250,7 +250,7 @@ function LiveMaterialCard({ material }: { material: TestStudyMaterial }) {
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="px-2.5 py-1 rounded-md border border-teal-100 text-teal-600 hover:bg-teal-50 transition-all"
+            className="px-2.5 py-1 rounded-md border border-brand-primary text-brand-primary hover:bg-brand-primary-surface transition-all"
             style={{ fontSize: "11.5px", fontWeight: 600, textDecoration: "none" }}
           >
             ↓
@@ -260,7 +260,7 @@ function LiveMaterialCard({ material }: { material: TestStudyMaterial }) {
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="px-2.5 py-1 rounded-md border border-gray-100 text-gray-400 hover:text-teal-600 hover:border-teal-200 hover:bg-teal-50 transition-all"
+            className="px-2.5 py-1 rounded-md border border-gray-100 text-gray-400 hover:text-brand-primary hover:border-brand-primary hover:bg-brand-primary-surface transition-all"
             style={{ fontSize: "11.5px", fontWeight: 600, textDecoration: "none" }}
           >
             ↗
@@ -360,8 +360,7 @@ function BatchMultiSelect({
         type="button"
         onClick={() => !loading && setOpen((o) => !o)}
         disabled={loading}
-        className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-left flex items-center justify-between focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white disabled:opacity-50"
-        style={{ fontSize: "13.5px" }}
+        className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-left flex items-center justify-between focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all bg-white disabled:opacity-50"        style={{ fontSize: "13.5px" }}
       >
         <span className={selected.length === 0 ? "text-gray-300" : "text-gray-800"}>
           {loading
@@ -391,13 +390,13 @@ function BatchMultiSelect({
                 key={batch.id}
                 type="button"
                 onClick={() => toggle(batch.id)}
-                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-teal-50 transition-colors text-left"
+                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-brand-primary-surface transition-colors text-left"
               >
                 <div
                   className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0 transition-all"
                   style={{
                     border: isSelected ? "none" : "2px solid #d1d5db",
-                    backgroundColor: isSelected ? "#0d9488" : "transparent",
+                    backgroundColor: isSelected ? "var(--brand-primary)" : "transparent",
                   }}
                 >
                   {isSelected && <Check size={10} color="white" strokeWidth={3} />}
@@ -420,10 +419,10 @@ function BatchMultiSelect({
             <span
               key={id}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-md"
-              style={{ fontSize: "12px", fontWeight: 500, backgroundColor: "#f0fdfa", color: "#0d9488" }}
+              style={{ fontSize: "12px", fontWeight: 500, backgroundColor: "var(--brand-primary-surface)", color: "var(--brand-primary)" }}
             >
               {options.find((o) => o.id === id)?.name ?? id}
-              <button type="button" onClick={() => toggle(id)} className="hover:text-teal-700">
+              <button type="button" onClick={() => toggle(id)} className="hover:text-brand-primary">
                 <X size={10} strokeWidth={2.5} />
               </button>
             </span>
@@ -461,10 +460,10 @@ function FileAttachArea({
         onClick={() => inputRef.current?.click()}
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => { e.preventDefault(); handleFiles(e.dataTransfer.files); }}
-        className="border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-teal-300 hover:bg-teal-50 transition-all"
+        className="border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-brand-primary hover:bg-brand-primary-surface transition-all"
       >
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "#f0fdfa" }}>
-          <Paperclip size={18} color="#0d9488" strokeWidth={2} />
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "var(--brand-primary-surface)" }}>
+            <Paperclip size={18} color="var(--brand-primary)" strokeWidth={2} />
         </div>
         <p className="text-gray-600" style={{ fontSize: "13.5px", fontWeight: 600 }}>
           Click to browse or drag files here
@@ -634,8 +633,8 @@ function TestFormView({
   if (submitted) {
     return (
       <div className="p-8 max-w-[600px] mx-auto flex flex-col items-center justify-center" style={{ minHeight: "60vh" }}>
-        <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: "#f0fdfa" }}>
-          <CheckCircle2 size={32} color="#0d9488" strokeWidth={2} />
+        <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: "var(--brand-primary-surface)" }}>
+          <CheckCircle2 size={32} color="var(--brand-primary)" strokeWidth={2} />
         </div>
         <h2 className="text-gray-900 mb-2" style={{ fontSize: "20px", fontWeight: 700 }}>
           {mode === "create" ? "Test Created!" : "Test Updated!"}
@@ -681,7 +680,7 @@ function TestFormView({
             value={form.name}
             onChange={(e) => set("name")(e.target.value)}
             placeholder="e.g. Mid-Term Physics"
-            className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all"
+            className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all"
             style={{ fontSize: "13.5px" }}
           />
           {errors.name && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.name}</p>}
@@ -707,7 +706,7 @@ function TestFormView({
                       setShowAddSubject(false);
                     }
                   }}
-                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white"
+                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all bg-white"
                   style={{ fontSize: "13.5px", color: form.subject ? "#1f2937" : "#d1d5db" }}
                 >
                   <option value="" disabled>Select a subject</option>
@@ -723,7 +722,7 @@ function TestFormView({
                       onChange={(e) => setNewSubjectInput(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddSubject(); } }}
                       placeholder="e.g. Political Science"
-                      className="flex-1 border border-gray-200 rounded-xl px-3.5 py-2 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all"
+                      className="flex-1 border border-gray-200 rounded-xl px-3.5 py-2 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all"
                       style={{ fontSize: "13px" }}
                       autoFocus
                     />
@@ -732,7 +731,7 @@ function TestFormView({
                       onClick={handleAddSubject}
                       disabled={addingSubject || !newSubjectInput.trim()}
                       className="px-4 py-2 rounded-xl text-white transition-all disabled:opacity-50"
-                      style={{ fontSize: "13px", fontWeight: 600, backgroundColor: "#0d9488" }}
+                      style={{ fontSize: "13px", fontWeight: 600, backgroundColor: "var(--brand-primary)" }}
                     >
                       {addingSubject ? "Adding…" : "Add"}
                     </button>
@@ -759,7 +758,7 @@ function TestFormView({
               value={form.date}
               min={getMinDate()}
               onChange={(e) => set("date")(e.target.value)}
-              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white"
+              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all bg-white"
               style={{ fontSize: "13.5px" }}
             />
             {errors.date && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.date}</p>}
@@ -775,7 +774,7 @@ function TestFormView({
               value={form.testTime}
               min={getMinTime()}
               onChange={(e) => set("testTime")(e.target.value)}
-              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white"
+              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all bg-white"
               style={{ fontSize: "13.5px" }}
             />
           </div>
@@ -787,7 +786,7 @@ function TestFormView({
               value={form.durationMinutes}
               onChange={(e) => set("durationMinutes")(e.target.value === "" ? "" : Number(e.target.value) as any)}
               placeholder="e.g. 90"
-              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all"
+              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all"
               style={{ fontSize: "13.5px" }}
             />
           </div>
@@ -802,7 +801,7 @@ function TestFormView({
             value={form.totalMarks}
             onChange={(e) => set("totalMarks")(Number(e.target.value))}
             placeholder="e.g. 100"
-            className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all"
+            className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all"
             style={{ fontSize: "13.5px" }}
           />
           {errors.totalMarks && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.totalMarks}</p>}
@@ -828,7 +827,7 @@ function TestFormView({
             onChange={(e) => set("syllabus")(e.target.value)}
             placeholder="Describe the chapters, topics, or units this test covers…"
             rows={4}
-            className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all resize-none"
+            className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all resize-none"
             style={{ fontSize: "13.5px", lineHeight: 1.6 }}
           />
         </div>
@@ -854,7 +853,7 @@ function TestFormView({
             onClick={handleSubmit}
             disabled={submitting || loadingBatches}
             className="px-6 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+            style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
           >
             {submitting ? "Creating…" : mode === "create" ? "Create Test" : "Save Changes"}
           </button>
@@ -974,8 +973,8 @@ function MarksEntryView({
   if (saved) {
     return (
       <div className="p-8 max-w-[600px] mx-auto flex flex-col items-center justify-center" style={{ minHeight: "60vh" }}>
-        <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: "#f0fdfa" }}>
-          <CheckCircle2 size={32} color="#0d9488" strokeWidth={2} />
+        <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: "var(--brand-primary-surface)" }}>
+          <CheckCircle2 size={32} color="var(--brand-primary)" strokeWidth={2} />
         </div>
         <h2 className="text-gray-900 mb-2" style={{ fontSize: "20px", fontWeight: 700 }}>
           Marks {mode === "enter" ? "Submitted" : "Updated"}!
@@ -1117,7 +1116,7 @@ function MarksEntryView({
                     setErrors((er) => { const c = { ...er }; delete c[student.student_id]; return c; });
                         }}
                         placeholder="—"
-                        className="w-20 border rounded-xl px-3 py-2 text-center focus:outline-none focus:border-teal-400 transition-all"
+                        className="w-20 border rounded-xl px-3 py-2 text-center focus:outline-none focus:border-brand-primary transition-all"
                         style={{
                           fontSize: "14px", fontWeight: 600,
                           borderColor: err ? "#fca5a5" : "#e5e7eb",
@@ -1158,7 +1157,7 @@ function MarksEntryView({
             onClick={handleSave}
             disabled={submitting || loadingStudents}
             className="px-6 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+            style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
           >
             {submitting ? "Submitting…" : mode === "enter" ? "Submit All Marks" : "Save Changes"}
           </button>
@@ -1339,7 +1338,7 @@ function TestDetail({
               <button
                 onClick={onEnterMarks}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl text-white hover:opacity-90 transition-all"
-                style={{ backgroundColor: "#0d9488", fontSize: "13px", fontWeight: 600 }}
+                style={{ backgroundColor: "var(--brand-primary)", fontSize: "13px", fontWeight: 600 }}
               >
                 <Award size={14} strokeWidth={2} />
                 Enter Marks
@@ -1351,7 +1350,7 @@ function TestDetail({
               <>
                 <button
                   onClick={onModifyMarks}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-teal-200 text-teal-700 hover:bg-teal-50 transition-all"
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-brand-primary text-brand-primary hover:bg-brand-primary-surface transition-all"
                   style={{ fontSize: "13px", fontWeight: 600 }}
                 >
                   <Pencil size={13} strokeWidth={2} />
@@ -1430,7 +1429,7 @@ function TestDetail({
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <span className="px-3 py-1 rounded-md" style={{ fontSize: "12.5px", fontWeight: 500, backgroundColor: "#f0fdfa", color: "#0d9488" }}>
+            <span className="px-3 py-1 rounded-md" style={{ fontSize: "12.5px", fontWeight: 500, backgroundColor: "var(--brand-primary-surface)", color: "var(--brand-primary)" }}>
               {test.batchName}
             </span>
           </div>
@@ -1441,7 +1440,7 @@ function TestDetail({
       <div className="grid grid-cols-2 gap-5 mb-5">
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
           <div className="flex items-center gap-2 mb-4">
-            <BookOpen size={15} className="text-teal-500" />
+            <BookOpen size={15} className="text-brand-primary" />
             <h2 className="text-gray-800" style={{ fontSize: "15px", fontWeight: 700 }}>Syllabus / Topics</h2>
           </div>
           {test.syllabus ? (
@@ -1454,13 +1453,13 @@ function TestDetail({
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <Paperclip size={15} className="text-teal-500" />
+              <Paperclip size={15} className="text-brand-primary" />
               <h2 className="text-gray-800" style={{ fontSize: "15px", fontWeight: 700 }}>Study Material</h2>
             </div>
             {test.liveMaterials.length > 0 && (
               <span
                 className="px-2 py-0.5 rounded-full"
-                style={{ fontSize: "11px", fontWeight: 600, backgroundColor: "#f0fdfa", color: "#0d9488" }}
+                style={{ fontSize: "11px", fontWeight: 600, backgroundColor: "var(--brand-primary-surface)", color: "var(--brand-primary)" }}
               >
                 {test.liveMaterials.length} file{test.liveMaterials.length !== 1 ? "s" : ""}
               </span>
@@ -1483,7 +1482,7 @@ function TestDetail({
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-50 flex items-center justify-between" style={{ backgroundColor: "#f9fafb" }}>
             <div className="flex items-center gap-2">
-              <Award size={15} className="text-teal-500" />
+              <Award size={15} className="text-brand-primary" />
               <h2 className="text-gray-800" style={{ fontSize: "15px", fontWeight: 700 }}>Student Marks</h2>
             </div>
 
@@ -1516,7 +1515,7 @@ function TestDetail({
                 <button
                   onClick={onEnterMarks}
                   className="mt-2 flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
-                  style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+                  style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
                 >
                   <Award size={15} strokeWidth={2} />
                   Enter Marks Now
@@ -1872,7 +1871,7 @@ useEffect(() => {
           <button
             onClick={() => setView({ type: "create" })}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
-            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+            style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
           >
             <Plus size={16} strokeWidth={2.5} />
             Create Test
@@ -1897,7 +1896,7 @@ useEffect(() => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search tests by name, subject, or batch…"
-            className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-300 shadow-sm"
+            className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary shadow-sm"
             style={{ fontSize: "13.5px" }}
           />
         </div>
@@ -1908,9 +1907,9 @@ useEffect(() => {
             className="px-4 py-2.5 rounded-xl border shadow-sm transition-colors whitespace-nowrap"
             style={{
               fontSize: "13px", fontWeight: 500,
-              backgroundColor: filter === f ? "#0d9488" : "white",
+              backgroundColor: filter === f ? "var(--brand-primary)" : "white",
               color: filter === f ? "white" : "#6b7280",
-              borderColor: filter === f ? "#0d9488" : "#f3f4f6",
+              borderColor: filter === f ? "var(--brand-primary)" : "#f3f4f6",
             }}
           >
             {f}
@@ -1943,7 +1942,7 @@ useEffect(() => {
                 <tr
                   key={test.id}
                   onClick={() => setView({ type: "detail", testId: test.id })}
-                  className="border-t border-gray-50 hover:bg-teal-50 transition-colors cursor-pointer group"
+                  className="border-t border-gray-50 hover:bg-brand-primary-surface transition-colors cursor-pointer group"
                 >
                   {/* Name */}
                   <td className="px-5 py-3.5">
@@ -1951,7 +1950,7 @@ useEffect(() => {
                       <div className="w-8 h-8 rounded-md flex items-center justify-center" style={{ backgroundColor: sc.bg }}>
                         <ClipboardList size={15} style={{ color: sc.color }} strokeWidth={2} />
                       </div>
-                      <span className="text-gray-800 group-hover:text-teal-700" style={{ fontSize: "13.5px", fontWeight: 600 }}>
+                      <span className="text-gray-800 group-hover:text-brand-primary" style={{ fontSize: "13.5px", fontWeight: 600 }}>
                         {test.name}
                       </span>
                     </div>
@@ -1966,7 +1965,7 @@ useEffect(() => {
 
                   {/* Batch */}
                   <td className="px-5 py-3.5">
-                    <span className="px-2 py-0.5 rounded-md" style={{ fontSize: "11px", fontWeight: 500, backgroundColor: "#f0fdfa", color: "#0d9488" }}>
+                    <span className="px-2 py-0.5 rounded-md" style={{ fontSize: "11px", fontWeight: 500, backgroundColor: "var(--brand-primary-surface)", color: "var(--brand-primary)" }}>
                       {test.batchName}
                     </span>
                   </td>

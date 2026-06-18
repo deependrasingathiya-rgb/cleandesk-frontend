@@ -251,7 +251,7 @@ if (loading) {
           <button
             onClick={() => setCreateOpen(true)}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
-            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+            style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
           >
             <Plus size={16} strokeWidth={2.5} />
             Create Announcement
@@ -267,7 +267,7 @@ if (loading) {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search announcements…"
-            className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-300 shadow-sm"
+            className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary shadow-sm"
             style={{ fontSize: "13.5px" }}
           />
         </div>
@@ -282,9 +282,9 @@ if (loading) {
                 className="px-3.5 py-2.5 rounded-xl border shadow-sm transition-all"
                 style={{
                   fontSize: "12.5px", fontWeight: 600,
-                  backgroundColor: isActive ? (style?.color ?? "#0d9488") : "white",
+                  backgroundColor: isActive ? (style?.color ?? "var(--brand-primary)") : "white",
                   color: isActive ? "white" : (style?.color ?? "#6b7280"),
-                  borderColor: isActive ? (style?.color ?? "#0d9488") : "#f3f4f6",
+                  borderColor: isActive ? (style?.color ?? "var(--brand-primary)") : "#f3f4f6",
                 }}
               >
                 {t}
@@ -311,12 +311,12 @@ if (loading) {
                 key={ann.id}
                 onClick={() => setSelected(isSelected ? null : ann)}
                 className={`bg-white rounded-2xl p-5 shadow-sm border transition-all cursor-pointer group ${
-                  isSelected ? "border-teal-300 shadow-md" : "border-gray-100 hover:border-teal-200 hover:shadow-md"
+                  isSelected ? "border-brand-primary shadow-md" : "border-gray-100 hover:border-brand-primary hover:shadow-md"
                 }`}
               >
                 <div className="flex items-start justify-between gap-3 mb-2">
                   <h3
-                    className="text-gray-800 group-hover:text-teal-700 transition-colors leading-snug"
+                    className="text-gray-800 group-hover:text-brand-primary transition-colors leading-snug"
                     style={{ fontSize: "15px", fontWeight: 650 }}
                   >
                     {ann.title || ann.type}
@@ -333,8 +333,8 @@ if (loading) {
                 </p>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: "#f0fdfa" }}>
-                      <span style={{ fontSize: "10px", fontWeight: 700, color: "#0d9488" }}>{ann.createdBy.charAt(0)}</span>
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: "var(--brand-primary-surface)" }}>
+                      <span style={{ fontSize: "10px", fontWeight: 700, color: "var(--brand-primary)" }}>{ann.createdBy.charAt(0)}</span>
                     </div>
                     <span className="text-gray-400" style={{ fontSize: "12.5px" }}>{ann.createdBy}</span>
                     <span className="text-gray-200">·</span>
@@ -464,8 +464,8 @@ if (loading) {
                         className="px-2 py-0.5 rounded-md"
                         style={{
                           fontSize: "11.5px", fontWeight: 600,
-                          backgroundColor: b === "Universal" ? "#f0fdfa" : "#f3f4f6",
-                          color: b === "Universal" ? "#0d9488" : "#374151",
+                          backgroundColor: b === "Universal" ? "var(--brand-primary-surface)" : "#f3f4f6",
+                          color: b === "Universal" ? "var(--brand-primary)" : "#374151",
                         }}
                       >
                         {b}
@@ -489,22 +489,22 @@ if (loading) {
     href={att.file_url}
     target="_blank"
     rel="noopener noreferrer"
-    className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-gray-100 hover:border-teal-200 hover:bg-teal-50 transition-all group"
+    className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-gray-100 hover:border-brand-primary hover:bg-brand-primary-surface transition-all group"
     style={{ textDecoration: "none" }}
   >
     <div
       className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0"
-      style={{ backgroundColor: "#f0fdfa" }}
+      style={{ backgroundColor: "var(--brand-primary-surface)" }}
     >
-      <Paperclip size={11} color="#0d9488" strokeWidth={2} />
+      <Paperclip size={11} color="var(--brand-primary)" strokeWidth={2} />
     </div>
     <span
-      className="flex-1 text-gray-700 truncate group-hover:text-teal-700 transition-colors"
+      className="flex-1 text-gray-700 truncate group-hover:text-brand-primary transition-colors"
       style={{ fontSize: "12px", fontWeight: 500 }}
     >
       {att.name}
     </span>
-    <Download size={11} className="text-gray-300 group-hover:text-teal-500 flex-shrink-0" />
+    <Download size={11} className="text-gray-300 group-hover:text-brand-primary flex-shrink-0" />
   </a>
 ))}
                     </div>

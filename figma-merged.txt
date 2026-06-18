@@ -79,11 +79,16 @@ or initiating processes. They communicate interactivity and should have clear, a
   "private": true,
   "version": "0.0.1",
   "type": "module",
-  "scripts": {
-    "build": "vite build",
-    "dev": "vite",
-    "merge": "node merge-figma.cjs"
-  },
+ "scripts": {
+  "dev": "vite",
+  "build": "vite build",
+  "build:cleandesk": "vite build --mode cleandesk",
+  "build:gurukul": "vite build --mode gurukul",
+  "build:all": "npm run build:cleandesk && npm run build:gurukul",
+  "preview:cleandesk": "vite preview --mode cleandesk",
+  "preview:gurukul": "vite preview --mode gurukul",
+  "merge": "node merge-figma.cjs"
+},
   "dependencies": {
     "@emotion/react": "11.14.0",
     "@emotion/styled": "11.14.1",
@@ -7352,7 +7357,7 @@ function AcademicYearModal({
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             placeholder="e.g. 2027–2028"
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-50 transition-all"
+            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-gray-800 focus:outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary-light transition-all"
             style={{ fontSize: "14px" }}
           />
           <p className="text-gray-400 mt-2" style={{ fontSize: "12px" }}>
@@ -7373,7 +7378,7 @@ function AcademicYearModal({
             onClick={() => { if (label.trim()) { onSave(label.trim()); onClose(); } }}
             disabled={!label.trim()}
             className="flex-1 py-2.5 rounded-xl text-white transition-all hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+            style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
           >
             {isEdit ? "Save Changes" : "Create Academic Year"}
           </button>
@@ -7428,8 +7433,8 @@ function DetailPanel({
 
           {/* Year Identity */}
           <div className="flex items-center gap-4 mb-6">
-            <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ backgroundColor: "#f0fdfa" }}>
-              <CalendarDays size={26} style={{ color: "#0d9488" }} strokeWidth={1.8} />
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ backgroundColor: "var(--brand-primary-surface)" }}>
+              <CalendarDays size={26} style={{ color: "var(--brand-primary)" }} strokeWidth={1.8} />
             </div>
             <div>
               <p className="text-gray-900" style={{ fontSize: "22px", fontWeight: 750, letterSpacing: "-0.02em" }}>
@@ -7494,7 +7499,7 @@ function DetailPanel({
         <div className="px-6 py-4 border-t border-gray-100 flex flex-col gap-2.5">
           <button
             onClick={onEdit}
-            className="w-full py-2.5 rounded-xl border border-gray-200 text-gray-700 flex items-center justify-center gap-2 hover:border-teal-300 hover:text-teal-700 hover:bg-teal-50 transition-all"
+            className="w-full py-2.5 rounded-xl border border-gray-200 text-gray-700 flex items-center justify-center gap-2 hover:border-brand-primary hover:text-brand-primary hover:bg-brand-primary-surface transition-all"
             style={{ fontSize: "13.5px", fontWeight: 600 }}
           >
             <Edit2 size={14} strokeWidth={2.5} />
@@ -7681,7 +7686,7 @@ export function AcademicYears() {
         <button
           onClick={() => setModalMode("create")}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white transition-all hover:opacity-90 active:scale-95"
-          style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+          style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
         >
           <Plus size={16} strokeWidth={2.5} />
           New Academic Year
@@ -7742,7 +7747,7 @@ export function AcademicYears() {
             {years.map((yr) => (
               <tr
                 key={yr.id}
-                className="hover:bg-teal-50 transition-colors cursor-pointer group"
+                className="hover:bg-brand-primary-surface transition-colors cursor-pointer group"
                 onClick={() => setDetailYear(yr)}
               >
                 {/* Academic Year */}
@@ -7750,9 +7755,9 @@ export function AcademicYears() {
                   <div className="flex items-center gap-3">
                     <div
                       className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                      style={{ backgroundColor: "#f0fdfa" }}
+                      style={{ backgroundColor: "var(--brand-primary-surface)" }}
                     >
-                      <CalendarDays size={17} style={{ color: "#0d9488" }} strokeWidth={2} />
+                      <CalendarDays size={17} style={{ color: "var(--brand-primary)" }} strokeWidth={2} />
                     </div>
                     <div>
                       <p className="text-gray-800" style={{ fontSize: "14px", fontWeight: 650 }}>
@@ -7782,7 +7787,7 @@ export function AcademicYears() {
                   <div className="flex items-center gap-2">
                     <div
                       className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
-                      style={{ backgroundColor: "#0d9488" }}
+                      style={{ backgroundColor: "var(--brand-primary)" }}
                     >
                       <span className="text-white" style={{ fontSize: "9px", fontWeight: 700 }}>
                         {yr.createdByName.split(" ").filter(Boolean).map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
@@ -7824,7 +7829,7 @@ export function AcademicYears() {
                         setSelectedYear(yr);
                         setModalMode("edit");
                       }}
-                      className="w-8 h-8 rounded-md flex items-center justify-center border border-gray-100 text-gray-400 hover:border-teal-300 hover:text-teal-600 hover:bg-teal-50 transition-all"
+                      className="w-8 h-8 rounded-md flex items-center justify-center border border-gray-100 text-gray-400 hover:border-brand-primary hover:text-brand-primary hover:bg-brand-primary-surface transition-all"
                       title="Edit"
                     >
                       <Edit2 size={14} strokeWidth={2} />
@@ -7833,7 +7838,7 @@ export function AcademicYears() {
                     {/* Details chevron */}
                     <button
                       onClick={() => setDetailYear(yr)}
-                      className="w-8 h-8 rounded-md flex items-center justify-center border border-gray-100 text-gray-400 hover:border-teal-300 hover:text-teal-600 hover:bg-teal-50 transition-all"
+                      className="w-8 h-8 rounded-md flex items-center justify-center border border-gray-100 text-gray-400 hover:border-brand-primary hover:text-brand-primary hover:bg-brand-primary-surface transition-all"
                       title="View details"
                     >
                       <ChevronRight size={14} strokeWidth={2} />
@@ -8134,7 +8139,7 @@ if (loading) {
           <button
             onClick={() => setCreateOpen(true)}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
-            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+            style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
           >
             <Plus size={16} strokeWidth={2.5} />
             Create Announcement
@@ -8150,7 +8155,7 @@ if (loading) {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search announcements…"
-            className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-300 shadow-sm"
+            className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary shadow-sm"
             style={{ fontSize: "13.5px" }}
           />
         </div>
@@ -8165,9 +8170,9 @@ if (loading) {
                 className="px-3.5 py-2.5 rounded-xl border shadow-sm transition-all"
                 style={{
                   fontSize: "12.5px", fontWeight: 600,
-                  backgroundColor: isActive ? (style?.color ?? "#0d9488") : "white",
+                  backgroundColor: isActive ? (style?.color ?? "var(--brand-primary)") : "white",
                   color: isActive ? "white" : (style?.color ?? "#6b7280"),
-                  borderColor: isActive ? (style?.color ?? "#0d9488") : "#f3f4f6",
+                  borderColor: isActive ? (style?.color ?? "var(--brand-primary)") : "#f3f4f6",
                 }}
               >
                 {t}
@@ -8194,12 +8199,12 @@ if (loading) {
                 key={ann.id}
                 onClick={() => setSelected(isSelected ? null : ann)}
                 className={`bg-white rounded-2xl p-5 shadow-sm border transition-all cursor-pointer group ${
-                  isSelected ? "border-teal-300 shadow-md" : "border-gray-100 hover:border-teal-200 hover:shadow-md"
+                  isSelected ? "border-brand-primary shadow-md" : "border-gray-100 hover:border-brand-primary hover:shadow-md"
                 }`}
               >
                 <div className="flex items-start justify-between gap-3 mb-2">
                   <h3
-                    className="text-gray-800 group-hover:text-teal-700 transition-colors leading-snug"
+                    className="text-gray-800 group-hover:text-brand-primary transition-colors leading-snug"
                     style={{ fontSize: "15px", fontWeight: 650 }}
                   >
                     {ann.title || ann.type}
@@ -8216,8 +8221,8 @@ if (loading) {
                 </p>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: "#f0fdfa" }}>
-                      <span style={{ fontSize: "10px", fontWeight: 700, color: "#0d9488" }}>{ann.createdBy.charAt(0)}</span>
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: "var(--brand-primary-surface)" }}>
+                      <span style={{ fontSize: "10px", fontWeight: 700, color: "var(--brand-primary)" }}>{ann.createdBy.charAt(0)}</span>
                     </div>
                     <span className="text-gray-400" style={{ fontSize: "12.5px" }}>{ann.createdBy}</span>
                     <span className="text-gray-200">·</span>
@@ -8347,8 +8352,8 @@ if (loading) {
                         className="px-2 py-0.5 rounded-md"
                         style={{
                           fontSize: "11.5px", fontWeight: 600,
-                          backgroundColor: b === "Universal" ? "#f0fdfa" : "#f3f4f6",
-                          color: b === "Universal" ? "#0d9488" : "#374151",
+                          backgroundColor: b === "Universal" ? "var(--brand-primary-surface)" : "#f3f4f6",
+                          color: b === "Universal" ? "var(--brand-primary)" : "#374151",
                         }}
                       >
                         {b}
@@ -8372,22 +8377,22 @@ if (loading) {
     href={att.file_url}
     target="_blank"
     rel="noopener noreferrer"
-    className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-gray-100 hover:border-teal-200 hover:bg-teal-50 transition-all group"
+    className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-gray-100 hover:border-brand-primary hover:bg-brand-primary-surface transition-all group"
     style={{ textDecoration: "none" }}
   >
     <div
       className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0"
-      style={{ backgroundColor: "#f0fdfa" }}
+      style={{ backgroundColor: "var(--brand-primary-surface)" }}
     >
-      <Paperclip size={11} color="#0d9488" strokeWidth={2} />
+      <Paperclip size={11} color="var(--brand-primary)" strokeWidth={2} />
     </div>
     <span
-      className="flex-1 text-gray-700 truncate group-hover:text-teal-700 transition-colors"
+      className="flex-1 text-gray-700 truncate group-hover:text-brand-primary transition-colors"
       style={{ fontSize: "12px", fontWeight: 500 }}
     >
       {att.name}
     </span>
-    <Download size={11} className="text-gray-300 group-hover:text-teal-500 flex-shrink-0" />
+    <Download size={11} className="text-gray-300 group-hover:text-brand-primary flex-shrink-0" />
   </a>
 ))}
                     </div>
@@ -10109,9 +10114,9 @@ function CreateFeeStructureModal({
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-10 flex flex-col items-center">
           <div
             className="w-14 h-14 rounded-full flex items-center justify-center mb-4"
-            style={{ backgroundColor: "#f0fdfa" }}
+            style={{ backgroundColor: "var(--brand-primary-surface)" }}
           >
-            <CheckCircle2 size={28} color="#0d9488" strokeWidth={2} />
+            <CheckCircle2 size={28} color="var(--brand-primary)" strokeWidth={2} />
           </div>
           <p className="text-gray-900" style={{ fontSize: "18px", fontWeight: 700 }}>
 {isUpdateMode ? "Fee Structure Updated!" : "Fee Structure Created!"}
@@ -10165,7 +10170,7 @@ function CreateFeeStructureModal({
               value={form.label}
               onChange={(e) => { setForm((f) => ({ ...f, label: e.target.value })); setErrors((er) => { const c = { ...er }; delete c.label; return c; }); }}
               placeholder="e.g. Annual Fees 2025-26"
-              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all"
+              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all"
               style={{ fontSize: "13.5px" }}
             />
             {errors.label && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.label}</p>}
@@ -10182,7 +10187,7 @@ function CreateFeeStructureModal({
               value={form.totalAmount}
               onChange={(e) => { setForm((f) => ({ ...f, totalAmount: e.target.value })); setErrors((er) => { const c = { ...er }; delete c.totalAmount; return c; }); }}
               placeholder="e.g. 50000"
-              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all"
+              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all"
               style={{ fontSize: "13.5px" }}
             />
             {errors.totalAmount && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.totalAmount}</p>}
@@ -10209,20 +10214,20 @@ function CreateFeeStructureModal({
                     onClick={() => setFeeCollectionType(opt.value)}
                     className="flex flex-col items-start p-3 rounded-xl border transition-all text-left"
                     style={{
-                      borderColor: isSelected ? "#0d9488" : "#f3f4f6",
-                      backgroundColor: isSelected ? "#f0fdfa" : "white",
+                      borderColor: isSelected ? "var(--brand-primary)" : "#f3f4f6",
+                    backgroundColor: isSelected ? "var(--brand-primary-surface)" : "white",
                     }}
                   >
                     <div className="flex items-center gap-1.5 mb-1">
                       <div
                         className="w-3 h-3 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: isSelected ? "#0d9488" : "#d1d5db" }}
+                        style={{ backgroundColor: isSelected ? "var(--brand-primary)" : "#d1d5db" }}
                       />
                       <span
                         style={{
                           fontSize: "12.5px",
                           fontWeight: isSelected ? 700 : 500,
-                          color: isSelected ? "#0d9488" : "#374151",
+                          color: isSelected ? "var(--brand-primary)" : "#374151",
                         }}
                       >
                         {opt.label}
@@ -10246,7 +10251,7 @@ function CreateFeeStructureModal({
               type="date"
               value={form.finalDueDate}
               onChange={(e) => { setForm((f) => ({ ...f, finalDueDate: e.target.value })); setErrors((er) => { const c = { ...er }; delete c.finalDueDate; return c; }); }}
-              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white"
+              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all bg-white"
               style={{ fontSize: "13.5px" }}
             />
             {errors.finalDueDate && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.finalDueDate}</p>}
@@ -10269,7 +10274,7 @@ function CreateFeeStructureModal({
                   value={form.lateFeeAmount}
                   onChange={(e) => { setForm((f) => ({ ...f, lateFeeAmount: e.target.value })); setErrors((er) => { const c = { ...er }; delete c.lateFeeAmount; return c; }); }}
                   placeholder="e.g. 500"
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 transition-all"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary transition-all"
                   style={{ fontSize: "13px" }}
                 />
                 {errors.lateFeeAmount && <p className="text-red-500 mt-1" style={{ fontSize: "11.5px" }}>{errors.lateFeeAmount}</p>}
@@ -10281,7 +10286,7 @@ function CreateFeeStructureModal({
                 <select
                   value={form.lateFeeType}
                   onChange={(e) => { setForm((f) => ({ ...f, lateFeeType: e.target.value as LateFeeType | "" })); setErrors((er) => { const c = { ...er }; delete c.lateFeeType; return c; }); }}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-gray-800 focus:outline-none focus:border-teal-400 transition-all bg-white"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-gray-800 focus:outline-none focus:border-brand-primary transition-all bg-white"
                   style={{ fontSize: "13px", color: form.lateFeeType ? "#1f2937" : "#d1d5db" }}
                 >
                   <option value="">None</option>
@@ -10307,7 +10312,7 @@ function CreateFeeStructureModal({
               type="button"
               onClick={() => setForm((f) => ({ ...f, requireAdvance: !f.requireAdvance }))}
               className="relative inline-flex items-center rounded-full transition-all duration-200 flex-shrink-0 ml-4"
-              style={{ width: "44px", height: "24px", backgroundColor: form.requireAdvance ? "#0d9488" : "#e5e7eb" }}
+              style={{ width: "44px", height: "24px", backgroundColor: form.requireAdvance ? "var(--brand-primary)" : "#e5e7eb" }}
             >
               <span
                 className="inline-block rounded-full bg-white shadow transition-transform duration-200"
@@ -10330,7 +10335,7 @@ function CreateFeeStructureModal({
                   type="button"
                   onClick={addInstallment}
                   disabled={form.installments.length >= 12}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-teal-200 text-teal-700 hover:bg-teal-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-brand-primary text-brand-primary hover:bg-brand-primary-surface transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                   style={{ fontSize: "12px", fontWeight: 600 }}
                 >
                   <Plus size={12} strokeWidth={2.5} />
@@ -10343,20 +10348,20 @@ function CreateFeeStructureModal({
                 <div
                   className="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl"
                   style={{
-                    backgroundColor: sumMismatch ? "#fef2f2" : "#f0fdfa",
-                    border: `1px solid ${sumMismatch ? "#fecaca" : "#ccfbf1"}`,
+                    backgroundColor: sumMismatch ? "#fef2f2" : "var(--brand-primary-surface)",
+                    border: `1px solid ${sumMismatch ? "#fecaca" : "var(--brand-primary-light)"}`,
                   }}
                 >
                   {sumMismatch ? (
                     <AlertCircle size={13} style={{ color: "#dc2626" }} strokeWidth={2} />
                   ) : (
-                    <CheckCircle2 size={13} style={{ color: "#0d9488" }} strokeWidth={2} />
+                    <CheckCircle2 size={13} style={{ color: "var(--brand-primary)" }} strokeWidth={2} />
                   )}
                   <span
                     style={{
                       fontSize: "12px",
                       fontWeight: 600,
-                      color: sumMismatch ? "#dc2626" : "#0d9488",
+                      color: sumMismatch ? "#dc2626" : "var(--brand-primary)",
                     }}
                   >
                     Sum: INR {installmentSum.toFixed(2)} / INR {totalAmountNum.toFixed(2)}
@@ -10403,7 +10408,7 @@ function CreateFeeStructureModal({
                             value={inst.amount}
                             onChange={(e) => updateInstallment(idx, "amount", e.target.value)}
                             placeholder="0.00"
-                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 transition-all"
+                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary transition-all"
                             style={{
                               fontSize: "13px",
                               borderColor: errors[`inst_${idx}_amount`] ? "#fca5a5" : undefined,
@@ -10420,7 +10425,7 @@ function CreateFeeStructureModal({
                             type="date"
                             value={inst.due_date}
                             onChange={(e) => updateInstallment(idx, "due_date", e.target.value)}
-                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:border-teal-400 transition-all bg-white"
+                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:border-brand-primary transition-all bg-white"
                             style={{
                               fontSize: "13px",
                               borderColor: errors[`inst_${idx}_due_date`] ? "#fca5a5" : undefined,
@@ -10482,7 +10487,7 @@ function CreateFeeStructureModal({
             onClick={handleSubmit}
             disabled={submitting}
             className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+            style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
           >
             {submitting ? (isUpdateMode ? "Updating..." : "Creating...") : (isUpdateMode ? "Update Fee Structure" : "Create Fee Structure")}
           </button>
@@ -10573,7 +10578,7 @@ function EditBatchModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Science - Batch A"
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-50 transition-all"
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary-light transition-all"
               style={{ fontSize: "13.5px" }}
             />
           </div>
@@ -10590,7 +10595,7 @@ function EditBatchModal({
               <select
                 value={selectedYearId}
                 onChange={(e) => setSelectedYearId(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 bg-white transition-all"
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:outline-none focus:border-brand-primary bg-white transition-all"
                 style={{ fontSize: "13.5px" }}
               >
                 {academicYears.map((y) => (
@@ -10620,7 +10625,7 @@ function EditBatchModal({
             onClick={handleSubmit}
             disabled={!canSubmit}
             className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+            style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
           >
             {submitting ? "Saving..." : "Save Changes"}
           </button>
@@ -10707,7 +10712,7 @@ function CreateBatchModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Science - Batch A"
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-50 transition-all"
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary-light transition-all"
               style={{ fontSize: "13.5px" }}
             />
           </div>
@@ -10722,7 +10727,7 @@ function CreateBatchModal({
               <select
                 value={selectedYearId}
                 onChange={(e) => setSelectedYearId(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 bg-white transition-all"
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:outline-none focus:border-brand-primary bg-white transition-all"
                 style={{ fontSize: "13.5px" }}
               >
                 {academicYears.map((y) => (
@@ -10753,7 +10758,7 @@ function CreateBatchModal({
             onClick={handleSubmit}
             disabled={!canSubmit}
             className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+            style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
           >
             {submitting ? "Creating..." : "Create Batch"}
           </button>
@@ -10794,9 +10799,9 @@ function StudentProfilePanel({
         <div className="flex items-center gap-4">
           <div
             className="w-14 h-14 rounded-full flex items-center justify-center flex-shrink-0"
-            style={{ backgroundColor: "#f0fdfa" }}
+            style={{ backgroundColor: "var(--brand-primary-surface)" }}
           >
-            <span style={{ fontSize: "18px", fontWeight: 700, color: "#0d9488" }}>{initials}</span>
+            <span style={{ fontSize: "18px", fontWeight: 700, color: "var(--brand-primary)" }}>{initials}</span>
           </div>
           <div>
             <p className="text-gray-900" style={{ fontSize: "17px", fontWeight: 700, letterSpacing: "-0.01em" }}>
@@ -10812,9 +10817,9 @@ function StudentProfilePanel({
       {/* Info */}
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
         {/* Batch tag */}
-        <div className="flex items-center gap-2 p-3 rounded-xl" style={{ backgroundColor: "#f0fdfa", border: "1px solid #ccfbf1" }}>
-          <Users2 size={14} style={{ color: "#0d9488" }} strokeWidth={2} />
-          <span className="text-teal-700" style={{ fontSize: "12.5px", fontWeight: 600 }}>{batchName}</span>
+        <div className="flex items-center gap-2 p-3 rounded-xl" style={{ backgroundColor: "var(--brand-primary-surface)", border: "1px solid var(--brand-primary-light)" }}>
+            <Users2 size={14} style={{ color: "var(--brand-primary)" }} strokeWidth={2} />
+            <span className="text-brand-primary" style={{ fontSize: "12.5px", fontWeight: 600 }}>{batchName}</span>
         </div>
 
         {/* Contact */}
@@ -11008,21 +11013,22 @@ function BatchDetailPanel({
                   {!loadingFee && !feeStructure && (
                     <button
                       onClick={() => setShowFeeModal(true)}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-teal-200 text-teal-700 hover:bg-teal-50 transition-all"
-                      style={{ fontSize: "12px", fontWeight: 600 }}
-                    >
-                      <Plus size={12} strokeWidth={2.5} />
-                      Create
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-brand-primary text-brand-primary hover:bg-brand-primary-surface transition-all"
+                    style={{ fontSize: "12px", fontWeight: 600 }}
+                  >
+                    <Plus size={12} strokeWidth={2.5} />
+                    Create
                     </button>
                   )}
                   {!loadingFee && feeStructure && (
                     <button
                       onClick={() => setShowEditFeeModal(true)}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-teal-200 text-teal-700 hover:bg-teal-50 transition-all"
-                      style={{ fontSize: "12px", fontWeight: 600 }}
-                    >
-                      <Edit2 size={12} strokeWidth={2.5} />
-                      Update
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-brand-primary text-brand-primary hover:bg-brand-primary-surface transition-all"
+                    style={{ fontSize: "12px", fontWeight: 600 }}
+                  >
+                    <Edit2 size={12} strokeWidth={2.5} />
+                    Update
+
                     </button>
                   )}
                 </div>
@@ -11081,8 +11087,8 @@ function BatchDetailPanel({
 
                       {feeStructure.require_advance && (
                         <div className="flex items-center gap-1.5 mt-1">
-                          <CheckCircle2 size={12} style={{ color: "#0d9488" }} strokeWidth={2.5} />
-                          <span className="text-teal-700" style={{ fontSize: "12px", fontWeight: 500 }}>
+                          <CheckCircle2 size={12} style={{ color: "var(--brand-primary)" }} strokeWidth={2.5} />
+                          <span className="text-brand-primary" style={{ fontSize: "12px", fontWeight: 500 }}>
                             Advance payment required
                           </span>
                         </div>
@@ -11122,7 +11128,7 @@ function BatchDetailPanel({
                     <button
                       onClick={() => setShowFeeModal(true)}
                       className="mt-2 px-4 py-1.5 rounded-lg text-white hover:opacity-90 transition-all"
-                      style={{ fontSize: "12.5px", fontWeight: 600, backgroundColor: "#0d9488" }}
+                      style={{ fontSize: "12.5px", fontWeight: 600, backgroundColor: "var(--brand-primary)" }}
                     >
 Create Fee Structure
                     </button>
@@ -11139,9 +11145,9 @@ Create Fee Structure
                 <div className="flex items-center gap-4">
                   <div
                     className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0"
-                    style={{ backgroundColor: "#f0fdfa" }}
+                    style={{ backgroundColor: "var(--brand-primary-surface)" }}
                   >
-                    <span style={{ fontSize: "20px", fontWeight: 750, color: "#0d9488" }}>
+                    <span style={{ fontSize: "20px", fontWeight: 750, color: "var(--brand-primary)" }}>
                       {batch.student_count}
                     </span>
                   </div>
@@ -11199,26 +11205,26 @@ Create Fee Structure
                             return (
                               <tr
                                 key={student.id}
-                                className="hover:bg-teal-50 transition-colors cursor-pointer group"
+                                className="hover:bg-brand-primary-surface transition-colors cursor-pointer group"
                                 onClick={() => setSelectedStudent(student)}
                               >
                                 <td className="px-4 py-3">
                                   <div className="flex items-center gap-2.5">
                                     <div
                                       className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
-                                      style={{ backgroundColor: "#f0fdfa" }}
+                                      style={{ backgroundColor: "var(--brand-primary-surface)" }}
                                     >
-                                      <span style={{ fontSize: "10px", fontWeight: 700, color: "#0d9488" }}>
+                                      <span style={{ fontSize: "10px", fontWeight: 700, color: "var(--brand-primary)" }}>
                                         {initials}
                                       </span>
                                     </div>
-                                    <p className="text-gray-800 group-hover:text-teal-700 transition-colors" style={{ fontSize: "13px", fontWeight: 600 }}>
+                                    <p className="text-gray-800 group-hover:text-brand-primary transition-colors" style={{ fontSize: "13px", fontWeight: 600 }}>
                                       {student.name}
                                     </p>
                                   </div>
                                 </td>
                                 <td className="px-4 py-3 text-right">
-                                  <ChevronRight size={13} className="text-gray-300 group-hover:text-teal-400 transition-colors" />
+                                  <ChevronRight size={13} className="text-gray-300 group-hover:text-brand-primary transition-colors" />
                                 </td>
                               </tr>
                             );
@@ -11232,7 +11238,7 @@ Create Fee Structure
                       <button
                         onClick={handleShowMore}
                         disabled={loadingMore}
-                        className="mt-3 w-full py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:border-teal-300 hover:text-teal-700 hover:bg-teal-50 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                        className="mt-3 w-full py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:border-brand-primary hover:text-brand-primary hover:bg-brand-primary-surface transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                         style={{ fontSize: "13px", fontWeight: 600 }}
                       >
                         {loadingMore ? (
@@ -11251,7 +11257,7 @@ Create Fee Structure
             <div className="px-6 py-4 border-t border-gray-100 relative">
               <button
                 onClick={() => setShowMenu((v) => !v)}
-                className="w-full py-2.5 rounded-xl border border-gray-200 text-gray-700 flex items-center justify-center gap-2 hover:border-teal-300 hover:text-teal-700 hover:bg-teal-50 transition-all"
+                className="w-full py-2.5 rounded-xl border border-gray-200 text-gray-700 flex items-center justify-center gap-2 hover:border-brand-primary hover:text-brand-primary hover:bg-brand-primary-surface transition-all"
                 style={{ fontSize: "13.5px", fontWeight: 600 }}
               >
                 <MoreVertical size={14} strokeWidth={2.5} />
@@ -11438,7 +11444,7 @@ export function Batches() {
         <button
           onClick={() => setShowCreate(true)}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white transition-all hover:opacity-90 active:scale-95"
-          style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+          style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
         >
           <Plus size={16} strokeWidth={2.5} />
           Create Batch
@@ -11476,7 +11482,7 @@ export function Batches() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by batch name or teacher..."
-            className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-300 shadow-sm transition-all"
+            className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary shadow-sm transition-all"
             style={{ fontSize: "13.5px" }}
           />
         </div>
@@ -11493,7 +11499,7 @@ export function Batches() {
           <p className="text-red-400" style={{ fontSize: "14px" }}>{batchesError}</p>
           <button
             onClick={loadData}
-            className="mt-3 text-teal-600 underline"
+            className="mt-3 text-brand-primary underline"
             style={{ fontSize: "13px" }}
           >
             Retry
@@ -11508,7 +11514,7 @@ export function Batches() {
                 <div
                   key={batch.id}
                   onClick={() => setDetailBatch(batch)}
-                  className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 cursor-pointer hover:shadow-md hover:border-teal-200 transition-all group"
+                  className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 cursor-pointer hover:shadow-md hover:border-brand-primary transition-all group"
                 >
                   {/* Top row */}
                   <div className="flex items-start justify-between mb-2">
@@ -11517,7 +11523,7 @@ export function Batches() {
                         <BookOpen size={16} style={{ color: sc.color }} strokeWidth={2} />
                       </div>
                       <div>
-                        <p className="text-gray-900 group-hover:text-teal-700 transition-colors" style={{ fontSize: "14px", fontWeight: 650 }}>
+                        <p className="text-gray-900 group-hover:text-brand-primary transition-colors" style={{ fontSize: "14px", fontWeight: 650 }}>
                           {batch.name}
                         </p>
                         <p className="text-gray-400" style={{ fontSize: "12px" }}>
@@ -11553,7 +11559,7 @@ export function Batches() {
                     <span className="text-gray-400" style={{ fontSize: "12px" }}>
                       Created by {batch.created_by}
                     </span>
-                    <ChevronRight size={14} className="text-gray-300 group-hover:text-teal-500 transition-colors" />
+                    <ChevronRight size={14} className="text-gray-300 group-hover:text-brand-primary transition-colors" />
                   </div>
                 </div>
               );
@@ -11756,7 +11762,7 @@ function BatchSelector({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-left flex items-center justify-between focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white"
+        className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-left flex items-center justify-between focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all bg-white"
         style={{ fontSize: "13.5px" }}
       >
         <span style={{ color: selected.length === 0 ? "#d1d5db" : "#1f2937" }}>
@@ -11775,11 +11781,11 @@ function BatchSelector({
                 key={batch}
                 type="button"
                 onClick={() => toggle(batch)}
-                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-teal-50 transition-colors text-left"
+                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-brand-primary-surface transition-colors text-left"
               >
                 <div
                   className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0 transition-all"
-                  style={{ border: isSelected ? "none" : "2px solid #d1d5db", backgroundColor: isSelected ? "#0d9488" : "transparent" }}
+                  style={{ border: isSelected ? "none" : "2px solid #d1d5db", backgroundColor: isSelected ? "var(--brand-primary)" : "transparent" }}
                 >
                   {isSelected && (
                     <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
@@ -11790,7 +11796,7 @@ function BatchSelector({
                 <div className="flex items-center gap-2 flex-1">
                   <span className="text-gray-700" style={{ fontSize: "13px", fontWeight: isSelected ? 600 : 400 }}>{batch}</span>
                   {isUniversal && (
-                    <span className="px-1.5 py-0.5 rounded" style={{ fontSize: "10px", fontWeight: 700, color: "#0d9488", backgroundColor: "#f0fdfa" }}>ALL</span>
+                    <span className="px-1.5 py-0.5 rounded" style={{ fontSize: "10px", fontWeight: 700, color: "var(--brand-primary)", backgroundColor: "var(--brand-primary-surface)" }}>ALL</span>
                   )}
                 </div>
               </button>
@@ -11805,7 +11811,7 @@ function BatchSelector({
             <span
               key={b}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-md"
-              style={{ fontSize: "12px", fontWeight: 500, backgroundColor: b === "Universal" ? "#f0fdfa" : "#f3f4f6", color: b === "Universal" ? "#0d9488" : "#374151" }}
+              style={{ fontSize: "12px", fontWeight: 500, backgroundColor: b === "Universal" ? "var(--brand-primary-surface)" : "#f3f4f6", color: b === "Universal" ? "var(--brand-primary)" : "#374151" }}
             >
               {b}
               <button type="button" onClick={() => remove(b)} className="hover:opacity-70"><X size={10} strokeWidth={2.5} /></button>
@@ -11827,7 +11833,7 @@ function SectionHeader({ title, actionLabel, onAction }: { title: string; action
     <div className="flex items-center justify-between mb-4">
       <h2 className="text-gray-800" style={{ fontSize: "16px", fontWeight: 650, letterSpacing: "-0.01em" }}>{title}</h2>
       {actionLabel && (
-        <button onClick={onAction} className="flex items-center gap-1.5 text-teal-600 hover:text-teal-700 transition-colors" style={{ fontSize: "13px", fontWeight: 500 }}>
+        <button onClick={onAction} className="flex items-center gap-1.5 text-brand-primary hover:text-brand-primary transition-colors" style={{ fontSize: "13px", fontWeight: 500 }}>
           {actionLabel}<ArrowRight size={14} />
         </button>
       )}
@@ -11999,7 +12005,7 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
           <p className="text-gray-400 mt-1" style={{ fontSize: "14px" }}>Overview of institute activity — {pageDateLabel}</p>
           {lastUpdatedLabel && <p className="text-gray-300 mt-1" style={{ fontSize: "12px" }}>Auto-refreshing every minute. Last updated at {lastUpdatedLabel}.</p>}
         </div>
-        <button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white transition-all hover:opacity-90 active:scale-95" style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}>
+        <button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white transition-all hover:opacity-90 active:scale-95" style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}>
           <Plus size={16} strokeWidth={2.5} />
           Create Announcement
         </button>
@@ -12095,7 +12101,7 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
               ) : upcomingTests.map((test) => (
                 <tr key={test.id} className="border-t border-gray-50">
                   <td className="px-4 py-3.5"><span className="text-gray-800" style={{ fontSize: "13.5px", fontWeight: 600 }}>{test.test_name}</span></td>
-                  <td className="px-4 py-3.5"><span className="inline-flex items-center px-2.5 py-0.5 rounded-full" style={{ fontSize: "11.5px", fontWeight: 600, backgroundColor: "#f0fdfa", color: "#0d9488" }}>{test.subject}</span></td>
+                  <td className="px-4 py-3.5"><span className="inline-flex items-center px-2.5 py-0.5 rounded-full" style={{ fontSize: "11.5px", fontWeight: 600, backgroundColor: "var(--brand-primary-surface)", color: "var(--brand-primary)" }}>{test.subject}</span></td>
                   <td className="px-4 py-3.5"><span className="text-gray-500" style={{ fontSize: "13px" }}>{test.batch_name}</span></td>
                   <td className="px-4 py-3.5"><span className="text-gray-700" style={{ fontSize: "13px", fontWeight: 500 }}>{new Date(test.test_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span></td>
                   <td className="px-4 py-3.5"><span className="text-gray-400" style={{ fontSize: "13px" }}>{test.created_by ?? "—"}</span></td>
@@ -12122,8 +12128,8 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
                   </div>
                   <p className="text-gray-400 mb-3 leading-relaxed" style={{ fontSize: "12.5px" }}>{ann.preview}</p>
                   <div className="flex items-center gap-2">
-                    <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: "#f0fdfa" }}>
-                      <span style={{ fontSize: "9px", fontWeight: 700, color: "#0d9488" }}>{ann.createdBy.charAt(0)}</span>
+                    <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: "var(--brand-primary-surface)" }}>
+                      <span style={{ fontSize: "9px", fontWeight: 700, color: "var(--brand-primary)" }}>{ann.createdBy.charAt(0)}</span>
                     </div>
                     <span className="text-gray-400" style={{ fontSize: "12px" }}>{ann.createdBy}</span>
                     <span className="text-gray-200">·</span>
@@ -12140,9 +12146,9 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-gray-800" style={{ fontSize: "16px", fontWeight: 650, letterSpacing: "-0.01em" }}>Notifications</h2>
               {unreadCount > 0 && (
-                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ backgroundColor: "#f0fdfa" }}>
-                  <Bell size={12} style={{ color: "#0d9488" }} />
-                  <span style={{ fontSize: "11px", fontWeight: 600, color: "#0d9488" }}>{unreadCount} new</span>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ backgroundColor: "var(--brand-primary-surface)" }}>
+                  <Bell size={12} style={{ color: "var(--brand-primary)" }} />
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--brand-primary)" }}>{unreadCount} new</span>
                 </div>
               )}
             </div>
@@ -12179,7 +12185,7 @@ export function DashboardView({ config }: { config: DashboardConfig }) {
                         <p className="text-gray-300 mt-1" style={{ fontSize: "11px" }}>{relativeTime}</p>
                       </div>
                       {!notif.is_read && (
-                        <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5" style={{ backgroundColor: "#0d9488" }} />
+                        <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5" style={{ backgroundColor: "var(--brand-primary)" }} />
                       )}
                     </div>
                   );
@@ -12297,7 +12303,7 @@ function BatchDrillDown({
       <div className="p-8">
         <button
           onClick={onBack}
-          className="flex items-center gap-2 text-gray-400 hover:text-teal-600 transition-colors mb-6"
+          className="flex items-center gap-2 text-gray-400 hover:text-brand-primary transition-colors mb-6"
           style={{ fontSize: "13.5px", fontWeight: 600 }}
         >
           <ChevronRight size={15} strokeWidth={2.5} style={{ transform: "rotate(180deg)" }} />
@@ -12322,7 +12328,7 @@ function BatchDrillDown({
       {/* Back */}
       <button
         onClick={onBack}
-        className="flex items-center gap-2 text-gray-400 hover:text-teal-600 transition-colors mb-6"
+        className="flex items-center gap-2 text-gray-400 hover:text-brand-primary transition-colors mb-6"
         style={{ fontSize: "13.5px", fontWeight: 600 }}
       >
         <ChevronRight size={15} strokeWidth={2.5} style={{ transform: "rotate(180deg)" }} />
@@ -12394,19 +12400,19 @@ function BatchDrillDown({
                     const base = window.location.pathname.startsWith("/management") ? "/management" : "";
                     navigate(`${base}/students/${s.student_user_id}?from=fee-management&tab=fee&batchId=${encodeURIComponent(batchId)}&batchName=${encodeURIComponent(batchName)}`);
                   }}
-                  className="border-t border-gray-50 hover:bg-teal-50 transition-colors cursor-pointer group"
+                  className="border-t border-gray-50 hover:bg-brand-primary-surface transition-colors cursor-pointer group"
                 >
                   {/* Student name */}
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-3">
                       <div
                         className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
-                        style={{ backgroundColor: "#f0fdfa" }}
+                        style={{ backgroundColor: "var(--brand-primary-surface)" }}
                       >
-                        <span style={{ fontSize: "11px", fontWeight: 700, color: "#0d9488" }}>{initials}</span>
+                        <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--brand-primary)" }}>{initials}</span>
                       </div>
                       <div>
-                        <p className="text-gray-800 group-hover:text-teal-700 transition-colors" style={{ fontSize: "13.5px", fontWeight: 600 }}>
+                        <p className="text-gray-800 group-hover:text-brand-primary transition-colors" style={{ fontSize: "13.5px", fontWeight: 600 }}>
                           {s.student_name}
                         </p>
                         <p className="text-gray-400" style={{ fontSize: "11.5px" }}>{s.login_identifier}</p>
@@ -12693,7 +12699,7 @@ export function FeeManagement() {
                   <tr
                     key={batch.batch_id}
                     onClick={() => setDrillDown({ batchId: batch.batch_id, batchName: batch.batch_name })}
-                    className="border-t border-gray-50 hover:bg-teal-50 transition-colors cursor-pointer group"
+                    className="border-t border-gray-50 hover:bg-brand-primary-surface transition-colors cursor-pointer group"
                   >
                     {/* Batch name */}
                     <td className="px-5 py-4">
@@ -14171,7 +14177,7 @@ function InlineEditor({
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") cancel(); }}
               disabled={saving}
-              className="mt-1 w-full border border-teal-300 rounded-md px-3 py-1.5 text-gray-800 focus:outline-none focus:ring-2 focus:ring-teal-100 transition-all disabled:opacity-60"
+              className="mt-1 w-full border border-brand-primary rounded-md px-3 py-1.5 text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-primary-light transition-all disabled:opacity-60"
               style={{ fontSize: "13.5px" }}
             />
           ) : (
@@ -14186,12 +14192,12 @@ function InlineEditor({
               <button
                 onClick={commit}
                 disabled={saving}
-                className="w-7 h-7 rounded-md flex items-center justify-center transition-colors hover:bg-teal-50 disabled:opacity-50"
-                style={{ color: "#0d9488" }}
+                className="w-7 h-7 rounded-md flex items-center justify-center transition-colors hover:bg-brand-primary-surface disabled:opacity-50"
+                style={{ color: "var(--brand-primary)" }}
                 title="Save"
               >
                 {saving
-                  ? <div className="w-3 h-3 border border-teal-500 border-t-transparent rounded-full animate-spin" />
+                  ? <div className="w-3 h-3 border border-brand-primary border-t-transparent rounded-full animate-spin" />
                   : <Check size={14} strokeWidth={2.5} />
                 }
               </button>
@@ -14209,7 +14215,7 @@ function InlineEditor({
             <button
               onClick={() => { if (!disabled) { setDraft(value); setSaving_editing(true); } }}
               disabled={disabled}
-              className="w-7 h-7 rounded-md flex items-center justify-center transition-colors hover:bg-teal-50 text-gray-300 hover:text-teal-600 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-gray-300"
+              className="w-7 h-7 rounded-md flex items-center justify-center transition-colors hover:bg-brand-primary-surface text-gray-300 hover:text-brand-primary disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-gray-300"
               title={disabled ? "Cannot be edited" : "Edit"}
             >
               <Edit2 size={13} strokeWidth={2} />
@@ -14303,7 +14309,7 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
             <button
               onClick={onClose}
               className="mt-6 px-6 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
-              style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+              style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
             >
               Done
             </button>
@@ -14325,7 +14331,7 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
                       value={val}
                       onChange={(e) => { set(e.target.value); setError(""); }}
                       placeholder="••••••••"
-                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 pr-10 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-50 transition-all"
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 pr-10 text-gray-800 focus:outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary-light transition-all"
                       style={{ fontSize: "13.5px" }}
                     />
                     <button
@@ -14365,7 +14371,7 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
                 disabled={!canSubmit}
                 onClick={handleSubmit}
                 className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+                style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
               >
                 {submitting ? "Updating…" : "Update Password"}
               </button>
@@ -14395,7 +14401,7 @@ function NotifToggle({ value, onChange }: { value: boolean; onChange: (v: boolea
       type="button"
       onClick={() => onChange(!value)}
       className="relative inline-flex items-center rounded-full transition-all duration-200 flex-shrink-0"
-      style={{ width: "40px", height: "22px", backgroundColor: value ? "#0d9488" : "#e5e7eb" }}
+      style={{ width: "40px", height: "22px", backgroundColor: value ? "var(--brand-primary)" : "#e5e7eb" }}
     >
       <span
         className="inline-block rounded-full bg-white shadow transition-transform duration-200"
@@ -14492,9 +14498,9 @@ function NotificationModal({ onClose }: { onClose: () => void }) {
               style={{
                 fontSize: "12.5px",
                 fontWeight: 600,
-                borderColor: prefs.digestFrequency === f ? "#0d9488" : "#f3f4f6",
-                backgroundColor: prefs.digestFrequency === f ? "#f0fdfa" : "white",
-                color: prefs.digestFrequency === f ? "#0d9488" : "#9ca3af",
+                borderColor: prefs.digestFrequency === f ? "var(--brand-primary)" : "#f3f4f6",
+                backgroundColor: prefs.digestFrequency === f ? "var(--brand-primary-surface)" : "white",
+                color: prefs.digestFrequency === f ? "var(--brand-primary)" : "#9ca3af",
               }}
             >
               {f}
@@ -14509,7 +14515,7 @@ function NotificationModal({ onClose }: { onClose: () => void }) {
           <button
             onClick={save}
             className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all flex items-center justify-center gap-2"
-            style={{ backgroundColor: saved ? "#16a34a" : "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+            style={{ backgroundColor: saved ? "var(--semantic-success)" : "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
           >
             {saved ? <><CheckCircle2 size={15} strokeWidth={2.5} /> Saved!</> : "Save Preferences"}
           </button>
@@ -14577,7 +14583,7 @@ export function Profile() {
     return (
       <div className="p-8 max-w-[1000px] mx-auto flex items-center justify-center" style={{ minHeight: "60vh" }}>
         <div className="text-center">
-          <div className="w-8 h-8 border-2 border-teal-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <div className="w-8 h-8 border-2 border-brand-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
           <p className="text-gray-400" style={{ fontSize: "13.5px" }}>Loading profile…</p>
         </div>
       </div>
@@ -14706,35 +14712,35 @@ export function Profile() {
               {/* Change Password */}
               <div
                 onClick={() => setShowPassword(true)}
-                className="flex items-center justify-between p-3.5 rounded-xl border border-gray-100 hover:border-teal-200 hover:bg-teal-50 transition-all cursor-pointer group"
+                className="flex items-center justify-between p-3.5 rounded-xl border border-gray-100 hover:border-brand-primary hover:bg-brand-primary-surface transition-all cursor-pointer group"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-md flex items-center justify-center" style={{ backgroundColor: "#f0fdfa" }}>
-                    <Key size={15} style={{ color: "#0d9488" }} />
+                  <div className="w-8 h-8 rounded-md flex items-center justify-center" style={{ backgroundColor: "var(--brand-primary-surface)" }}>
+                    <Key size={15} style={{ color: "var(--brand-primary)" }} />
                   </div>
                   <div>
-                    <p className="text-gray-800 group-hover:text-teal-700" style={{ fontSize: "13.5px", fontWeight: 600 }}>Change Password</p>
+                    <p className="text-gray-800 group-hover:text-brand-primary" style={{ fontSize: "13.5px", fontWeight: 600 }}>Change Password</p>
                     <p className="text-gray-400" style={{ fontSize: "12px" }}>Update your account password</p>
                   </div>
                 </div>
-                <span className="text-gray-300 group-hover:text-teal-500">→</span>
+                <span className="text-gray-300 group-hover:text-brand-primary">→</span>
               </div>
 
               {/* Notification Preferences */}
               <div
                 onClick={() => setShowNotif(true)}
-                className="flex items-center justify-between p-3.5 rounded-xl border border-gray-100 hover:border-teal-200 hover:bg-teal-50 transition-all cursor-pointer group"
+                className="flex items-center justify-between p-3.5 rounded-xl border border-gray-100 hover:border-brand-primary hover:bg-brand-primary-surface transition-all cursor-pointer group"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-md flex items-center justify-center" style={{ backgroundColor: "#f0fdfa" }}>
-                    <Bell size={15} style={{ color: "#0d9488" }} />
+                  <div className="w-8 h-8 rounded-md flex items-center justify-center" style={{ backgroundColor: "var(--brand-primary-surface)" }}>
+                    <Bell size={15} style={{ color: "var(--brand-primary)" }} />
                   </div>
                   <div>
-                    <p className="text-gray-800 group-hover:text-teal-700" style={{ fontSize: "13.5px", fontWeight: 600 }}>Notification Preferences</p>
+                    <p className="text-gray-800 group-hover:text-brand-primary" style={{ fontSize: "13.5px", fontWeight: 600 }}>Notification Preferences</p>
                     <p className="text-gray-400" style={{ fontSize: "12px" }}>Manage email & push notifications</p>
                   </div>
                 </div>
-                <span className="text-gray-300 group-hover:text-teal-500">→</span>
+                <span className="text-gray-300 group-hover:text-brand-primary">→</span>
               </div>
 
             </div>
@@ -21188,7 +21194,7 @@ function TextInput({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all"
+      className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all"
       style={{ fontSize: "13.5px" }}
     />
   );
@@ -21395,8 +21401,8 @@ function EnrollStudentForm({ onBack, onSubmit }: {
     if (paymentDone) {
       return (
         <div className="p-8 max-w-[600px] mx-auto flex flex-col items-center justify-center" style={{ minHeight: "60vh" }}>
-          <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: "#f0fdfa" }}>
-            <CheckCircle2 size={32} color="#0d9488" strokeWidth={2} />
+          <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: "var(--brand-primary-surface)" }}>
+            <CheckCircle2 size={32} color="var(--brand-primary)" strokeWidth={2} />
           </div>
           <h2 className="text-gray-900 mb-1" style={{ fontSize: "20px", fontWeight: 700 }}>All Done!</h2>
           <p className="text-gray-400 text-center mb-6" style={{ fontSize: "14px" }}>
@@ -21405,7 +21411,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
           <button
             onClick={() => setSubmitted(true)}
             className="px-6 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
-            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+            style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
           >
             View Credentials
           </button>
@@ -21452,7 +21458,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
               <select
                 value={advanceMode}
                 onChange={(e) => { setAdvanceMode(e.target.value); setAdvanceErrors((er) => { const c = { ...er }; delete c.advanceMode; return c; }); }}
-                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white"
+                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all bg-white"
                 style={{ fontSize: "13.5px", color: advanceMode ? "#1f2937" : "#d1d5db" }}
               >
                 <option value="">Select mode</option>
@@ -21471,7 +21477,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
                 type="date"
                 value={advanceDate}
                 onChange={(e) => { setAdvanceDate(e.target.value); setAdvanceErrors((er) => { const c = { ...er }; delete c.advanceDate; return c; }); }}
-                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white"
+                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all bg-white"
                 style={{ fontSize: "13.5px" }}
               />
               {advanceErrors.advanceDate && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{advanceErrors.advanceDate}</p>}
@@ -21511,7 +21517,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
               onClick={handlePaymentSubmit}
               disabled={submittingPayment}
               className="flex-1 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-              style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+              style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
             >
               {submittingPayment ? "Recording…" : "Record Payment"}
             </button>
@@ -21532,8 +21538,8 @@ function EnrollStudentForm({ onBack, onSubmit }: {
   if (submitted && createdStudent) {
     return (
       <div className="p-8 max-w-[600px] mx-auto flex flex-col items-center justify-center" style={{ minHeight: "60vh" }}>
-        <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: "#f0fdfa" }}>
-          <CheckCircle2 size={32} color="#0d9488" strokeWidth={2} />
+        <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: "var(--brand-primary-surface)" }}>
+          <CheckCircle2 size={32} color="var(--brand-primary)" strokeWidth={2} />
         </div>
         <h2 className="text-gray-900 mb-2" style={{ fontSize: "20px", fontWeight: 700 }}>Student Enrolled!</h2>
         <p className="text-gray-400 text-center" style={{ fontSize: "14px" }}>
@@ -21552,7 +21558,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
                 <span className="text-gray-800 font-mono" style={{ fontSize: "13.5px" }}>{value}</span>
                 <button
                   onClick={handleCopy}
-                  className="text-gray-400 hover:text-teal-600 transition-colors flex-shrink-0"
+                  className="text-gray-400 hover:text-brand-primary transition-colors flex-shrink-0"
                   title="Copy credentials"
                 >
                   {copied ? <Check size={14} /> : <Copy size={14} />}
@@ -21564,7 +21570,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
         <button
           onClick={onBack}
           className="mt-6 px-6 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
-          style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+          style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
         >
           Done
         </button>
@@ -21653,7 +21659,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
             <select
               value={form.board}
               onChange={(e) => set("board")(e.target.value)}
-              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white"
+              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all bg-white"
               style={{ fontSize: "13.5px", color: form.board ? "#1f2937" : "#d1d5db" }}
             >
               <option value="" disabled>Select a board</option>
@@ -21672,7 +21678,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
               value={form.academicYearId}
               onChange={(e) => set("academicYearId")(e.target.value)}
               disabled={loadingData}
-              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white disabled:opacity-50"
+              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all bg-white disabled:opacity-50"
               style={{ fontSize: "13.5px", color: form.academicYearId ? "#1f2937" : "#d1d5db" }}
             >
               <option value="">{loadingData ? "Loading…" : "Select academic year"}</option>
@@ -21692,7 +21698,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
                 setErrors((prev) => ({ ...prev, batch: undefined }));
               }}
               disabled={loadingData || !form.academicYearId}
-              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white disabled:opacity-50"
+              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all bg-white disabled:opacity-50"
               style={{ fontSize: "13.5px", color: form.batch ? "#1f2937" : "#d1d5db" }}
             >
               <option value="">
@@ -21729,7 +21735,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
                 style={{ backgroundColor: "#f9fafb" }}
               >
                 <div className="px-4 py-2.5 border-b border-gray-100 flex items-center gap-2">
-                  <DollarSign size={13} style={{ color: "#0d9488" }} strokeWidth={2} />
+                  <DollarSign size={13} style={{ color: "var(--brand-primary)" }} strokeWidth={2} />
                   <p className="text-gray-500 uppercase" style={{ fontSize: "10.5px", fontWeight: 700, letterSpacing: "0.07em" }}>
                     Fee Structure
                   </p>
@@ -21761,7 +21767,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
                       })}
                     </span>
                     {batchFeeStructure.require_advance && (
-                      <span className="text-teal-600" style={{ fontSize: "12px", fontWeight: 500 }}>
+                      <span className="text-brand-primary" style={{ fontSize: "12px", fontWeight: 500 }}>
                         · Advance required
                       </span>
                     )}
@@ -21881,7 +21887,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
                         fontSize: "18px",
                         fontWeight: 800,
                         letterSpacing: "-0.02em",
-                        color: hasDiscount ? "#0d9488" : "#374151",
+                        color: hasDiscount ? "var(--brand-primary)" : "#374151",
                       }}
                     >
                       ₹{payable.toLocaleString("en-IN")}
@@ -21908,7 +21914,7 @@ function EnrollStudentForm({ onBack, onSubmit }: {
             onClick={handleSubmit}
             disabled={submitting || loadingData}
             className="px-6 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+            style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
           >
             {submitting ? "Enrolling…" : "Create Academic Record"}
           </button>
@@ -21958,9 +21964,9 @@ function StudentProfile({ student, onBack, onDeactivate }: {
           <div className="flex items-center gap-5">
             <div
               className="w-16 h-16 rounded-2xl flex items-center justify-center"
-              style={{ backgroundColor: "#f0fdfa" }}
+              style={{ backgroundColor: "var(--brand-primary-surface)" }}
             >
-              <span style={{ fontSize: "22px", fontWeight: 800, color: "#0d9488" }}>{initials}</span>
+              <span style={{ fontSize: "22px", fontWeight: 800, color: "var(--brand-primary)" }}>{initials}</span>
             </div>
             <div>
               <div className="flex items-center gap-3 mb-1">
@@ -22047,17 +22053,17 @@ function StudentProfile({ student, onBack, onDeactivate }: {
         {/* Attendance Summary */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
           <div className="flex items-center gap-2 mb-5">
-            <CalendarDays size={16} className="text-teal-500" />
+            <CalendarDays size={16} className="text-brand-primary" />
             <h2 className="text-gray-800" style={{ fontSize: "15px", fontWeight: 700 }}>Attendance Summary</h2>
           </div>
 
           {/* Overall */}
-          <div className="flex items-center gap-3 mb-5 p-4 rounded-xl" style={{ backgroundColor: "#f0fdfa" }}>
+          <div className="flex items-center gap-3 mb-5 p-4 rounded-xl" style={{ backgroundColor: "var(--brand-primary-surface)" }}>
             {student.attendance != null ? (
               <>
                 <div>
                   <p className="text-gray-400" style={{ fontSize: "12px", fontWeight: 500 }}>Overall Attendance</p>
-                  <p style={{ fontSize: "28px", fontWeight: 800, color: "#0d9488", lineHeight: 1.1 }}>
+                  <p style={{ fontSize: "28px", fontWeight: 800, color: "var(--brand-primary)", lineHeight: 1.1 }}>
                     {student.attendance}%
                   </p>
                 </div>
@@ -22118,7 +22124,7 @@ function StudentProfile({ student, onBack, onDeactivate }: {
         {/* Test Results Summary */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
           <div className="flex items-center gap-2 mb-5">
-            <ClipboardList size={16} className="text-teal-500" />
+            <ClipboardList size={16} className="text-brand-primary" />
             <h2 className="text-gray-800" style={{ fontSize: "15px", fontWeight: 700 }}>Test Results</h2>
           </div>
 
@@ -22300,7 +22306,7 @@ export function Students() {
         <button
           onClick={() => setView("enroll")}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
-          style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+          style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
         >
           <Plus size={16} strokeWidth={2.5} />
           Enroll Student
@@ -22328,9 +22334,9 @@ export function Students() {
               style={{
                 fontSize: "13px",
                 fontWeight: 500,
-                backgroundColor: selectedYearId === year.id ? "#0d9488" : "white",
+                backgroundColor: selectedYearId === year.id ? "var(--brand-primary)" : "white",
                 color: selectedYearId === year.id ? "white" : "#6b7280",
-                borderColor: selectedYearId === year.id ? "#0d9488" : "#f3f4f6",
+                borderColor: selectedYearId === year.id ? "var(--brand-primary)" : "#f3f4f6",
               }}
             >
               {year.label}
@@ -22340,8 +22346,8 @@ export function Students() {
                   style={{
                     fontSize: "10px",
                     fontWeight: 700,
-                    backgroundColor: selectedYearId === year.id ? "rgba(255,255,255,0.25)" : "#f0fdfa",
-                    color: selectedYearId === year.id ? "white" : "#0d9488",
+                    backgroundColor: selectedYearId === year.id ? "rgba(255,255,255,0.25)" : "var(--brand-primary-surface)",
+                    color: selectedYearId === year.id ? "white" : "var(--brand-primary)",
                   }}
                 >
                   Active
@@ -22376,7 +22382,7 @@ export function Students() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search students by name, roll no, or batch…"
-            className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-300 shadow-sm"
+            className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary shadow-sm"
             style={{ fontSize: "13.5px" }}
           />
         </div>
@@ -22406,12 +22412,12 @@ export function Students() {
                 <tr
                   key={student.id}
                   onClick={() => navigate(`/students/${student.id}`)}
-                  className="border-t border-gray-50 hover:bg-teal-50 transition-colors cursor-pointer"
+                  className="border-t border-gray-50 hover:bg-brand-primary-surface transition-colors cursor-pointer"
                 >
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: "#f0fdfa" }}>
-                        <span style={{ fontSize: "12px", fontWeight: 700, color: "#0d9488" }}>{initials}</span>
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: "var(--brand-primary-surface)" }}>
+                        <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--brand-primary)" }}>{initials}</span>
                       </div>
                       <div>
                         <p className="text-gray-800" style={{ fontSize: "13.5px", fontWeight: 600 }}>{student.name}</p>
@@ -22471,7 +22477,7 @@ export function Students() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setPage(Math.max(1, page - 1))}
-              className="w-8 h-8 rounded-md border border-gray-100 flex items-center justify-center text-gray-400 hover:border-teal-300 hover:text-teal-600 transition-colors"
+              className="w-8 h-8 rounded-md border border-gray-100 flex items-center justify-center text-gray-400 hover:border-brand-primary hover:text-brand-primary transition-colors"
             >
               <ChevronLeft size={14} />
             </button>
@@ -22482,9 +22488,9 @@ export function Students() {
                 className="w-8 h-8 rounded-md border transition-colors flex items-center justify-center"
                 style={{
                   fontSize: "13px", fontWeight: 600,
-                  borderColor: page === p ? "#0d9488" : "#f3f4f6",
+                  borderColor: page === p ? "var(--brand-primary)" : "#f3f4f6",
                   color: page === p ? "white" : "#6b7280",
-                  backgroundColor: page === p ? "#0d9488" : "white",
+                  backgroundColor: page === p ? "var(--brand-primary)" : "white",
                 }}
               >
                 {p}
@@ -22492,7 +22498,7 @@ export function Students() {
             ))}
             <button
               onClick={() => setPage(Math.min(3, page + 1))}
-              className="w-8 h-8 rounded-md border border-gray-100 flex items-center justify-center text-gray-400 hover:border-teal-300 hover:text-teal-600 transition-colors"
+              className="w-8 h-8 rounded-md border border-gray-100 flex items-center justify-center text-gray-400 hover:border-brand-primary hover:text-brand-primary transition-colors"
             >
               <ChevronRight size={14} />
             </button>
@@ -25628,7 +25634,7 @@ function AssignTeacherModal({
               value={selectedUserId}
               onChange={(e) => setSelectedUserId(e.target.value)}
               disabled={loadingData}
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 bg-white transition-all disabled:opacity-50"
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:outline-none focus:border-brand-primary bg-white transition-all disabled:opacity-50"
               style={{ fontSize: "13.5px", color: selectedUserId ? "#111827" : "#9ca3af" }}
             >
               <option value="">{loadingData ? "Loading…" : teacherUsers.length === 0 ? "No unassigned teacher users" : "Choose a user with Teacher role…"}</option>
@@ -25662,7 +25668,7 @@ function AssignTeacherModal({
           key={b.id}
           style={{
             borderBottom: "1px solid #f3f4f6",
-            backgroundColor: checked ? "#f0fdfa" : "white",
+            backgroundColor: checked ? "var(--brand-primary-surface)" : "white",
           }}
         >
           {/* Batch row — toggle selection */}
@@ -25674,8 +25680,8 @@ function AssignTeacherModal({
             <div
               className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0 border transition-all"
               style={{
-                backgroundColor: checked ? "#0d9488" : "white",
-                borderColor: checked ? "#0d9488" : "#d1d5db",
+                backgroundColor: checked ? "var(--brand-primary)" : "white",
+                borderColor: checked ? "var(--brand-primary)" : "#d1d5db",
               }}
             >
               {checked && (
@@ -25684,7 +25690,7 @@ function AssignTeacherModal({
                 </svg>
               )}
             </div>
-            <span style={{ fontSize: "13.5px", color: checked ? "#0d9488" : "#374151", fontWeight: checked ? 600 : 400 }}>
+            <span style={{ fontSize: "13.5px", color: checked ? "var(--brand-primary)" : "#374151", fontWeight: checked ? 600 : 400 }}>
               {b.name}
             </span>
           </button>
@@ -25707,8 +25713,8 @@ function AssignTeacherModal({
                       style={{
                         fontSize: "12px",
                         fontWeight: selected ? 600 : 400,
-                        backgroundColor: selected ? "#0d9488" : "white",
-                        borderColor: selected ? "#0d9488" : "#d1d5db",
+                        backgroundColor: selected ? "var(--brand-primary)" : "white",
+                        borderColor: selected ? "var(--brand-primary)" : "#d1d5db",
                         color: selected ? "white" : "#374151",
                       }}
                     >
@@ -25734,10 +25740,10 @@ function AssignTeacherModal({
 {selectedBatchIds.length > 0 && selectedUserObj && (
   <div
     className="flex items-start gap-3 p-3 rounded-xl"
-    style={{ backgroundColor: "#f0fdfa", border: "1px solid #ccfbf1" }}
+    style={{ backgroundColor: "var(--brand-primary-surface)", border: "1px solid var(--brand-primary-light)" }}
   >
-    <CheckCircle2 size={15} style={{ color: "#0d9488", marginTop: "2px" }} strokeWidth={2.5} />
-    <p style={{ fontSize: "12.5px", color: "#0d9488", fontWeight: 500, lineHeight: 1.5 }}>
+    <CheckCircle2 size={15} style={{ color: "var(--brand-primary)", marginTop: "2px" }} strokeWidth={2.5} />
+    <p style={{ fontSize: "12.5px", color: "var(--brand-primary)", fontWeight: 500, lineHeight: 1.5 }}>
       <span style={{ fontWeight: 700 }}>{selectedUserObj.full_name}</span> will be assigned to{" "}
       <span style={{ fontWeight: 700 }}>{selectedBatchIds.length}</span>{" "}
       batch{selectedBatchIds.length !== 1 ? "es" : ""}:{" "}
@@ -25769,7 +25775,7 @@ function AssignTeacherModal({
             disabled={!canSubmit}
             onClick={handleSubmit}
             className="flex-1 py-2.5 rounded-xl text-white transition-all hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+            style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
           >
             {submitting ? "Assigning…" : "Assign Teacher"}
           </button>
@@ -25871,9 +25877,9 @@ function AssignedBatchesSection({
                     style={{
                       fontSize: "11px",
                       fontWeight: 600,
-                      borderColor: isEditing ? "#0d9488" : "#e5e7eb",
-                      color: isEditing ? "#0d9488" : "#9ca3af",
-                      backgroundColor: isEditing ? "#f0fdfa" : "transparent",
+                      borderColor: isEditing ? "var(--brand-primary)" : "#e5e7eb",
+                      color: isEditing ? "var(--brand-primary)" : "#9ca3af",
+                      backgroundColor: isEditing ? "var(--brand-primary-surface)" : "transparent",
                     }}
                   >
                     {isEditing ? "Done" : "Edit"}
@@ -25994,7 +26000,7 @@ function TeacherProfilePanel({
           <div className="flex items-center gap-2">
             <button
               onClick={onViewFull}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-100 text-gray-500 hover:border-teal-300 hover:text-teal-600 hover:bg-teal-50 transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-100 text-gray-500 hover:border-brand-primary hover:text-brand-primary hover:bg-brand-primary-surface transition-all"
               style={{ fontSize: "12px", fontWeight: 600 }}
               title="Open full profile page"
             >
@@ -26187,7 +26193,7 @@ export function Teachers() {
         <button
           onClick={() => setShowAssign(true)}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all active:scale-95"
-          style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+          style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
         >
           <Plus size={16} strokeWidth={2.5} />
           Add Teacher
@@ -26223,7 +26229,7 @@ export function Teachers() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search teachers by name or login identifier…"
-            className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-300 shadow-sm transition-all"
+            className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary shadow-sm transition-all"
             style={{ fontSize: "13.5px" }}
           />
         </div>
@@ -26252,7 +26258,7 @@ export function Teachers() {
                 <tr
                   key={teacher.id}
                   onClick={() => setSelectedTeacher(teacher)}
-                  className="border-t border-gray-50 hover:bg-teal-50 transition-colors cursor-pointer group"
+                  className="border-t border-gray-50 hover:bg-brand-primary-surface transition-colors cursor-pointer group"
                 >
                   {/* Teacher Name */}
                   <td className="px-6 py-4">
@@ -26267,7 +26273,7 @@ export function Teachers() {
                       </div>
                       <div>
                         <p
-                          className="group-hover:text-teal-700 transition-colors"
+                          className="group-hover:text-brand-primary transition-colors"
                           style={{ fontSize: "13.5px", fontWeight: 600, color: "#111827" }}
                         >
                           {teacher.name}
@@ -26323,7 +26329,7 @@ export function Teachers() {
 
                   {/* Arrow */}
                   <td className="px-6 py-4 text-right">
-                    <ChevronRight size={15} className="text-gray-300 group-hover:text-teal-400 transition-colors ml-auto" />
+                    <ChevronRight size={15} className="text-gray-300 group-hover:text-brand-primary transition-colors ml-auto" />
                   </td>
                 </tr>
               );
@@ -26627,7 +26633,7 @@ function LiveMaterialCard({ material }: { material: TestStudyMaterial }) {
           {type !== "other" && (
             <button
               onClick={(e) => { e.stopPropagation(); setExpanded((x) => !x); }}
-              className="px-2.5 py-1 rounded-md border border-gray-100 text-gray-400 hover:text-teal-600 hover:border-teal-200 hover:bg-teal-50 transition-all"
+              className="px-2.5 py-1 rounded-md border border-gray-100 text-gray-400 hover:text-brand-primary hover:border-brand-primary hover:bg-brand-primary-surface transition-all"
               style={{ fontSize: "11.5px", fontWeight: 600 }}
             >
               {expanded ? "Hide" : "Preview"}
@@ -26639,7 +26645,7 @@ function LiveMaterialCard({ material }: { material: TestStudyMaterial }) {
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="px-2.5 py-1 rounded-md border border-teal-100 text-teal-600 hover:bg-teal-50 transition-all"
+            className="px-2.5 py-1 rounded-md border border-brand-primary text-brand-primary hover:bg-brand-primary-surface transition-all"
             style={{ fontSize: "11.5px", fontWeight: 600, textDecoration: "none" }}
           >
             ↓
@@ -26649,7 +26655,7 @@ function LiveMaterialCard({ material }: { material: TestStudyMaterial }) {
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="px-2.5 py-1 rounded-md border border-gray-100 text-gray-400 hover:text-teal-600 hover:border-teal-200 hover:bg-teal-50 transition-all"
+            className="px-2.5 py-1 rounded-md border border-gray-100 text-gray-400 hover:text-brand-primary hover:border-brand-primary hover:bg-brand-primary-surface transition-all"
             style={{ fontSize: "11.5px", fontWeight: 600, textDecoration: "none" }}
           >
             ↗
@@ -26749,8 +26755,7 @@ function BatchMultiSelect({
         type="button"
         onClick={() => !loading && setOpen((o) => !o)}
         disabled={loading}
-        className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-left flex items-center justify-between focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white disabled:opacity-50"
-        style={{ fontSize: "13.5px" }}
+        className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-left flex items-center justify-between focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all bg-white disabled:opacity-50"        style={{ fontSize: "13.5px" }}
       >
         <span className={selected.length === 0 ? "text-gray-300" : "text-gray-800"}>
           {loading
@@ -26780,13 +26785,13 @@ function BatchMultiSelect({
                 key={batch.id}
                 type="button"
                 onClick={() => toggle(batch.id)}
-                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-teal-50 transition-colors text-left"
+                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-brand-primary-surface transition-colors text-left"
               >
                 <div
                   className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0 transition-all"
                   style={{
                     border: isSelected ? "none" : "2px solid #d1d5db",
-                    backgroundColor: isSelected ? "#0d9488" : "transparent",
+                    backgroundColor: isSelected ? "var(--brand-primary)" : "transparent",
                   }}
                 >
                   {isSelected && <Check size={10} color="white" strokeWidth={3} />}
@@ -26809,10 +26814,10 @@ function BatchMultiSelect({
             <span
               key={id}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-md"
-              style={{ fontSize: "12px", fontWeight: 500, backgroundColor: "#f0fdfa", color: "#0d9488" }}
+              style={{ fontSize: "12px", fontWeight: 500, backgroundColor: "var(--brand-primary-surface)", color: "var(--brand-primary)" }}
             >
               {options.find((o) => o.id === id)?.name ?? id}
-              <button type="button" onClick={() => toggle(id)} className="hover:text-teal-700">
+              <button type="button" onClick={() => toggle(id)} className="hover:text-brand-primary">
                 <X size={10} strokeWidth={2.5} />
               </button>
             </span>
@@ -26850,10 +26855,10 @@ function FileAttachArea({
         onClick={() => inputRef.current?.click()}
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => { e.preventDefault(); handleFiles(e.dataTransfer.files); }}
-        className="border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-teal-300 hover:bg-teal-50 transition-all"
+        className="border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-brand-primary hover:bg-brand-primary-surface transition-all"
       >
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "#f0fdfa" }}>
-          <Paperclip size={18} color="#0d9488" strokeWidth={2} />
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "var(--brand-primary-surface)" }}>
+            <Paperclip size={18} color="var(--brand-primary)" strokeWidth={2} />
         </div>
         <p className="text-gray-600" style={{ fontSize: "13.5px", fontWeight: 600 }}>
           Click to browse or drag files here
@@ -27023,8 +27028,8 @@ function TestFormView({
   if (submitted) {
     return (
       <div className="p-8 max-w-[600px] mx-auto flex flex-col items-center justify-center" style={{ minHeight: "60vh" }}>
-        <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: "#f0fdfa" }}>
-          <CheckCircle2 size={32} color="#0d9488" strokeWidth={2} />
+        <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: "var(--brand-primary-surface)" }}>
+          <CheckCircle2 size={32} color="var(--brand-primary)" strokeWidth={2} />
         </div>
         <h2 className="text-gray-900 mb-2" style={{ fontSize: "20px", fontWeight: 700 }}>
           {mode === "create" ? "Test Created!" : "Test Updated!"}
@@ -27070,7 +27075,7 @@ function TestFormView({
             value={form.name}
             onChange={(e) => set("name")(e.target.value)}
             placeholder="e.g. Mid-Term Physics"
-            className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all"
+            className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all"
             style={{ fontSize: "13.5px" }}
           />
           {errors.name && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.name}</p>}
@@ -27096,7 +27101,7 @@ function TestFormView({
                       setShowAddSubject(false);
                     }
                   }}
-                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white"
+                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all bg-white"
                   style={{ fontSize: "13.5px", color: form.subject ? "#1f2937" : "#d1d5db" }}
                 >
                   <option value="" disabled>Select a subject</option>
@@ -27112,7 +27117,7 @@ function TestFormView({
                       onChange={(e) => setNewSubjectInput(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddSubject(); } }}
                       placeholder="e.g. Political Science"
-                      className="flex-1 border border-gray-200 rounded-xl px-3.5 py-2 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all"
+                      className="flex-1 border border-gray-200 rounded-xl px-3.5 py-2 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all"
                       style={{ fontSize: "13px" }}
                       autoFocus
                     />
@@ -27121,7 +27126,7 @@ function TestFormView({
                       onClick={handleAddSubject}
                       disabled={addingSubject || !newSubjectInput.trim()}
                       className="px-4 py-2 rounded-xl text-white transition-all disabled:opacity-50"
-                      style={{ fontSize: "13px", fontWeight: 600, backgroundColor: "#0d9488" }}
+                      style={{ fontSize: "13px", fontWeight: 600, backgroundColor: "var(--brand-primary)" }}
                     >
                       {addingSubject ? "Adding…" : "Add"}
                     </button>
@@ -27148,7 +27153,7 @@ function TestFormView({
               value={form.date}
               min={getMinDate()}
               onChange={(e) => set("date")(e.target.value)}
-              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white"
+              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all bg-white"
               style={{ fontSize: "13.5px" }}
             />
             {errors.date && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.date}</p>}
@@ -27164,7 +27169,7 @@ function TestFormView({
               value={form.testTime}
               min={getMinTime()}
               onChange={(e) => set("testTime")(e.target.value)}
-              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all bg-white"
+              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all bg-white"
               style={{ fontSize: "13.5px" }}
             />
           </div>
@@ -27176,7 +27181,7 @@ function TestFormView({
               value={form.durationMinutes}
               onChange={(e) => set("durationMinutes")(e.target.value === "" ? "" : Number(e.target.value) as any)}
               placeholder="e.g. 90"
-              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all"
+              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all"
               style={{ fontSize: "13.5px" }}
             />
           </div>
@@ -27191,7 +27196,7 @@ function TestFormView({
             value={form.totalMarks}
             onChange={(e) => set("totalMarks")(Number(e.target.value))}
             placeholder="e.g. 100"
-            className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all"
+            className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all"
             style={{ fontSize: "13.5px" }}
           />
           {errors.totalMarks && <p className="text-red-500 mt-1" style={{ fontSize: "12px" }}>{errors.totalMarks}</p>}
@@ -27217,7 +27222,7 @@ function TestFormView({
             onChange={(e) => set("syllabus")(e.target.value)}
             placeholder="Describe the chapters, topics, or units this test covers…"
             rows={4}
-            className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100 transition-all resize-none"
+            className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary-light transition-all resize-none"
             style={{ fontSize: "13.5px", lineHeight: 1.6 }}
           />
         </div>
@@ -27243,7 +27248,7 @@ function TestFormView({
             onClick={handleSubmit}
             disabled={submitting || loadingBatches}
             className="px-6 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+            style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
           >
             {submitting ? "Creating…" : mode === "create" ? "Create Test" : "Save Changes"}
           </button>
@@ -27363,8 +27368,8 @@ function MarksEntryView({
   if (saved) {
     return (
       <div className="p-8 max-w-[600px] mx-auto flex flex-col items-center justify-center" style={{ minHeight: "60vh" }}>
-        <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: "#f0fdfa" }}>
-          <CheckCircle2 size={32} color="#0d9488" strokeWidth={2} />
+        <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: "var(--brand-primary-surface)" }}>
+          <CheckCircle2 size={32} color="var(--brand-primary)" strokeWidth={2} />
         </div>
         <h2 className="text-gray-900 mb-2" style={{ fontSize: "20px", fontWeight: 700 }}>
           Marks {mode === "enter" ? "Submitted" : "Updated"}!
@@ -27506,7 +27511,7 @@ function MarksEntryView({
                     setErrors((er) => { const c = { ...er }; delete c[student.student_id]; return c; });
                         }}
                         placeholder="—"
-                        className="w-20 border rounded-xl px-3 py-2 text-center focus:outline-none focus:border-teal-400 transition-all"
+                        className="w-20 border rounded-xl px-3 py-2 text-center focus:outline-none focus:border-brand-primary transition-all"
                         style={{
                           fontSize: "14px", fontWeight: 600,
                           borderColor: err ? "#fca5a5" : "#e5e7eb",
@@ -27547,7 +27552,7 @@ function MarksEntryView({
             onClick={handleSave}
             disabled={submitting || loadingStudents}
             className="px-6 py-2.5 rounded-xl text-white hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+            style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
           >
             {submitting ? "Submitting…" : mode === "enter" ? "Submit All Marks" : "Save Changes"}
           </button>
@@ -27728,7 +27733,7 @@ function TestDetail({
               <button
                 onClick={onEnterMarks}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl text-white hover:opacity-90 transition-all"
-                style={{ backgroundColor: "#0d9488", fontSize: "13px", fontWeight: 600 }}
+                style={{ backgroundColor: "var(--brand-primary)", fontSize: "13px", fontWeight: 600 }}
               >
                 <Award size={14} strokeWidth={2} />
                 Enter Marks
@@ -27740,7 +27745,7 @@ function TestDetail({
               <>
                 <button
                   onClick={onModifyMarks}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-teal-200 text-teal-700 hover:bg-teal-50 transition-all"
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-brand-primary text-brand-primary hover:bg-brand-primary-surface transition-all"
                   style={{ fontSize: "13px", fontWeight: 600 }}
                 >
                   <Pencil size={13} strokeWidth={2} />
@@ -27819,7 +27824,7 @@ function TestDetail({
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <span className="px-3 py-1 rounded-md" style={{ fontSize: "12.5px", fontWeight: 500, backgroundColor: "#f0fdfa", color: "#0d9488" }}>
+            <span className="px-3 py-1 rounded-md" style={{ fontSize: "12.5px", fontWeight: 500, backgroundColor: "var(--brand-primary-surface)", color: "var(--brand-primary)" }}>
               {test.batchName}
             </span>
           </div>
@@ -27830,7 +27835,7 @@ function TestDetail({
       <div className="grid grid-cols-2 gap-5 mb-5">
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
           <div className="flex items-center gap-2 mb-4">
-            <BookOpen size={15} className="text-teal-500" />
+            <BookOpen size={15} className="text-brand-primary" />
             <h2 className="text-gray-800" style={{ fontSize: "15px", fontWeight: 700 }}>Syllabus / Topics</h2>
           </div>
           {test.syllabus ? (
@@ -27843,13 +27848,13 @@ function TestDetail({
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <Paperclip size={15} className="text-teal-500" />
+              <Paperclip size={15} className="text-brand-primary" />
               <h2 className="text-gray-800" style={{ fontSize: "15px", fontWeight: 700 }}>Study Material</h2>
             </div>
             {test.liveMaterials.length > 0 && (
               <span
                 className="px-2 py-0.5 rounded-full"
-                style={{ fontSize: "11px", fontWeight: 600, backgroundColor: "#f0fdfa", color: "#0d9488" }}
+                style={{ fontSize: "11px", fontWeight: 600, backgroundColor: "var(--brand-primary-surface)", color: "var(--brand-primary)" }}
               >
                 {test.liveMaterials.length} file{test.liveMaterials.length !== 1 ? "s" : ""}
               </span>
@@ -27872,7 +27877,7 @@ function TestDetail({
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-50 flex items-center justify-between" style={{ backgroundColor: "#f9fafb" }}>
             <div className="flex items-center gap-2">
-              <Award size={15} className="text-teal-500" />
+              <Award size={15} className="text-brand-primary" />
               <h2 className="text-gray-800" style={{ fontSize: "15px", fontWeight: 700 }}>Student Marks</h2>
             </div>
 
@@ -27905,7 +27910,7 @@ function TestDetail({
                 <button
                   onClick={onEnterMarks}
                   className="mt-2 flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
-                  style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+                  style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
                 >
                   <Award size={15} strokeWidth={2} />
                   Enter Marks Now
@@ -28261,7 +28266,7 @@ useEffect(() => {
           <button
             onClick={() => setView({ type: "create" })}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
-            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+            style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
           >
             <Plus size={16} strokeWidth={2.5} />
             Create Test
@@ -28286,7 +28291,7 @@ useEffect(() => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search tests by name, subject, or batch…"
-            className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-300 shadow-sm"
+            className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary shadow-sm"
             style={{ fontSize: "13.5px" }}
           />
         </div>
@@ -28297,9 +28302,9 @@ useEffect(() => {
             className="px-4 py-2.5 rounded-xl border shadow-sm transition-colors whitespace-nowrap"
             style={{
               fontSize: "13px", fontWeight: 500,
-              backgroundColor: filter === f ? "#0d9488" : "white",
+              backgroundColor: filter === f ? "var(--brand-primary)" : "white",
               color: filter === f ? "white" : "#6b7280",
-              borderColor: filter === f ? "#0d9488" : "#f3f4f6",
+              borderColor: filter === f ? "var(--brand-primary)" : "#f3f4f6",
             }}
           >
             {f}
@@ -28332,7 +28337,7 @@ useEffect(() => {
                 <tr
                   key={test.id}
                   onClick={() => setView({ type: "detail", testId: test.id })}
-                  className="border-t border-gray-50 hover:bg-teal-50 transition-colors cursor-pointer group"
+                  className="border-t border-gray-50 hover:bg-brand-primary-surface transition-colors cursor-pointer group"
                 >
                   {/* Name */}
                   <td className="px-5 py-3.5">
@@ -28340,7 +28345,7 @@ useEffect(() => {
                       <div className="w-8 h-8 rounded-md flex items-center justify-center" style={{ backgroundColor: sc.bg }}>
                         <ClipboardList size={15} style={{ color: sc.color }} strokeWidth={2} />
                       </div>
-                      <span className="text-gray-800 group-hover:text-teal-700" style={{ fontSize: "13.5px", fontWeight: 600 }}>
+                      <span className="text-gray-800 group-hover:text-brand-primary" style={{ fontSize: "13.5px", fontWeight: 600 }}>
                         {test.name}
                       </span>
                     </div>
@@ -28355,7 +28360,7 @@ useEffect(() => {
 
                   {/* Batch */}
                   <td className="px-5 py-3.5">
-                    <span className="px-2 py-0.5 rounded-md" style={{ fontSize: "11px", fontWeight: 500, backgroundColor: "#f0fdfa", color: "#0d9488" }}>
+                    <span className="px-2 py-0.5 rounded-md" style={{ fontSize: "11px", fontWeight: 500, backgroundColor: "var(--brand-primary-surface)", color: "var(--brand-primary)" }}>
                       {test.batchName}
                     </span>
                   </td>
@@ -28575,8 +28580,8 @@ function CreateUserModal({
           </div>
 
           <div className="space-y-3 mb-6">
-            <div className="px-4 py-3 rounded-xl border border-gray-100" style={{ backgroundColor: "#f0fdfa" }}>
-              <p className="text-teal-700" style={{ fontSize: "13px", fontWeight: 500 }}>
+            <div className="px-4 py-3 rounded-xl border border-gray-100" style={{ backgroundColor: "var(--brand-primary-surface)" }}>
+              <p className="text-brand-primary" style={{ fontSize: "13px", fontWeight: 500 }}>
                 User created successfully. They can now log in using their registered mobile number via WhatsApp OTP.
               </p>
             </div>
@@ -28585,7 +28590,7 @@ function CreateUserModal({
           <button
             onClick={onClose}
             className="w-full py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
-            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+            style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
           >
             Done
           </button>
@@ -28635,7 +28640,7 @@ function CreateUserModal({
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               placeholder="e.g. Sneha Patel"
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-50 transition-all"
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary-light transition-all"
               style={{ fontSize: "13.5px" }}
             />
             <p className="text-gray-400 mt-1.5" style={{ fontSize: "11.5px" }}>
@@ -28682,7 +28687,7 @@ function CreateUserModal({
                   value={mobile}
                   onChange={(e) => setMobile(e.target.value.replace(/\D/g, "").slice(0, 10))}
                   placeholder="10-digit mobile number"
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-50 transition-all"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary-light transition-all"
                   style={{ fontSize: "13.5px" }}
                 />
               </div>
@@ -28696,7 +28701,7 @@ function CreateUserModal({
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="e.g. sneha.patel@gmail.com"
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-50 transition-all"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary-light transition-all"
                   style={{ fontSize: "13.5px" }}
                 />
               </div>
@@ -28710,7 +28715,7 @@ function CreateUserModal({
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
                   placeholder="e.g. 12, Shivaji Nagar, Nagpur"
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-50 transition-all"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary-light transition-all"
                   style={{ fontSize: "13.5px" }}
                 />
               </div>
@@ -28736,7 +28741,7 @@ function CreateUserModal({
             disabled={!canSubmit}
             onClick={handleSubmit}
             className="flex-1 py-2.5 rounded-xl text-white transition-all hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+            style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
           >
             {submitting ? "Creating…" : "Create User"}
           </button>
@@ -29075,7 +29080,7 @@ export function Users() {
         <button
           onClick={() => setShowCreate(true)}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all active:scale-95"
-          style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+          style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
         >
           <Plus size={16} strokeWidth={2.5} />
           Create User
@@ -29115,7 +29120,7 @@ export function Users() {
             value={search}
             onChange={(e) => handleFilterChange(() => setSearch(e.target.value))}
             placeholder="Search by name or phone number…"
-            className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-300 shadow-sm transition-all"
+            className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary shadow-sm transition-all"
             style={{ fontSize: "13.5px" }}
           />
         </div>
@@ -29128,9 +29133,9 @@ export function Users() {
               style={{
                 fontSize: "12.5px",
                 fontWeight: 600,
-                borderColor: roleFilter === r ? "#0d9488" : "#f3f4f6",
-                backgroundColor: roleFilter === r ? "#f0fdfa" : "white",
-                color: roleFilter === r ? "#0d9488" : "#9ca3af",
+                borderColor: roleFilter === r ? "var(--brand-primary)" : "#f3f4f6",
+                backgroundColor: roleFilter === r ? "var(--brand-primary-surface)" : "white",
+                color: roleFilter === r ? "var(--brand-primary)" : "#9ca3af",
               }}
             >
               {r}
@@ -29181,7 +29186,7 @@ export function Users() {
                         </span>
                       </div>
                       <span
-                        className="text-gray-700 group-hover:text-teal-700 transition-colors"
+                        className="text-gray-700 group-hover:text-brand-primary transition-colors"
                         style={{ fontSize: "13.5px", fontWeight: 500 }}
                       >
                         {user.phoneNumber ?? "—"}
@@ -29240,7 +29245,7 @@ export function Users() {
                   <td className="px-6 py-4 text-right">
                     <ChevronRight
                       size={15}
-                      className="text-gray-300 group-hover:text-teal-400 transition-colors ml-auto"
+                      className="text-gray-300 group-hover:text-brand-primary transition-colors ml-auto"
                     />
                   </td>
                 </tr>
@@ -29259,7 +29264,7 @@ export function Users() {
               <button
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={safePage === 1}
-                className="px-3 py-1.5 rounded-lg border border-gray-100 text-gray-500 hover:border-teal-300 hover:text-teal-600 hover:bg-teal-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                className="px-3 py-1.5 rounded-lg border border-gray-100 text-gray-500 hover:border-brand-primary hover:text-brand-primary hover:bg-brand-primary-surface disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                 style={{ fontSize: "12.5px", fontWeight: 600 }}
               >
                 ← Prev
@@ -29282,9 +29287,9 @@ export function Users() {
                       style={{
                         fontSize: "12.5px",
                         fontWeight: 600,
-                        borderColor: safePage === p ? "#0d9488" : "#f3f4f6",
-                        backgroundColor: safePage === p ? "#f0fdfa" : "white",
-                        color: safePage === p ? "#0d9488" : "#6b7280",
+                        borderColor: safePage === p ? "var(--brand-primary)" : "#f3f4f6",
+                        backgroundColor: safePage === p ? "var(--brand-primary-surface)" : "white",
+                        color: safePage === p ? "var(--brand-primary)" : "#6b7280",
                       }}
                     >
                       {p}
@@ -29294,7 +29299,7 @@ export function Users() {
               <button
                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                 disabled={safePage === totalPages}
-                className="px-3 py-1.5 rounded-lg border border-gray-100 text-gray-500 hover:border-teal-300 hover:text-teal-600 hover:bg-teal-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                className="px-3 py-1.5 rounded-lg border border-gray-100 text-gray-500 hover:border-brand-primary hover:text-brand-primary hover:bg-brand-primary-surface disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                 style={{ fontSize: "12.5px", fontWeight: 600 }}
               >
                 Next →
@@ -32048,6 +32053,7 @@ font-family: 'DM Sans', system-ui, sans-serif}
 
 // ===== FILE: src\styles\theme.css =====
 
+
 @custom-variant dark (&:is(.dark *));
 
 :root {
@@ -32068,6 +32074,14 @@ font-family: 'DM Sans', system-ui, sans-serif}
   --accent-foreground: #030213;
   --destructive: #d4183d;
   --destructive-foreground: #ffffff;
+  --brand-primary: #0D9488;
+  --brand-primary-dark: #0F766E;
+  --brand-primary-light: rgba(13, 148, 136, 0.12);
+  --brand-primary-surface: #F0FDFA;
+  --semantic-success: #16A34A;
+  --semantic-error: #DC2626;
+  --semantic-warning: #D97706;
+  --semantic-info: #2563EB;
   --border: rgba(0, 0, 0, 0.1);
   --input: transparent;
   --input-background: #f3f3f5;
@@ -32150,6 +32164,14 @@ font-family: 'DM Sans', system-ui, sans-serif}
   --color-input-background: var(--input-background);
   --color-switch-background: var(--switch-background);
   --color-ring: var(--ring);
+  --color-brand-primary: var(--brand-primary);
+  --color-brand-primary-dark: var(--brand-primary-dark);
+  --color-brand-primary-light: var(--brand-primary-light);
+  --color-brand-primary-surface: var(--brand-primary-surface);
+  --color-semantic-success: var(--semantic-success);
+  --color-semantic-error: var(--semantic-error);
+  --color-semantic-warning: var(--semantic-warning);
+  --color-semantic-info: var(--semantic-info);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);

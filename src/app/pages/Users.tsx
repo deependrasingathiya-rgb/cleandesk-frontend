@@ -164,8 +164,8 @@ function CreateUserModal({
           </div>
 
           <div className="space-y-3 mb-6">
-            <div className="px-4 py-3 rounded-xl border border-gray-100" style={{ backgroundColor: "#f0fdfa" }}>
-              <p className="text-teal-700" style={{ fontSize: "13px", fontWeight: 500 }}>
+            <div className="px-4 py-3 rounded-xl border border-gray-100" style={{ backgroundColor: "var(--brand-primary-surface)" }}>
+              <p className="text-brand-primary" style={{ fontSize: "13px", fontWeight: 500 }}>
                 User created successfully. They can now log in using their registered mobile number via WhatsApp OTP.
               </p>
             </div>
@@ -174,7 +174,7 @@ function CreateUserModal({
           <button
             onClick={onClose}
             className="w-full py-2.5 rounded-xl text-white hover:opacity-90 transition-all"
-            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+            style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
           >
             Done
           </button>
@@ -224,7 +224,7 @@ function CreateUserModal({
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               placeholder="e.g. Sneha Patel"
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-50 transition-all"
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary-light transition-all"
               style={{ fontSize: "13.5px" }}
             />
             <p className="text-gray-400 mt-1.5" style={{ fontSize: "11.5px" }}>
@@ -271,7 +271,7 @@ function CreateUserModal({
                   value={mobile}
                   onChange={(e) => setMobile(e.target.value.replace(/\D/g, "").slice(0, 10))}
                   placeholder="10-digit mobile number"
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-50 transition-all"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary-light transition-all"
                   style={{ fontSize: "13.5px" }}
                 />
               </div>
@@ -285,7 +285,7 @@ function CreateUserModal({
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="e.g. sneha.patel@gmail.com"
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-50 transition-all"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary-light transition-all"
                   style={{ fontSize: "13.5px" }}
                 />
               </div>
@@ -299,7 +299,7 @@ function CreateUserModal({
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
                   placeholder="e.g. 12, Shivaji Nagar, Nagpur"
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-50 transition-all"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary-light transition-all"
                   style={{ fontSize: "13.5px" }}
                 />
               </div>
@@ -325,7 +325,7 @@ function CreateUserModal({
             disabled={!canSubmit}
             onClick={handleSubmit}
             className="flex-1 py-2.5 rounded-xl text-white transition-all hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+            style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
           >
             {submitting ? "Creating…" : "Create User"}
           </button>
@@ -664,7 +664,7 @@ export function Users() {
         <button
           onClick={() => setShowCreate(true)}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all active:scale-95"
-          style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+          style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
         >
           <Plus size={16} strokeWidth={2.5} />
           Create User
@@ -704,7 +704,7 @@ export function Users() {
             value={search}
             onChange={(e) => handleFilterChange(() => setSearch(e.target.value))}
             placeholder="Search by name or phone number…"
-            className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-300 shadow-sm transition-all"
+            className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary shadow-sm transition-all"
             style={{ fontSize: "13.5px" }}
           />
         </div>
@@ -717,9 +717,9 @@ export function Users() {
               style={{
                 fontSize: "12.5px",
                 fontWeight: 600,
-                borderColor: roleFilter === r ? "#0d9488" : "#f3f4f6",
-                backgroundColor: roleFilter === r ? "#f0fdfa" : "white",
-                color: roleFilter === r ? "#0d9488" : "#9ca3af",
+                borderColor: roleFilter === r ? "var(--brand-primary)" : "#f3f4f6",
+                backgroundColor: roleFilter === r ? "var(--brand-primary-surface)" : "white",
+                color: roleFilter === r ? "var(--brand-primary)" : "#9ca3af",
               }}
             >
               {r}
@@ -770,7 +770,7 @@ export function Users() {
                         </span>
                       </div>
                       <span
-                        className="text-gray-700 group-hover:text-teal-700 transition-colors"
+                        className="text-gray-700 group-hover:text-brand-primary transition-colors"
                         style={{ fontSize: "13.5px", fontWeight: 500 }}
                       >
                         {user.phoneNumber ?? "—"}
@@ -829,7 +829,7 @@ export function Users() {
                   <td className="px-6 py-4 text-right">
                     <ChevronRight
                       size={15}
-                      className="text-gray-300 group-hover:text-teal-400 transition-colors ml-auto"
+                      className="text-gray-300 group-hover:text-brand-primary transition-colors ml-auto"
                     />
                   </td>
                 </tr>
@@ -848,7 +848,7 @@ export function Users() {
               <button
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={safePage === 1}
-                className="px-3 py-1.5 rounded-lg border border-gray-100 text-gray-500 hover:border-teal-300 hover:text-teal-600 hover:bg-teal-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                className="px-3 py-1.5 rounded-lg border border-gray-100 text-gray-500 hover:border-brand-primary hover:text-brand-primary hover:bg-brand-primary-surface disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                 style={{ fontSize: "12.5px", fontWeight: 600 }}
               >
                 ← Prev
@@ -871,9 +871,9 @@ export function Users() {
                       style={{
                         fontSize: "12.5px",
                         fontWeight: 600,
-                        borderColor: safePage === p ? "#0d9488" : "#f3f4f6",
-                        backgroundColor: safePage === p ? "#f0fdfa" : "white",
-                        color: safePage === p ? "#0d9488" : "#6b7280",
+                        borderColor: safePage === p ? "var(--brand-primary)" : "#f3f4f6",
+                        backgroundColor: safePage === p ? "var(--brand-primary-surface)" : "white",
+                        color: safePage === p ? "var(--brand-primary)" : "#6b7280",
                       }}
                     >
                       {p}
@@ -883,7 +883,7 @@ export function Users() {
               <button
                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                 disabled={safePage === totalPages}
-                className="px-3 py-1.5 rounded-lg border border-gray-100 text-gray-500 hover:border-teal-300 hover:text-teal-600 hover:bg-teal-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                className="px-3 py-1.5 rounded-lg border border-gray-100 text-gray-500 hover:border-brand-primary hover:text-brand-primary hover:bg-brand-primary-surface disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                 style={{ fontSize: "12.5px", fontWeight: 600 }}
               >
                 Next →

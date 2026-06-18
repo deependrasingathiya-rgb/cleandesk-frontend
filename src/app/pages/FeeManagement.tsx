@@ -87,7 +87,7 @@ function BatchDrillDown({
       <div className="p-8">
         <button
           onClick={onBack}
-          className="flex items-center gap-2 text-gray-400 hover:text-teal-600 transition-colors mb-6"
+          className="flex items-center gap-2 text-gray-400 hover:text-brand-primary transition-colors mb-6"
           style={{ fontSize: "13.5px", fontWeight: 600 }}
         >
           <ChevronRight size={15} strokeWidth={2.5} style={{ transform: "rotate(180deg)" }} />
@@ -112,7 +112,7 @@ function BatchDrillDown({
       {/* Back */}
       <button
         onClick={onBack}
-        className="flex items-center gap-2 text-gray-400 hover:text-teal-600 transition-colors mb-6"
+        className="flex items-center gap-2 text-gray-400 hover:text-brand-primary transition-colors mb-6"
         style={{ fontSize: "13.5px", fontWeight: 600 }}
       >
         <ChevronRight size={15} strokeWidth={2.5} style={{ transform: "rotate(180deg)" }} />
@@ -184,19 +184,19 @@ function BatchDrillDown({
                     const base = window.location.pathname.startsWith("/management") ? "/management" : "";
                     navigate(`${base}/students/${s.student_user_id}?from=fee-management&tab=fee&batchId=${encodeURIComponent(batchId)}&batchName=${encodeURIComponent(batchName)}`);
                   }}
-                  className="border-t border-gray-50 hover:bg-teal-50 transition-colors cursor-pointer group"
+                  className="border-t border-gray-50 hover:bg-brand-primary-surface transition-colors cursor-pointer group"
                 >
                   {/* Student name */}
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-3">
                       <div
                         className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
-                        style={{ backgroundColor: "#f0fdfa" }}
+                        style={{ backgroundColor: "var(--brand-primary-surface)" }}
                       >
-                        <span style={{ fontSize: "11px", fontWeight: 700, color: "#0d9488" }}>{initials}</span>
+                        <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--brand-primary)" }}>{initials}</span>
                       </div>
                       <div>
-                        <p className="text-gray-800 group-hover:text-teal-700 transition-colors" style={{ fontSize: "13.5px", fontWeight: 600 }}>
+                        <p className="text-gray-800 group-hover:text-brand-primary transition-colors" style={{ fontSize: "13.5px", fontWeight: 600 }}>
                           {s.student_name}
                         </p>
                         <p className="text-gray-400" style={{ fontSize: "11.5px" }}>{s.login_identifier}</p>
@@ -483,7 +483,7 @@ export function FeeManagement() {
                   <tr
                     key={batch.batch_id}
                     onClick={() => setDrillDown({ batchId: batch.batch_id, batchName: batch.batch_name })}
-                    className="border-t border-gray-50 hover:bg-teal-50 transition-colors cursor-pointer group"
+                    className="border-t border-gray-50 hover:bg-brand-primary-surface transition-colors cursor-pointer group"
                   >
                     {/* Batch name */}
                     <td className="px-5 py-4">

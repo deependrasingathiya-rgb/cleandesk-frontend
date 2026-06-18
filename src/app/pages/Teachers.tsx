@@ -194,7 +194,7 @@ function AssignTeacherModal({
               value={selectedUserId}
               onChange={(e) => setSelectedUserId(e.target.value)}
               disabled={loadingData}
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:outline-none focus:border-teal-400 bg-white transition-all disabled:opacity-50"
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:outline-none focus:border-brand-primary bg-white transition-all disabled:opacity-50"
               style={{ fontSize: "13.5px", color: selectedUserId ? "#111827" : "#9ca3af" }}
             >
               <option value="">{loadingData ? "Loading…" : teacherUsers.length === 0 ? "No unassigned teacher users" : "Choose a user with Teacher role…"}</option>
@@ -228,7 +228,7 @@ function AssignTeacherModal({
           key={b.id}
           style={{
             borderBottom: "1px solid #f3f4f6",
-            backgroundColor: checked ? "#f0fdfa" : "white",
+            backgroundColor: checked ? "var(--brand-primary-surface)" : "white",
           }}
         >
           {/* Batch row — toggle selection */}
@@ -240,8 +240,8 @@ function AssignTeacherModal({
             <div
               className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0 border transition-all"
               style={{
-                backgroundColor: checked ? "#0d9488" : "white",
-                borderColor: checked ? "#0d9488" : "#d1d5db",
+                backgroundColor: checked ? "var(--brand-primary)" : "white",
+                borderColor: checked ? "var(--brand-primary)" : "#d1d5db",
               }}
             >
               {checked && (
@@ -250,7 +250,7 @@ function AssignTeacherModal({
                 </svg>
               )}
             </div>
-            <span style={{ fontSize: "13.5px", color: checked ? "#0d9488" : "#374151", fontWeight: checked ? 600 : 400 }}>
+            <span style={{ fontSize: "13.5px", color: checked ? "var(--brand-primary)" : "#374151", fontWeight: checked ? 600 : 400 }}>
               {b.name}
             </span>
           </button>
@@ -273,8 +273,8 @@ function AssignTeacherModal({
                       style={{
                         fontSize: "12px",
                         fontWeight: selected ? 600 : 400,
-                        backgroundColor: selected ? "#0d9488" : "white",
-                        borderColor: selected ? "#0d9488" : "#d1d5db",
+                        backgroundColor: selected ? "var(--brand-primary)" : "white",
+                        borderColor: selected ? "var(--brand-primary)" : "#d1d5db",
                         color: selected ? "white" : "#374151",
                       }}
                     >
@@ -300,10 +300,10 @@ function AssignTeacherModal({
 {selectedBatchIds.length > 0 && selectedUserObj && (
   <div
     className="flex items-start gap-3 p-3 rounded-xl"
-    style={{ backgroundColor: "#f0fdfa", border: "1px solid #ccfbf1" }}
+    style={{ backgroundColor: "var(--brand-primary-surface)", border: "1px solid var(--brand-primary-light)" }}
   >
-    <CheckCircle2 size={15} style={{ color: "#0d9488", marginTop: "2px" }} strokeWidth={2.5} />
-    <p style={{ fontSize: "12.5px", color: "#0d9488", fontWeight: 500, lineHeight: 1.5 }}>
+    <CheckCircle2 size={15} style={{ color: "var(--brand-primary)", marginTop: "2px" }} strokeWidth={2.5} />
+    <p style={{ fontSize: "12.5px", color: "var(--brand-primary)", fontWeight: 500, lineHeight: 1.5 }}>
       <span style={{ fontWeight: 700 }}>{selectedUserObj.full_name}</span> will be assigned to{" "}
       <span style={{ fontWeight: 700 }}>{selectedBatchIds.length}</span>{" "}
       batch{selectedBatchIds.length !== 1 ? "es" : ""}:{" "}
@@ -335,7 +335,7 @@ function AssignTeacherModal({
             disabled={!canSubmit}
             onClick={handleSubmit}
             className="flex-1 py-2.5 rounded-xl text-white transition-all hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+            style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
           >
             {submitting ? "Assigning…" : "Assign Teacher"}
           </button>
@@ -437,9 +437,9 @@ function AssignedBatchesSection({
                     style={{
                       fontSize: "11px",
                       fontWeight: 600,
-                      borderColor: isEditing ? "#0d9488" : "#e5e7eb",
-                      color: isEditing ? "#0d9488" : "#9ca3af",
-                      backgroundColor: isEditing ? "#f0fdfa" : "transparent",
+                      borderColor: isEditing ? "var(--brand-primary)" : "#e5e7eb",
+                      color: isEditing ? "var(--brand-primary)" : "#9ca3af",
+                      backgroundColor: isEditing ? "var(--brand-primary-surface)" : "transparent",
                     }}
                   >
                     {isEditing ? "Done" : "Edit"}
@@ -560,7 +560,7 @@ function TeacherProfilePanel({
           <div className="flex items-center gap-2">
             <button
               onClick={onViewFull}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-100 text-gray-500 hover:border-teal-300 hover:text-teal-600 hover:bg-teal-50 transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-100 text-gray-500 hover:border-brand-primary hover:text-brand-primary hover:bg-brand-primary-surface transition-all"
               style={{ fontSize: "12px", fontWeight: 600 }}
               title="Open full profile page"
             >
@@ -753,7 +753,7 @@ export function Teachers() {
         <button
           onClick={() => setShowAssign(true)}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white hover:opacity-90 transition-all active:scale-95"
-          style={{ backgroundColor: "#0d9488", fontSize: "13.5px", fontWeight: 600 }}
+          style={{ backgroundColor: "var(--brand-primary)", fontSize: "13.5px", fontWeight: 600 }}
         >
           <Plus size={16} strokeWidth={2.5} />
           Add Teacher
@@ -789,7 +789,7 @@ export function Teachers() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search teachers by name or login identifier…"
-            className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-teal-300 shadow-sm transition-all"
+            className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:border-brand-primary shadow-sm transition-all"
             style={{ fontSize: "13.5px" }}
           />
         </div>
@@ -818,7 +818,7 @@ export function Teachers() {
                 <tr
                   key={teacher.id}
                   onClick={() => setSelectedTeacher(teacher)}
-                  className="border-t border-gray-50 hover:bg-teal-50 transition-colors cursor-pointer group"
+                  className="border-t border-gray-50 hover:bg-brand-primary-surface transition-colors cursor-pointer group"
                 >
                   {/* Teacher Name */}
                   <td className="px-6 py-4">
@@ -833,7 +833,7 @@ export function Teachers() {
                       </div>
                       <div>
                         <p
-                          className="group-hover:text-teal-700 transition-colors"
+                          className="group-hover:text-brand-primary transition-colors"
                           style={{ fontSize: "13.5px", fontWeight: 600, color: "#111827" }}
                         >
                           {teacher.name}
@@ -889,7 +889,7 @@ export function Teachers() {
 
                   {/* Arrow */}
                   <td className="px-6 py-4 text-right">
-                    <ChevronRight size={15} className="text-gray-300 group-hover:text-teal-400 transition-colors ml-auto" />
+                    <ChevronRight size={15} className="text-gray-300 group-hover:text-brand-primary transition-colors ml-auto" />
                   </td>
                 </tr>
               );
